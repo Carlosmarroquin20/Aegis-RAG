@@ -1,0 +1,67 @@
+---
+# Development stack: Aegis-RAG API + ChromaDB + Ollama
+# For production, replace hardcoded keys with secrets management.
+
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=true
+      - LOG_FORMAT=console
+      - LOG_LEVEL=DEBUG
+      - VALID_API_KEYS=dev-key-change-in-production
+      - SECURITY_STRICT_MODE=true
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2
+    depends_on:
+      chromadb:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    volumes:
+      # Mount source for live reload during development.
+      - ./src:/app/src:ro
+    networks:
+      - aegis-net
+    restart: unless-stopped
+
+  chromadb:
+    image: chromadb/chroma:0.6.0
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    networks:
+      - aegis-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - aegis-net
+    # Pull the default model on first startup.
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2 && wait"]
+    restart: unless-stopped
+
+volumes:
+  chroma-data:
+  ollama-models:
+
+networks:
+  aegis-net:
+    driver: bridge

@@ -1,0 +1,93 @@
+[project]
+name = "aegis-rag"
+version = "0.1.0"
+description = "Hardened RAG system for corporate environments — security-first, vector-store-agnostic."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Aegis Team" }]
+
+dependencies = [
+    # API layer
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.20",
+    # Validation & settings
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    # HTTP client (LLM backends)
+    "httpx>=0.28.0",
+    # Observability — structured JSON logs
+    "structlog>=24.4.0",
+    # Vector store & embeddings
+    "chromadb>=0.6.0",
+    "sentence-transformers>=3.3.0",
+    # Auth helpers
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    # Rate limiting persistence (optional Redis backend)
+    "redis>=5.2.0",
+    # Text sanitization
+    "bleach>=6.2.0",
+    "regex>=2024.11.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
+    "respx>=0.21.0",     # Mock HTTPX calls in tests
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aegis"]
+
+# --- uv workspace settings ---
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
+    "respx>=0.21.0",
+]
+
+# --- Linter ---
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "S", "UP", "B", "A"]
+ignore = [
+    "S101",   # allow assert in tests
+    "S311",   # random not used for crypto
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "N"]
+
+# --- Type checker ---
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+# --- Test runner ---
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--cov=src/aegis --cov-report=term-missing --cov-fail-under=80"
