@@ -131,8 +131,10 @@ class IngestDocumentsUseCase:
             if isinstance(self._vector_store, ChromaDBAdapter):
                 candidate_ids = [c.id for c in all_chunks]
                 existing_ids = await self._get_existing_ids(candidate_ids)
-        except Exception:  # noqa: BLE001
-            pass  # Deduplication is best-effort; upsert is always idempotent.
+        except Exception as exc:  # noqa: BLE001
+            # Deduplication is best-effort; a failure here does not block the upsert
+            # because add_documents() is idempotent on duplicate IDs.
+            log.warning("ingestion.dedup_failed", error=str(exc))
 
         new_chunks = [c for c in all_chunks if c.id not in existing_ids]
         duplicates = len(all_chunks) - len(new_chunks)
