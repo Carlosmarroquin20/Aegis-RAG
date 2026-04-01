@@ -18,7 +18,7 @@ from aegis.config import Settings, get_settings
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
-from aegis.infrastructure.security.rate_limiter import RateLimitPolicy, RateLimiter
+from aegis.infrastructure.security.rate_limiter import RateLimiter, RateLimitPolicy
 from aegis.infrastructure.security.security_gateway import SecurityGateway
 from aegis.infrastructure.vector_stores.chromadb_adapter import ChromaDBAdapter
 

@@ -28,14 +28,15 @@ class TestChunkingBasics:
 
     def test_long_document_produces_multiple_chunks(self, chunker: ChunkingService) -> None:
         # 10 paragraphs of 50 chars each; total > chunk_size=200 → must split.
-        paragraphs = ["This is paragraph number {:02d}. It has some text.".format(i) for i in range(10)]
+        paragraphs = [f"This is paragraph number {i:02d}. It has some text." for i in range(10)]
         content = "\n\n".join(paragraphs)
         doc = RawDocument(content=content, source="long.txt")
         chunks = chunker.chunk(doc)
         assert len(chunks) > 1
 
     def test_chunk_size_respected(self, chunker: ChunkingService) -> None:
-        # Each chunk should not vastly exceed chunk_size (sentence boundary may cause minor overflow).
+        # Each chunk should not vastly exceed chunk_size
+        # (sentence boundary may cause minor overflow).
         doc = RawDocument(content=" ".join(["word"] * 500), source="words.txt")
         chunks = chunker.chunk(doc)
         for chunk in chunks:
@@ -87,7 +88,8 @@ class TestMetadataPropagation:
 
     def test_chunk_index_is_sequential(self, chunker: ChunkingService) -> None:
         paragraphs = ["Paragraph {:02d}: " + "word " * 30 for _ in range(20)]
-        doc = RawDocument(content="\n\n".join(p.format(i) for i, p in enumerate(paragraphs)), source="seq.txt")
+        content = "\n\n".join(p.format(i) for i, p in enumerate(paragraphs))
+        doc = RawDocument(content=content, source="seq.txt")
         chunks = chunker.chunk(doc)
         indices = [int(c.metadata["chunk_index"]) for c in chunks]
         assert indices == list(range(len(chunks)))
@@ -120,7 +122,10 @@ class TestEdgeCases:
     def test_min_chunk_size_filters_tiny_chunks(self) -> None:
         chunker = ChunkingService(chunk_size=200, overlap=10, min_chunk_size=50)
         # Content that would produce tiny chunks after splitting.
-        doc = RawDocument(content="Hi.\n\nHi.\n\nThis paragraph is long enough to survive the filter.", source="tiny.txt")
+        doc = RawDocument(
+            content="Hi.\n\nHi.\n\nThis paragraph is long enough to survive the filter.",
+            source="tiny.txt",
+        )
         chunks = chunker.chunk(doc)
         assert all(len(c.content) >= chunker.min_chunk_size for c in chunks)
 

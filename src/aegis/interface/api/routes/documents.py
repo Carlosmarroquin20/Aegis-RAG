@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from typing import Annotated
 
-import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
 from aegis.application.dtos.ingestion_dtos import (
@@ -50,13 +49,13 @@ _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 )
 async def ingest_document(
     file: Annotated[UploadFile, File(description="Document to index (TXT, MD, PDF, DOCX).")],
+    use_case: Annotated[IngestDocumentsUseCase, Depends(get_ingest_use_case)],
     collection: Annotated[
         str | None,
         Form(description="Target collection. Defaults to the system default."),
     ] = None,
     chunk_size: Annotated[int, Form(ge=128, le=4096)] = 512,
     overlap: Annotated[int, Form(ge=0, le=512)] = 64,
-    use_case: IngestDocumentsUseCase = Depends(get_ingest_use_case),
 ) -> IngestResponse:
     content = await file.read()
 
@@ -76,11 +75,17 @@ async def ingest_document(
     try:
         return await use_case.execute(uploaded, request)
     except FileTooLargeError as exc:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)
+        ) from exc
     except UnsupportedFileTypeError as exc:
-        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
+        ) from exc
     except ParseError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 @router.get(
@@ -112,6 +117,7 @@ async def list_documents(
         result.get("ids", []),
         result.get("documents", []),
         result.get("metadatas", []),
+        strict=False,
     ):
         meta = meta or {}
         items.append(

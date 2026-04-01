@@ -46,7 +46,9 @@ class PdfParser(DocumentParserPort):
 
         total_pages = len(reader.pages)
         if total_pages > _MAX_PAGES:
-            logger.warning("pdf_parser.page_cap", filename=filename, total=total_pages, cap=_MAX_PAGES)
+            logger.warning(
+                "pdf_parser.page_cap", filename=filename, total=total_pages, cap=_MAX_PAGES
+            )
 
         documents: list[RawDocument] = []
         for page_num in range(min(total_pages, _MAX_PAGES)):

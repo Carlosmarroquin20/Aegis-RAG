@@ -71,6 +71,7 @@ class ChromaDBAdapter(VectorStorePort):
             results["documents"][0],
             results["metadatas"][0],
             results["distances"][0],
+            strict=False,
         ):
             # ChromaDB returns cosine distances (0 = identical, 2 = opposite).
             # Convert to similarity score in [0, 1].

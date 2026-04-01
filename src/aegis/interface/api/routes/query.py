@@ -6,9 +6,15 @@ security by middleware + use case, and errors by the exception handlers in main.
 """
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from aegis.application.dtos.rag_dtos import QueryRequest, QueryResponse, SecurityRejectionResponse
+from aegis.application.dtos.rag_dtos import (
+    QueryRequest,
+    QueryResponse,
+    SecurityRejectionResponse,
+)
 from aegis.application.use_cases.query_rag import QueryRAGUseCase, SecurityViolationError
 from aegis.interface.api.dependencies import get_query_use_case
 
@@ -19,7 +25,10 @@ router = APIRouter(prefix="/api/v1", tags=["rag"])
     "/query",
     response_model=QueryResponse,
     responses={
-        400: {"model": SecurityRejectionResponse, "description": "Query blocked by security policy."},
+        400: {
+            "model": SecurityRejectionResponse,
+            "description": "Query blocked by security policy.",
+        },
         403: {"description": "Forbidden: missing or invalid API key."},
         429: {"description": "Rate limit exceeded."},
     },
@@ -32,7 +41,7 @@ router = APIRouter(prefix="/api/v1", tags=["rag"])
 )
 async def query_rag(
     request: QueryRequest,
-    use_case: QueryRAGUseCase = Depends(get_query_use_case),
+    use_case: Annotated[QueryRAGUseCase, Depends(get_query_use_case)],
 ) -> QueryResponse:
     try:
         return await use_case.execute(request)

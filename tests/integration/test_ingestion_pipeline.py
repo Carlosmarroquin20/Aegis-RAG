@@ -7,8 +7,6 @@ together without requiring a live ChromaDB or filesystem.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
 
 from aegis.application.dtos.ingestion_dtos import IngestRequest, UploadedFile
@@ -21,7 +19,6 @@ from aegis.domain.models.document import Document
 from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 
-
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
 class FakeVectorStore(VectorStorePort):
@@ -30,7 +27,9 @@ class FakeVectorStore(VectorStorePort):
     def __init__(self) -> None:
         self.stored: list[Document] = []
 
-    async def similarity_search(self, query: str, k: int = 5, score_threshold: float = 0.0) -> list[Document]:
+    async def similarity_search(
+        self, query: str, k: int = 5, score_threshold: float = 0.0
+    ) -> list[Document]:
         return []
 
     async def add_documents(self, documents: list[Document]) -> None:
@@ -120,7 +119,10 @@ class TestMarkdownIngestion:
         vector_store: FakeVectorStore,
         default_request: IngestRequest,
     ) -> None:
-        md_content = "# Title\n\nThis is a paragraph with **bold** text.\n\n## Section\n\nMore content here."
+        md_content = (
+            "# Title\n\nThis is a paragraph with **bold** text.\n\n"
+            "## Section\n\nMore content here."
+        )
         uploaded = UploadedFile(filename="readme.md", content=md_content.encode())
 
         result = await use_case.execute(uploaded, default_request)
@@ -158,7 +160,11 @@ class TestUnsupportedFileTypes:
     ) -> None:
         # PE header magic bytes (\x4d\x5a = MZ) — Windows executable.
         exe_content = b"\x4d\x5a" + b"\x00" * 100
-        uploaded = UploadedFile(filename="malware.exe", content=exe_content, declared_mime_type="application/octet-stream")
+        uploaded = UploadedFile(
+            filename="malware.exe",
+            content=exe_content,
+            declared_mime_type="application/octet-stream",
+        )
 
         with pytest.raises(UnsupportedFileTypeError):
             await use_case.execute(uploaded, default_request)

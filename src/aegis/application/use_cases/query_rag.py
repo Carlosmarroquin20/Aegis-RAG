@@ -17,7 +17,7 @@ from aegis.application.dtos.rag_dtos import QueryRequest, QueryResponse, SourceD
 from aegis.domain.models.query import RawQuery
 from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.vector_store import VectorStorePort
-from aegis.infrastructure.security.output_sanitizer import OutputReflectionError, OutputSanitizer
+from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
 from aegis.infrastructure.security.security_gateway import SecurityGateway
 
 logger = structlog.get_logger(__name__)

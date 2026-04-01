@@ -62,7 +62,8 @@ class IngestDocumentsUseCase:
         # ── Stage 1: File size guard ───────────────────────────────────────────
         if len(uploaded_file.content) > _MAX_FILE_BYTES:
             raise FileTooLargeError(
-                f"File '{uploaded_file.filename}' exceeds the {_MAX_FILE_BYTES // (1024*1024)} MB limit."
+                f"File '{uploaded_file.filename}' exceeds the "
+                f"{_MAX_FILE_BYTES // (1024 * 1024)} MB limit."
             )
 
         # ── Stage 2: MIME type detection from magic bytes ──────────────────────
