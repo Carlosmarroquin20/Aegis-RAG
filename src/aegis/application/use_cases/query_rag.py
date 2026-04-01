@@ -2,9 +2,10 @@
 QueryRAG use case — orchestrates the full RAG pipeline.
 
 Execution order is intentional:
-  1. SecurityGateway evaluation (no I/O, fast fail)
+  1. SecurityGateway evaluation (no I/O, fast fail)     — LLM01
   2. Vector store retrieval (network I/O)
   3. LLM generation (network I/O, slow)
+  4. OutputSanitizer post-processing                    — LLM02
 
 The use case owns no state; all dependencies are injected at construction time.
 """
@@ -16,6 +17,7 @@ from aegis.application.dtos.rag_dtos import QueryRequest, QueryResponse, SourceD
 from aegis.domain.models.query import RawQuery
 from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.vector_store import VectorStorePort
+from aegis.infrastructure.security.output_sanitizer import OutputReflectionError, OutputSanitizer
 from aegis.infrastructure.security.security_gateway import SecurityGateway
 
 logger = structlog.get_logger(__name__)
@@ -36,10 +38,12 @@ class QueryRAGUseCase:
         vector_store: VectorStorePort,
         llm_client: LLMClientPort,
         security_gateway: SecurityGateway,
+        output_sanitizer: OutputSanitizer | None = None,
     ) -> None:
         self._vector_store = vector_store
         self._llm_client = llm_client
         self._gateway = security_gateway
+        self._output_sanitizer = output_sanitizer or OutputSanitizer()
 
     async def execute(self, request: QueryRequest) -> QueryResponse:
         log = logger.bind(top_k=request.top_k)
@@ -71,7 +75,18 @@ class QueryRAGUseCase:
         log.info("use_case.retrieved", doc_count=len(documents))
 
         # ── Generation ────────────────────────────────────────────────────────
-        answer = await self._llm_client.generate(sanitized_text, documents)
+        raw_answer = await self._llm_client.generate(sanitized_text, documents)
+
+        # ── Output sanitization (LLM02) ────────────────────────────────────────
+        # OutputReflectionError is intentionally NOT caught here: it propagates
+        # to the route handler which returns HTTP 500 (pipeline failure, not user error).
+        sanitized = self._output_sanitizer.sanitize(raw_answer, query_hash=query_hash)
+        if sanitized.has_warnings:
+            log.warning(
+                "use_case.output_warnings",
+                reflection=sanitized.reflection_detected,
+                pii_types=sanitized.pii_types_detected,
+            )
 
         sources = [
             SourceDocument(
@@ -83,7 +98,7 @@ class QueryRAGUseCase:
         ]
 
         return QueryResponse(
-            answer=answer,
+            answer=sanitized.text,
             sources=sources,
             query_hash=query_hash,
             threat_level=gateway_result.assessment.level.name,
