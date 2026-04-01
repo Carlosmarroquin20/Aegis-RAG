@@ -22,6 +22,7 @@ from aegis.config import get_settings
 from aegis.interface.api.dependencies import (
     get_chromadb_adapter,
     get_ollama_adapter,
+    get_parser_registry,
     get_rate_limiter,
     get_security_gateway,
 )
@@ -29,7 +30,7 @@ from aegis.interface.api.middleware.security_middleware import (
     APIKeyMiddleware,
     RateLimitMiddleware,
 )
-from aegis.interface.api.routes import health, query
+from aegis.interface.api.routes import documents, health, query
 
 
 def _configure_logging(settings_obj: object) -> None:
@@ -80,6 +81,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Warm up the security gateway (pre-compiles regex patterns).
     get_security_gateway(cfg)
 
+    # Pre-load the parser registry (deferred imports in parsers run at first get).
+    get_parser_registry()
+
     # Initialize the vector store (creates collection if absent).
     vector_store = get_chromadb_adapter(cfg)
     await vector_store.initialize()
@@ -115,7 +119,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"] if cfg.debug else [],
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type", cfg.api_key_header],
     )
 
@@ -128,6 +132,7 @@ def create_app() -> FastAPI:
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health.router)
     app.include_router(query.router)
+    app.include_router(documents.router)
 
     # ── Global Exception Handlers ─────────────────────────────────────────────
     @app.exception_handler(Exception)

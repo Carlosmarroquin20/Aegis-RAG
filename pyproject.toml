@@ -30,6 +30,11 @@ dependencies = [
     # Text sanitization
     "bleach>=6.2.0",
     "regex>=2024.11.6",
+    # Document parsing (Phase 2)
+    "pypdf>=5.1.0",
+    "python-docx>=1.1.0",
+    "filetype>=1.2.0",      # MIME detection from magic bytes (not Content-Type header)
+    "markdown-it-py>=3.0.0", # Markdown → plain text stripping
 ]
 
 [project.optional-dependencies]
@@ -42,6 +47,8 @@ dev = [
     "mypy>=1.13.0",
     "pre-commit>=4.0.0",
     "respx>=0.21.0",     # Mock HTTPX calls in tests
+    "pytest-mock>=3.14.0",
+    "pip-audit>=2.7.0",  # Dependency vulnerability scanner (used in CI)
 ]
 
 [build-system]
@@ -61,6 +68,8 @@ dev-dependencies = [
     "mypy>=1.13.0",
     "pre-commit>=4.0.0",
     "respx>=0.21.0",
+    "pytest-mock>=3.14.0",
+    "pip-audit>=2.7.0",
 ]
 
 # --- Linter ---
