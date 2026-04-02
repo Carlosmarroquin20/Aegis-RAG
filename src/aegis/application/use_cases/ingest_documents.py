@@ -178,6 +178,8 @@ class IngestDocumentsUseCase:
             return set()
 
         # ChromaDB collection.get() returns only IDs that exist.
+        from typing import Any
+
         assert store._collection is not None  # noqa: SLF001
-        result = store._collection.get(ids=ids, include=[])  # noqa: SLF001
+        result: Any = store._collection.get(ids=ids, include=[])  # noqa: SLF001
         return set(result.get("ids", []))

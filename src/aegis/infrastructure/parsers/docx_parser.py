@@ -48,9 +48,9 @@ class DocxParser(DocumentParserPort):
         Splits document into sections at Heading 1/2 boundaries.
         Each section becomes a RawDocument with the heading as metadata.
         """
-        from docx import Document as DocxDocument  # type: ignore[attr-defined]
+        from typing import Any
 
-        doc_typed: DocxDocument = doc  # type: ignore[assignment]
+        doc_typed: Any = doc
         raw_docs: list[RawDocument] = []
         current_heading: str | None = None
         current_lines: list[str] = []

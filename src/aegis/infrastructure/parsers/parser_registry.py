@@ -60,11 +60,11 @@ class ParserRegistry:
         Security note: always call this before passing content to a parser.
         Trusting the client-supplied Content-Type would allow file type spoofing.
         """
-        import filetype  # type: ignore[import-untyped]
+        import filetype
 
         kind = filetype.guess(content)
         if kind is not None:
-            return kind.mime
+            return str(kind.mime)
 
         # Text files have no magic bytes — infer from extension.
         lower = filename.lower()

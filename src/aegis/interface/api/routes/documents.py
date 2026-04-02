@@ -105,7 +105,9 @@ async def list_documents(
     if adapter._collection is None:  # noqa: SLF001
         raise HTTPException(status_code=503, detail="Vector store not initialized.")
 
-    result = adapter._collection.get(  # noqa: SLF001
+    from typing import Any
+
+    result: Any = adapter._collection.get(  # noqa: SLF001
         limit=limit,
         offset=offset,
         include=["documents", "metadatas"],

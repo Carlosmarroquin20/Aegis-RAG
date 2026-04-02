@@ -48,7 +48,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
         if request.url.path in _PUBLIC_PATHS:
-            return await call_next(request)  # type: ignore[operator]
+            return await call_next(request)  # type: ignore[no-any-return,operator]
 
         api_key = request.headers.get(self._header_name, "")
         if not api_key or api_key not in self._valid_keys:
@@ -64,7 +64,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         # Attach the validated key to request state for the rate limiter.
         request.state.api_key = api_key
-        return await call_next(request)  # type: ignore[operator]
+        return await call_next(request)  # type: ignore[no-any-return,operator]
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -79,7 +79,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
         if request.url.path in _PUBLIC_PATHS:
-            return await call_next(request)  # type: ignore[operator]
+            return await call_next(request)  # type: ignore[no-any-return,operator]
 
         api_key: str = getattr(request.state, "api_key", "anonymous")
         result = self._limiter.check_and_record(api_key)

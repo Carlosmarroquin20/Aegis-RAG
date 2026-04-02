@@ -96,7 +96,7 @@ class ChromaDBAdapter(VectorStorePort):
         self._collection.upsert(  # type: ignore[union-attr]
             ids=[doc.id for doc in documents],
             documents=[doc.content for doc in documents],
-            metadatas=[doc.metadata for doc in documents],  # type: ignore[arg-type]
+            metadatas=[doc.metadata for doc in documents],
         )
         logger.info("vector_store.documents_added", count=len(documents))
 
