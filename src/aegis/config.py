@@ -2,6 +2,7 @@
 Application-wide settings loaded from environment variables or .env file.
 All security-relevant defaults are conservative (strict mode on, low rate limits).
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -31,9 +32,9 @@ class Settings(BaseSettings):
     valid_api_keys: str = Field(default="", description="Comma-separated API keys")
 
     # ── Rate Limiting ──────────────────────────────────────────────────────────
-    rate_limit_requests: int = 60       # requests per window
+    rate_limit_requests: int = 60  # requests per window
     rate_limit_window_seconds: int = 60
-    rate_limit_burst: int = 10          # burst headroom above baseline
+    rate_limit_burst: int = 10  # burst headroom above baseline
 
     # ── Vector Store (ChromaDB) ────────────────────────────────────────────────
     chroma_host: str = "localhost"

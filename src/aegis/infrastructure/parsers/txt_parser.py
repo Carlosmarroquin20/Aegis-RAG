@@ -1,4 +1,5 @@
 """Plain-text parser. UTF-8 with Latin-1 fallback."""
+
 from __future__ import annotations
 
 from aegis.domain.models.ingestion import RawDocument, SupportedMimeType

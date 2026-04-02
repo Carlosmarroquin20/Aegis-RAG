@@ -6,6 +6,7 @@ remote (containerized) deployments without code changes.
 Embedding is handled externally via SentenceTransformers so the
 adapter stays decoupled from any specific embedding model.
 """
+
 from __future__ import annotations
 
 import structlog

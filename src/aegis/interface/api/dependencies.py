@@ -8,6 +8,7 @@ All expensive objects (embedding model, HTTP clients) are singletons cached via
 lru_cache(maxsize=1). FastAPI calls dependency factories per-request by default;
 the cache ensures the underlying heavy object is built only once per process.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache

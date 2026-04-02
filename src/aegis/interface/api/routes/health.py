@@ -4,6 +4,7 @@ Health and readiness endpoints.
 /health  — shallow liveness check (no external calls); used by load balancers.
 /ready   — deep readiness check (verifies vector store + LLM connectivity).
 """
+
 from __future__ import annotations
 
 import structlog

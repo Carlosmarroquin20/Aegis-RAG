@@ -5,6 +5,7 @@ RawQuery represents untrusted input at the API boundary.
 SanitizedQuery is the output of the SecurityGateway — it is the only form
 that may flow into the RAG pipeline.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator

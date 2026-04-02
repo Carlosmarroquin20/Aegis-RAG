@@ -4,6 +4,7 @@ LLM client port (abstract interface).
 Decouples the application layer from any specific LLM backend.
 Concrete adapters: OllamaAdapter (local), OpenAIAdapter, AnthropicAdapter.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

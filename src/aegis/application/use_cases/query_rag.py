@@ -9,6 +9,7 @@ Execution order is intentional:
 
 The use case owns no state; all dependencies are injected at construction time.
 """
+
 from __future__ import annotations
 
 import structlog

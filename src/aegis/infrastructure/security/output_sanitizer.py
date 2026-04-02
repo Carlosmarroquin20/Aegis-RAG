@@ -17,6 +17,7 @@ Sanitization pipeline:
 The sanitizer is intentionally conservative: it modifies as little as possible
 and logs what it does so security teams can tune the rules over time.
 """
+
 from __future__ import annotations
 
 import re

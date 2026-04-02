@@ -9,6 +9,7 @@ Responsibilities:
 The registry is pre-populated with all built-in parsers. Additional parsers can
 be registered at runtime via register() for extensibility.
 """
+
 from __future__ import annotations
 
 import structlog

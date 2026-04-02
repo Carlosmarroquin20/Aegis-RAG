@@ -17,6 +17,7 @@ Security considerations:
     path; indirect injection via document content is mitigated at the LLM layer
     by the hardened system prompt in OllamaAdapter.
 """
+
 from __future__ import annotations
 
 import structlog

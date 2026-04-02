@@ -2,6 +2,7 @@
 Domain model for retrieved documents.
 Metadata is typed as a flat string dict to remain vector-store-agnostic.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field

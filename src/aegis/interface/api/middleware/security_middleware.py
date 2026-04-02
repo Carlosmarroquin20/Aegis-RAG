@@ -9,6 +9,7 @@ These run before any route handler is invoked. Placing them in middleware
 (rather than FastAPI dependencies) ensures they execute even for 404/405 responses,
 preventing information leakage about undiscovered endpoints.
 """
+
 from __future__ import annotations
 
 import time

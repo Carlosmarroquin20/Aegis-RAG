@@ -4,6 +4,7 @@ DTOs for the document ingestion API.
 UploadedFile is populated from the multipart form data in the route handler.
 It carries the raw bytes and metadata needed by the ingestion use case.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
@@ -32,11 +33,15 @@ class IngestRequest(BaseModel):
         description="Target collection. Defaults to the configured default collection.",
     )
     chunk_size: int = Field(
-        default=512, ge=128, le=4096,
+        default=512,
+        ge=128,
+        le=4096,
         description="Target character count per chunk.",
     )
     overlap: int = Field(
-        default=64, ge=0, le=512,
+        default=64,
+        ge=0,
+        le=512,
         description="Overlap characters between consecutive chunks.",
     )
 

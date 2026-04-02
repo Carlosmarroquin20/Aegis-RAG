@@ -4,6 +4,7 @@ RAG query endpoint.
 The route handler is intentionally thin: validation is handled by Pydantic,
 security by middleware + use case, and errors by the exception handlers in main.py.
 """
+
 from __future__ import annotations
 
 from typing import Annotated

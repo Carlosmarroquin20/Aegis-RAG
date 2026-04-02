@@ -4,6 +4,7 @@ Vector store port (abstract interface).
 Concrete adapters (ChromaDB, pgvector, Weaviate, etc.) implement this protocol
 so the application layer remains decoupled from any specific vector database.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

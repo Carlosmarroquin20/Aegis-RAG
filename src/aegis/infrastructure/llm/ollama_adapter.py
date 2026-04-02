@@ -6,6 +6,7 @@ The system prompt is hardened to resist indirect prompt injection (LLM01/LLM02):
 it explicitly instructs the model to answer ONLY from the supplied context and
 to refuse any instruction embedded within retrieved documents.
 """
+
 from __future__ import annotations
 
 import httpx

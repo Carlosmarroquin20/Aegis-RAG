@@ -4,6 +4,7 @@ Unit tests for SecurityGateway.
 Tests are organized by attack category from OWASP LLM Top 10.
 No external I/O — the gateway is a pure function with deterministic outputs.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -27,6 +28,7 @@ def gateway_permissive() -> SecurityGateway:
 
 
 # ── LLM01: Prompt Injection ────────────────────────────────────────────────────
+
 
 class TestPromptInjectionBlocking:
     @pytest.mark.parametrize(
@@ -60,6 +62,7 @@ class TestPromptInjectionBlocking:
 
 # ── LLM07: System Prompt Disclosure ───────────────────────────────────────────
 
+
 class TestPromptDisclosureBlocking:
     @pytest.mark.parametrize(
         "payload",
@@ -77,6 +80,7 @@ class TestPromptDisclosureBlocking:
 
 # ── Injection via HTML / Templates ────────────────────────────────────────────
 
+
 class TestHTMLAndTemplateInjection:
     def test_blocks_script_tag(self, gateway_strict: SecurityGateway) -> None:
         result = gateway_strict.evaluate(RawQuery(text="<script>alert(1)</script>"))
@@ -92,6 +96,7 @@ class TestHTMLAndTemplateInjection:
 
 
 # ── Legitimate Queries ─────────────────────────────────────────────────────────
+
 
 class TestLegitimateQueries:
     @pytest.mark.parametrize(
@@ -119,6 +124,7 @@ class TestLegitimateQueries:
 
 # ── Structural Validation ──────────────────────────────────────────────────────
 
+
 class TestStructuralValidation:
     def test_blocks_overlength_query(self, gateway_strict: SecurityGateway) -> None:
         long_query = "a" * 8193
@@ -132,6 +138,7 @@ class TestStructuralValidation:
 
 
 # ── Unicode Normalization ──────────────────────────────────────────────────────
+
 
 class TestUnicodeNormalization:
     def test_normalizes_combining_characters(self) -> None:
@@ -156,6 +163,7 @@ class TestUnicodeNormalization:
 
 # ── Entropy Analysis ───────────────────────────────────────────────────────────
 
+
 class TestEntropyScoring:
     def test_normal_text_has_zero_entropy_score(self) -> None:
         normal = "The quick brown fox jumps over the lazy dog and the dog barked back."
@@ -169,6 +177,7 @@ class TestEntropyScoring:
 
 
 # ── Strict vs Permissive Mode ──────────────────────────────────────────────────
+
 
 class TestStrictVsPermissiveMode:
     def test_strict_blocks_suspicious_level_query(self, gateway_strict: SecurityGateway) -> None:

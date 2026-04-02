@@ -7,6 +7,7 @@ Wiring order matters:
      Stack order (request direction): RateLimit → APIKey → Routes
   3. The lifespan context manager handles adapter initialization and cleanup.
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,9 +58,7 @@ def _configure_logging(settings_obj: object) -> None:
 
     structlog.configure(
         processors=shared_processors + [renderer],
-        wrapper_class=structlog.make_filtering_bound_logger(
-            logging.getLevelName(cfg.log_level)
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(cfg.log_level)),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,
@@ -109,7 +108,7 @@ def create_app() -> FastAPI:
             "Hardened Retrieval-Augmented Generation API with OWASP LLM Top 10 controls. "
             "All queries are evaluated by the SecurityGateway before reaching the RAG pipeline."
         ),
-        docs_url="/docs" if cfg.debug else None,   # Disable Swagger UI in production.
+        docs_url="/docs" if cfg.debug else None,  # Disable Swagger UI in production.
         redoc_url="/redoc" if cfg.debug else None,
         lifespan=lifespan,
     )

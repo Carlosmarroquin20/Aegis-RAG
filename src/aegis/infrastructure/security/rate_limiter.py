@@ -9,6 +9,7 @@ Architecture:
   - The sliding window algorithm avoids the "thundering herd" problem inherent
     in fixed-window counters: bursts at window boundaries are naturally dampened.
 """
+
 from __future__ import annotations
 
 import time
@@ -33,8 +34,8 @@ class RateLimitPolicy:
 @dataclass(frozen=True, slots=True)
 class RateLimitResult:
     allowed: bool
-    remaining: int        # Requests left in the current window.
-    reset_at: float       # Unix monotonic timestamp when the window resets.
+    remaining: int  # Requests left in the current window.
+    reset_at: float  # Unix monotonic timestamp when the window resets.
     retry_after: float | None = None  # Seconds until the next allowed request.
 
 
@@ -116,9 +117,7 @@ class RateLimiter:
         timestamps = self._store.record_and_get(api_key, self._policy.window_seconds)
         count = len(timestamps)
 
-        reset_at = (
-            timestamps[0] + self._policy.window_seconds if timestamps else time.monotonic()
-        )
+        reset_at = timestamps[0] + self._policy.window_seconds if timestamps else time.monotonic()
 
         if count > self._max_requests:
             retry_after = max(0.0, reset_at - time.monotonic())
@@ -145,9 +144,7 @@ class RateLimiter:
         """Non-mutating check — useful for pre-flight validation without side effects."""
         timestamps = self._store.peek(api_key, self._policy.window_seconds)
         count = len(timestamps)
-        reset_at = (
-            timestamps[0] + self._policy.window_seconds if timestamps else time.monotonic()
-        )
+        reset_at = timestamps[0] + self._policy.window_seconds if timestamps else time.monotonic()
         remaining = max(0, self._max_requests - count)
         allowed = count < self._max_requests
         return RateLimitResult(allowed=allowed, remaining=remaining, reset_at=reset_at)

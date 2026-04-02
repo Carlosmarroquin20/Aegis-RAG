@@ -5,6 +5,7 @@ Uses markdown-it-py to render to HTML, then strips tags, rather than
 trying to regex-strip Markdown syntax directly (which breaks on edge cases
 like nested code blocks, tables, and footnotes).
 """
+
 from __future__ import annotations
 
 from aegis.domain.models.ingestion import RawDocument, SupportedMimeType

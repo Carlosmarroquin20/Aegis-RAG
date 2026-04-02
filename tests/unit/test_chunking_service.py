@@ -4,6 +4,7 @@ Unit tests for ChunkingService.
 Validates chunking behavior under normal conditions, boundary cases,
 and adversarial inputs (empty content, single oversized sentence, etc.).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -18,6 +19,7 @@ def chunker() -> ChunkingService:
 
 
 # ── Core Behavior ──────────────────────────────────────────────────────────────
+
 
 class TestChunkingBasics:
     def test_short_document_produces_single_chunk(self, chunker: ChunkingService) -> None:
@@ -53,12 +55,13 @@ class TestChunkingBasics:
 
         # The end of chunk[0]'s body should appear somewhere in chunk[1].
         body0 = chunks[0].content
-        tail = body0[-chunker.overlap:]
+        tail = body0[-chunker.overlap :]
         # Tail must be present in chunk[1] (possibly with minor whitespace variation).
         assert tail.strip()[:10] in chunks[1].content
 
 
 # ── Metadata Propagation ───────────────────────────────────────────────────────
+
 
 class TestMetadataPropagation:
     def test_source_propagated_to_chunks(self, chunker: ChunkingService) -> None:
@@ -97,6 +100,7 @@ class TestMetadataPropagation:
 
 # ── Content-Addressed IDs ──────────────────────────────────────────────────────
 
+
 class TestContentAddressedIDs:
     def test_same_content_same_id(self, chunker: ChunkingService) -> None:
         doc = RawDocument(content="Deterministic content.", source="a.txt")
@@ -117,6 +121,7 @@ class TestContentAddressedIDs:
 
 
 # ── Edge Cases ────────────────────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     def test_min_chunk_size_filters_tiny_chunks(self) -> None:

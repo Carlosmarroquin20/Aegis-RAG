@@ -5,6 +5,7 @@ Tests the IngestDocumentsUseCase end-to-end with a mock vector store,
 verifying that parsing → chunking → deduplication → upsert work correctly
 together without requiring a live ChromaDB or filesystem.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -20,6 +21,7 @@ from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
+
 
 class FakeVectorStore(VectorStorePort):
     """In-memory vector store stub that records upserted documents."""
@@ -68,6 +70,7 @@ def default_request() -> IngestRequest:
 
 # ── Plain-Text Ingestion ───────────────────────────────────────────────────────
 
+
 class TestTxtIngestion:
     async def test_txt_file_ingested_successfully(
         self,
@@ -112,6 +115,7 @@ class TestTxtIngestion:
 
 # ── Markdown Ingestion ─────────────────────────────────────────────────────────
 
+
 class TestMarkdownIngestion:
     async def test_markdown_file_ingested(
         self,
@@ -120,8 +124,7 @@ class TestMarkdownIngestion:
         default_request: IngestRequest,
     ) -> None:
         md_content = (
-            "# Title\n\nThis is a paragraph with **bold** text.\n\n"
-            "## Section\n\nMore content here."
+            "# Title\n\nThis is a paragraph with **bold** text.\n\n## Section\n\nMore content here."
         )
         uploaded = UploadedFile(filename="readme.md", content=md_content.encode())
 
@@ -135,6 +138,7 @@ class TestMarkdownIngestion:
 
 
 # ── Security: File Size ────────────────────────────────────────────────────────
+
 
 class TestFileSizeEnforcement:
     async def test_oversized_file_rejected(
@@ -151,6 +155,7 @@ class TestFileSizeEnforcement:
 
 
 # ── Security: Unsupported File Types ──────────────────────────────────────────
+
 
 class TestUnsupportedFileTypes:
     async def test_executable_file_rejected(
@@ -172,6 +177,7 @@ class TestUnsupportedFileTypes:
 
 # ── Deduplication ─────────────────────────────────────────────────────────────
 
+
 class TestDeduplication:
     async def test_re_ingestion_does_not_crash(
         self,
@@ -192,6 +198,7 @@ class TestDeduplication:
 
 
 # ── Custom Collection ──────────────────────────────────────────────────────────
+
 
 class TestCollectionRouting:
     async def test_custom_collection_in_response(

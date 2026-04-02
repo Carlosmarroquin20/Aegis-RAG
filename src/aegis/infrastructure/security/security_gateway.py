@@ -16,6 +16,7 @@ OWASP LLM coverage:
   LLM06 — Sensitive Information      → rate limiter + API key enforcement (middleware)
   LLM07 — System Prompt Disclosure   → _INJECTION_SIGNATURES (prompt_leakage category)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -132,7 +133,7 @@ _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
 ]
 
 _MAX_QUERY_CHARS: Final[int] = 8192
-_BLOCK_SCORE_THRESHOLD: Final[int] = 80       # Hard block
+_BLOCK_SCORE_THRESHOLD: Final[int] = 80  # Hard block
 _SUSPICIOUS_SCORE_THRESHOLD: Final[int] = 60  # Block only in strict mode
 
 
@@ -286,17 +287,14 @@ class SecurityGateway:
 
 # ── Module-level pure helpers (no class state dependency) ─────────────────────
 
+
 def _normalize_unicode(text: str) -> str:
     """
     Applies NFC normalization and strips C0/C1 control characters.
     Preserves standard whitespace (\\n, \\t, \\r) which is needed for code context.
     """
     normalized = unicodedata.normalize("NFC", text)
-    return "".join(
-        ch
-        for ch in normalized
-        if unicodedata.category(ch) != "Cc" or ch in "\n\t\r"
-    )
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Cc" or ch in "\n\t\r")
 
 
 def _sanitize(text: str) -> str:
@@ -328,9 +326,7 @@ def _entropy_score(text: str) -> int:
         freq[ch] = freq.get(ch, 0) + 1
 
     length = len(text)
-    entropy = -sum(
-        (count / length) * math.log2(count / length) for count in freq.values()
-    )
+    entropy = -sum((count / length) * math.log2(count / length) for count in freq.values())
 
     if entropy > 5.2:
         return 70

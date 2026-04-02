@@ -5,6 +5,7 @@ These live in the application layer and are shared between the use case and
 the interface layer. They intentionally do not import domain internals so
 the interface layer never needs to depend on the domain directly.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field

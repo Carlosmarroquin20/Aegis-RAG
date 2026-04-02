@@ -13,6 +13,7 @@ preserving cross-boundary context critical for retrieval accuracy.
 This lives in the domain layer because chunking is a core business concern —
 it directly affects retrieval quality and is independent of any infrastructure.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -71,9 +72,7 @@ class ChunkingService:
 
             # Stable, content-addressed ID: identical content produces the same ID
             # across re-ingestions, enabling idempotent upserts in the vector store.
-            chunk_id = hashlib.sha256(
-                f"{raw_doc.source}:{chunk_text}".encode()
-            ).hexdigest()[:32]
+            chunk_id = hashlib.sha256(f"{raw_doc.source}:{chunk_text}".encode()).hexdigest()[:32]
 
             metadata = {
                 **raw_doc.metadata,
@@ -85,9 +84,7 @@ class ChunkingService:
             if raw_doc.section:
                 metadata["section"] = raw_doc.section
 
-            documents.append(
-                Document(id=chunk_id, content=chunk_text, metadata=metadata)
-            )
+            documents.append(Document(id=chunk_id, content=chunk_text, metadata=metadata))
 
         logger.debug(
             "chunking.complete",
@@ -163,7 +160,7 @@ class ChunkingService:
                 chunks.append(chunk_text.strip())
                 # Capture overlap: last `overlap` chars of the current chunk body.
                 tail = " ".join(current_parts)
-                overlap_tail = tail[-self.overlap:] + " " if self.overlap else ""
+                overlap_tail = tail[-self.overlap :] + " " if self.overlap else ""
                 current_parts = []
                 current_len = 0
 

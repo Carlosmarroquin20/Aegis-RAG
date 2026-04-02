@@ -8,6 +8,7 @@ are present (flat documents without structure).
 Heading detection uses python-docx's built-in style name matching ("Heading 1",
 "Heading 2", etc.) rather than font size heuristics, which are unreliable.
 """
+
 from __future__ import annotations
 
 import structlog

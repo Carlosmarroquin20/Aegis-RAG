@@ -7,6 +7,7 @@ Concrete implementations: TxtParser, MarkdownParser, PdfParser, DocxParser.
 Design note: parsers are synchronous because PDF/DOCX extraction is CPU-bound
 and benefits from process-level parallelism rather than async I/O.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

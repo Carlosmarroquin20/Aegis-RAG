@@ -4,6 +4,7 @@ Unit tests for OutputSanitizer.
 Covers: length truncation, HTML stripping, reflection detection,
 PII detection, and blocking vs. permissive mode.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -25,6 +26,7 @@ def permissive_sanitizer() -> OutputSanitizer:
 
 
 # ── Length Enforcement ─────────────────────────────────────────────────────────
+
 
 class TestLengthEnforcement:
     def test_short_output_not_truncated(self, sanitizer: OutputSanitizer) -> None:
@@ -55,6 +57,7 @@ class TestLengthEnforcement:
 
 # ── HTML Stripping ─────────────────────────────────────────────────────────────
 
+
 class TestHTMLStripping:
     def test_strips_script_tag(self, sanitizer: OutputSanitizer) -> None:
         result = sanitizer.sanitize("Answer: <script>alert(1)</script> done.")
@@ -74,6 +77,7 @@ class TestHTMLStripping:
 
 
 # ── Reflection Detection ───────────────────────────────────────────────────────
+
 
 class TestReflectionDetection:
     @pytest.mark.parametrize(
@@ -104,6 +108,7 @@ class TestReflectionDetection:
 
 # ── PII Detection ──────────────────────────────────────────────────────────────
 
+
 class TestPIIDetection:
     def test_detects_ssn(self, sanitizer: OutputSanitizer) -> None:
         result = sanitizer.sanitize("Employee SSN is 123-45-6789.")
@@ -128,6 +133,7 @@ class TestPIIDetection:
 
 
 # ── has_warnings Property ──────────────────────────────────────────────────────
+
 
 class TestHasWarnings:
     def test_clean_output_no_warnings(self, sanitizer: OutputSanitizer) -> None:

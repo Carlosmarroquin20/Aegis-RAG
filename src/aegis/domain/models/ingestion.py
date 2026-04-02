@@ -5,6 +5,7 @@ RawDocument is the output of a parser — pre-chunking, pre-embedding.
 It carries provenance metadata that is preserved through chunking and indexing
 so that the RAG pipeline can cite exact sources in generated answers.
 """
+
 from __future__ import annotations
 
 from enum import StrEnum
@@ -16,9 +17,7 @@ class SupportedMimeType(StrEnum):
     TEXT_PLAIN = "text/plain"
     TEXT_MARKDOWN = "text/markdown"
     APPLICATION_PDF = "application/pdf"
-    APPLICATION_DOCX = (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+    APPLICATION_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
     @classmethod
     def values(cls) -> frozenset[str]:

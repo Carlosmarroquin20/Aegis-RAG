@@ -12,6 +12,7 @@ Security notes:
   - Abnormally large page counts (> 1000) are capped to prevent resource exhaustion
     from adversarially crafted PDFs.
 """
+
 from __future__ import annotations
 
 import io
