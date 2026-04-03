@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 class RawQuery(BaseModel):
     """Untrusted user input. Must not reach the LLM without SecurityGateway evaluation."""
 
-    text: str = Field(..., min_length=1, max_length=8192)
+    text: str = Field(..., min_length=1)
 
     @field_validator("text")
     @classmethod

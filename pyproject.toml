@@ -99,4 +99,4 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=src/aegis --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=src/aegis/domain --cov=src/aegis/infrastructure/security --cov-report=term-missing --cov-fail-under=80"

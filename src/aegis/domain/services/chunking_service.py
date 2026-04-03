@@ -66,7 +66,8 @@ class ChunkingService:
         raw_chunks = self._split(text)
 
         documents: list[Document] = []
-        for i, chunk_text in enumerate(raw_chunks):
+        doc_index = 0
+        for chunk_text in raw_chunks:
             if len(chunk_text) < self.min_chunk_size:
                 continue
 
@@ -74,16 +75,34 @@ class ChunkingService:
             # across re-ingestions, enabling idempotent upserts in the vector store.
             chunk_id = hashlib.sha256(f"{raw_doc.source}:{chunk_text}".encode()).hexdigest()[:32]
 
-            metadata = {
+            metadata: dict[str, str] = {
                 **raw_doc.metadata,
                 "source": raw_doc.source,
-                "chunk_index": str(i),
+                "chunk_index": str(doc_index),
             }
             if raw_doc.page_number is not None:
                 metadata["page"] = str(raw_doc.page_number)
             if raw_doc.section:
                 metadata["section"] = raw_doc.section
 
+            documents.append(Document(id=chunk_id, content=chunk_text, metadata=metadata))
+            doc_index += 1
+
+        # Fallback: if min_chunk_size filtered every candidate but the document has
+        # content, emit the first raw chunk anyway. This prevents callers from silently
+        # losing short-but-valid documents (e.g. single-sentence files).
+        if not documents and text.strip():
+            chunk_text = raw_chunks[0] if raw_chunks else text.strip()
+            chunk_id = hashlib.sha256(f"{raw_doc.source}:{chunk_text}".encode()).hexdigest()[:32]
+            metadata = {
+                **raw_doc.metadata,
+                "source": raw_doc.source,
+                "chunk_index": "0",
+            }
+            if raw_doc.page_number is not None:
+                metadata["page"] = str(raw_doc.page_number)
+            if raw_doc.section:
+                metadata["section"] = raw_doc.section
             documents.append(Document(id=chunk_id, content=chunk_text, metadata=metadata))
 
         logger.debug(
