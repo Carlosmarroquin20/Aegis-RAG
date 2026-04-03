@@ -67,7 +67,7 @@ jobs:
         run: uv sync --dev
 
       - name: Run tests
-        run: uv run pytest tests/unit/ -v --cov=src/aegis --cov-report=xml
+        run: uv run pytest tests/unit/ -v --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
