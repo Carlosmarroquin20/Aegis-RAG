@@ -13,6 +13,7 @@ preventing information leakage about undiscovered endpoints.
 from __future__ import annotations
 
 import time
+import uuid
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -27,6 +28,48 @@ logger = structlog.get_logger(__name__)
 
 # Paths excluded from API key enforcement (public endpoints).
 _PUBLIC_PATHS: frozenset[str] = frozenset({"/health", "/docs", "/openapi.json", "/redoc"})
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """
+    Assigns a unique ID to every request for end-to-end log correlation.
+
+    If the caller provides an X-Request-ID header (e.g., from an API gateway),
+    it is reused; otherwise a UUID4 is generated. The ID is:
+      1. Bound to structlog context vars so every log line includes it.
+      2. Echoed back in the X-Request-ID response header for client-side tracing.
+    """
+
+    async def dispatch(self, request: Request, call_next: object) -> Response:
+        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+
+        response: Response = await call_next(request)  # type: ignore[operator]
+        response.headers["X-Request-ID"] = request_id
+
+        structlog.contextvars.unbind_contextvars("request_id")
+        return response
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Injects defence-in-depth HTTP headers into every response.
+
+    These headers mitigate common browser-side attacks (XSS, clickjacking,
+    MIME sniffing) and signal HTTPS enforcement to compliant user-agents.
+    """
+
+    async def dispatch(self, request: Request, call_next: object) -> Response:
+        response: Response = await call_next(request)  # type: ignore[operator]
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "0"  # Modern best practice: rely on CSP instead
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+        return response
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):

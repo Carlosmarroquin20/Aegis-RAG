@@ -30,6 +30,8 @@ from aegis.interface.api.dependencies import (
 from aegis.interface.api.middleware.security_middleware import (
     APIKeyMiddleware,
     RateLimitMiddleware,
+    RequestIDMiddleware,
+    SecurityHeadersMiddleware,
 )
 from aegis.interface.api.routes import documents, health, query
 
@@ -124,7 +126,9 @@ def create_app() -> FastAPI:
 
     # ── Security Middleware Stack ──────────────────────────────────────────────
     # Middleware executes in reverse registration order.
-    # We register RateLimit first so it executes second (after APIKey).
+    # Stack order (request →): RequestID → SecurityHeaders → RateLimit → APIKey → Routes
+    app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RateLimitMiddleware, rate_limiter=get_rate_limiter(cfg))
     app.add_middleware(APIKeyMiddleware, settings=cfg)
 

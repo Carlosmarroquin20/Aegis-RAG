@@ -51,3 +51,36 @@ sentence_transformers/
 infra/terraform/.terraform/
 infra/terraform/*.tfstate
 infra/terraform/*.tfstate.backup
+
+# ── Secrets & credentials — NEVER commit ─────────────────────────────────────
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+credentials.json
+service-account*.json
+secrets.yaml
+secrets.yml
+*.secrets
+.htpasswd
+
+# ── Uploaded / ingested documents (may contain sensitive data) ────────────────
+uploads/
+data/
+*.pdf
+*.docx
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Database / persistence files ──────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+chroma_data/
+
+# ── Jupyter / notebook checkpoints ────────────────────────────────────────────
+.ipynb_checkpoints/
