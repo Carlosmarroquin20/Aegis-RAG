@@ -25,6 +25,8 @@ from dataclasses import dataclass
 
 import structlog
 
+from aegis.infrastructure.observability.metrics import output_reflections_total
+
 logger = structlog.get_logger(__name__)
 
 # ── Reflection Detection Signatures ──────────────────────────────────────────
@@ -111,6 +113,7 @@ class OutputSanitizer:
         # ── Step 3: Reflection detection ───────────────────────────────────────
         reflection_detected = any(p.search(text) for p in _REFLECTION_PATTERNS)
         if reflection_detected:
+            output_reflections_total.inc()
             log.error(
                 "output_sanitizer.reflection_detected",
                 query_hash=query_hash[:16] if query_hash else "unknown",

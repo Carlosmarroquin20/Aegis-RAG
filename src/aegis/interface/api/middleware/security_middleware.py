@@ -25,12 +25,20 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from aegis.config import Settings
+from aegis.infrastructure.observability.metrics import (
+    http_request_duration_seconds,
+    http_requests_total,
+)
 from aegis.infrastructure.security.rate_limiter import RateLimiter
 
 logger = structlog.get_logger(__name__)
 
-# Paths excluded from API key enforcement (public endpoints).
-_PUBLIC_PATHS: frozenset[str] = frozenset({"/health", "/docs", "/openapi.json", "/redoc"})
+# Paths excluded from API key enforcement and rate limiting (public endpoints).
+# /metrics is scraped by Prometheus on the internal network; protect it via
+# network-level ACLs (e.g., a private listener) rather than the API key.
+_PUBLIC_PATHS: frozenset[str] = frozenset(
+    {"/health", "/ready", "/metrics", "/docs", "/openapi.json", "/redoc"}
+)
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -56,20 +64,41 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
     """
-    Structured access log emitted for every request.
+    Structured access log + Prometheus instrumentation.
 
-    Each log line includes method, path, status code, response time in
-    milliseconds, and client IP — the minimum viable set for production
-    dashboards and incident investigation. The ``X-Response-Time`` header
-    is also set so callers can measure latency from their side.
+    Each request produces:
+      - one structured log line with method, path, status, duration_ms, IP
+      - one increment of ``aegis_http_requests_total{method,path,status}``
+      - one observation on ``aegis_http_request_duration_seconds{method,path}``
+
+    The ``X-Response-Time`` header is also set so callers can measure latency
+    from their side. The ``path`` label uses the matched route template
+    (e.g. ``/api/v1/documents/{doc_id}``) when available; this prevents label
+    cardinality explosion from path parameters.
     """
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
         start = time.monotonic()
         response: Response = await call_next(request)  # type: ignore[operator]
-        duration_ms = round((time.monotonic() - start) * 1000, 2)
+        duration_s = time.monotonic() - start
+        duration_ms = round(duration_s * 1000, 2)
 
         response.headers["X-Response-Time"] = f"{duration_ms}ms"
+
+        # Prefer the matched route template over the raw URL path to keep
+        # Prometheus label cardinality bounded.
+        route = request.scope.get("route")
+        metric_path = getattr(route, "path", None) or request.url.path
+
+        http_requests_total.labels(
+            method=request.method,
+            path=metric_path,
+            status=str(response.status_code),
+        ).inc()
+        http_request_duration_seconds.labels(
+            method=request.method,
+            path=metric_path,
+        ).observe(duration_s)
 
         logger.info(
             "http.access",

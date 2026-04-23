@@ -17,8 +17,9 @@ dependencies = [
     "pydantic-settings>=2.7.0",
     # HTTP client (LLM backends)
     "httpx>=0.28.0",
-    # Observability — structured JSON logs
+    # Observability — structured JSON logs + Prometheus metrics
     "structlog>=24.4.0",
+    "prometheus-client>=0.21.0",
     # Vector store & embeddings
     "chromadb>=0.6.0",
     "sentence-transformers>=3.3.0",

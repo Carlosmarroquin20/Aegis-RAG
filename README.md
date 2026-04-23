@@ -15,6 +15,7 @@ Aegis-RAG routes every query through an OWASP LLM Top 10 security pipeline befor
 - **Defence-in-depth middleware** — API key authentication, sliding-window rate limiting, security response headers (HSTS, CSP, X-Frame-Options), request ID correlation, and structured access logging with response timing.
 - **Adapter-based architecture** — swap ChromaDB for pgvector, or Ollama for OpenAI, by changing a single file. No domain code is affected.
 - **Air-gap compatible** — runs entirely on local infrastructure (Ollama + ChromaDB). No data leaves the network.
+- **Prometheus-ready** — `/metrics` endpoint exposes request counters, latency histograms, and security violations for SRE dashboards and alerting.
 
 ---
 
@@ -126,6 +127,35 @@ ChromaDB upsert
 
 ---
 
+## Observability
+
+Aegis-RAG ships with **Prometheus-native metrics** exposed at `/metrics` for scraping.
+
+| Metric | Type | Labels | Purpose |
+|---|---|---|---|
+| `aegis_http_requests_total` | Counter | `method`, `path`, `status` | Request volume & error rate (SLO input) |
+| `aegis_http_request_duration_seconds` | Histogram | `method`, `path` | Latency percentiles (p50, p95, p99) |
+| `aegis_security_violations_total` | Counter | `threat_level` | Blocked queries grouped by severity |
+| `aegis_security_rule_triggers_total` | Counter | `rule` | Which injection signatures are hitting |
+| `aegis_output_reflections_total` | Counter | — | LLM outputs blocked by reflection detection |
+| `aegis_rag_queries_total` | Counter | — | Queries that reached the retrieval stage |
+
+Path labels use the matched FastAPI route template (e.g. `/api/v1/documents/{doc_id}`) — not the raw URL — to keep label cardinality bounded.
+
+Every log line is a single JSON object (via `structlog`) with an auto-bound `request_id` field for end-to-end correlation between logs, metrics, and the `X-Request-ID` response header.
+
+Example scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: aegis-rag
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["aegis-rag:8000"]
+```
+
+---
+
 ## Tech Stack
 
 | Concern | Technology |
@@ -136,7 +166,7 @@ ChromaDB upsert
 | LLM backend | Ollama (local inference, air-gap compatible) |
 | Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
 | Document parsing | pypdf, python-docx, markdown-it-py, filetype (magic-byte MIME) |
-| Observability | structlog (JSON in prod, console in dev), request ID correlation |
+| Observability | structlog (JSON in prod), request ID correlation, Prometheus `/metrics` |
 | Linting | Ruff (lint + format), Mypy (strict mode) |
 | Security scanning | pip-audit (dependencies), Trivy (container image) |
 | Package manager | uv |
@@ -207,6 +237,7 @@ curl -X POST http://localhost:8000/api/v1/query \
 |---|---|---|
 | `GET` | `/health` | Liveness probe (no dependencies) |
 | `GET` | `/ready` | Readiness probe (checks ChromaDB + Ollama) |
+| `GET` | `/metrics` | Prometheus metrics (scrape target) |
 | `POST` | `/api/v1/query` | Submit a question to the RAG pipeline |
 | `POST` | `/api/v1/documents` | Upload and index a document (TXT, MD, PDF, DOCX) |
 | `GET` | `/api/v1/documents` | List indexed document chunks (paginated) |
@@ -259,6 +290,7 @@ src/aegis/
 │   └── use_cases/                     # QueryRAG, IngestDocuments
 ├── infrastructure/
 │   ├── llm/                           # OllamaAdapter (implements LLMClientPort)
+│   ├── observability/                 # Prometheus metrics (counters, histograms)
 │   ├── parsers/                       # TXT, Markdown, PDF, DOCX + ParserRegistry
 │   ├── security/                      # SecurityGateway, OutputSanitizer, RateLimiter
 │   └── vector_stores/                 # ChromaDBAdapter (implements VectorStorePort)

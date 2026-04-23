@@ -18,6 +18,11 @@ from aegis.application.dtos.rag_dtos import QueryRequest, QueryResponse, SourceD
 from aegis.domain.models.query import RawQuery
 from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.vector_store import VectorStorePort
+from aegis.infrastructure.observability.metrics import (
+    rag_queries_total,
+    security_rule_triggers_total,
+    security_violations_total,
+)
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
 from aegis.infrastructure.security.security_gateway import SecurityGateway
 
@@ -59,6 +64,11 @@ class QueryRAGUseCase:
                 query_hash=gateway_result.assessment.query_hash[:16],
                 score=gateway_result.assessment.score,
             )
+            security_violations_total.labels(
+                threat_level=gateway_result.assessment.level.name,
+            ).inc()
+            for rule in gateway_result.assessment.triggered_rules:
+                security_rule_triggers_total.labels(rule=rule).inc()
             raise SecurityViolationError(
                 reason=gateway_result.rejection_reason or "Security policy violation.",
                 query_hash=gateway_result.assessment.query_hash,
@@ -72,6 +82,7 @@ class QueryRAGUseCase:
         log = log.bind(query_hash=query_hash[:16])
 
         # ── Retrieval ──────────────────────────────────────────────────────────
+        rag_queries_total.inc()
         documents = await self._vector_store.similarity_search(sanitized_text, k=request.top_k)
         log.info("use_case.retrieved", doc_count=len(documents))
 
