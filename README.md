@@ -1,49 +1,56 @@
 # Aegis-RAG
 
-A hardened Retrieval-Augmented Generation (RAG) system designed for corporate environments.
-Built with a security-first architecture that enforces OWASP LLM Top 10 controls at every layer of the pipeline.
+**Security-hardened Retrieval-Augmented Generation API for enterprise environments.**
 
-> **Portfolio project** — demonstrates production-grade MLOps/DevOps practices including clean architecture, AppSec integration, observability, and containerized deployment.
+Aegis-RAG routes every query through an OWASP LLM Top 10 security pipeline before it reaches the RAG engine. The result is a production-grade system where prompt injection, output manipulation, and data exfiltration are mitigated by default rather than bolted on as an afterthought.
+
+> Built with hexagonal architecture, structured observability, and a full CI/CD pipeline — designed to demonstrate real-world MLOps, AppSec, and backend engineering practices.
+
+---
+
+## Key Features
+
+- **Prompt injection defence** — 11 heuristic signatures + Shannon entropy analysis, applied after NFC Unicode normalization to defeat homoglyph and encoding attacks.
+- **Output sanitization** — length enforcement, HTML stripping, prompt-reflection detection, and PII pattern flagging on every LLM response.
+- **Defence-in-depth middleware** — API key authentication, sliding-window rate limiting, security response headers (HSTS, CSP, X-Frame-Options), request ID correlation, and structured access logging with response timing.
+- **Adapter-based architecture** — swap ChromaDB for pgvector, or Ollama for OpenAI, by changing a single file. No domain code is affected.
+- **Air-gap compatible** — runs entirely on local infrastructure (Ollama + ChromaDB). No data leaves the network.
 
 ---
 
 ## Architecture
 
-Aegis-RAG follows a **hexagonal (ports & adapters)** architecture with four strict layers:
-
 ```
-┌─────────────────────────────────────────────────────┐
-│  Interface Layer     FastAPI routes, ASGI middleware │
-├─────────────────────────────────────────────────────┤
-│  Application Layer   Use cases, DTOs                │
-├─────────────────────────────────────────────────────┤
-│  Domain Layer        Models, ports (interfaces)     │
-│                      ChunkingService                │
-├─────────────────────────────────────────────────────┤
-│  Infrastructure      ChromaDB, Ollama, Parsers,     │
-│                      SecurityGateway, RateLimiter   │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  Interface          FastAPI routes, ASGI middleware stack           │
+│                     RequestID → AccessLog → SecurityHeaders →      │
+│                     RateLimit → APIKey → Routes                    │
+├─────────────────────────────────────────────────────────────────────┤
+│  Application        Use cases (QueryRAG, IngestDocuments), DTOs    │
+├─────────────────────────────────────────────────────────────────────┤
+│  Domain             Models, Ports (abstract interfaces),           │
+│                     ChunkingService                                │
+├─────────────────────────────────────────────────────────────────────┤
+│  Infrastructure     ChromaDB adapter, Ollama adapter, Parsers,     │
+│                     SecurityGateway, OutputSanitizer, RateLimiter  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-Each layer depends only inward. Swapping ChromaDB for pgvector, or Ollama for OpenAI,
-requires a change in a single adapter file.
+Each layer depends only inward. Infrastructure adapters implement domain ports — no business logic is coupled to any vendor SDK.
 
 ---
 
-## Security Design (OWASP LLM Top 10)
+## Security Controls (OWASP LLM Top 10)
 
-| Control | Implementation | Coverage |
+| Threat | Control | OWASP |
 |---|---|---|
-| Prompt injection detection | 11 heuristic signatures + Shannon entropy analysis | LLM01 |
-| Unicode normalization | NFC collapse before pattern matching (defeats homoglyph attacks) | LLM01 |
-| Instruction isolation in LLM | Hardcoded system prompt refusing document-embedded directives | LLM01/LLM02 |
-| Output sanitization | Length cap, HTML stripping, reflection detection, PII flagging | LLM02 |
-| API key authentication | ASGI-level middleware (runs before 404 responses) | LLM06 |
-| Per-key rate limiting | Sliding-window algorithm, Redis-swappable backend | LLM06 |
-| System prompt disclosure | Signature rules block probing queries | LLM07 |
-| File type validation | Magic-byte MIME detection (ignores attacker-controlled Content-Type) | General |
-| File size enforcement | 50 MB cap before parsing (prevents decompression bombs) | General |
-| Non-root container | UID 1001 in Docker runtime stage | General |
+| Prompt injection | 11 regex signatures + entropy scoring + Unicode NFC normalization | LLM01 |
+| Insecure output handling | Length cap, HTML stripping, reflection detection, PII flagging | LLM02 |
+| System prompt disclosure | Signature rules block probing queries ("show me your prompt") | LLM07 |
+| API abuse | Per-key sliding-window rate limiter with burst allowance | LLM06 |
+| Sensitive data exposure | API key auth at ASGI level, non-root container, no-store cache | LLM06 |
+| File upload attacks | Magic-byte MIME detection, 50 MB hard cap before parsing | General |
+| Browser-side attacks | HSTS, CSP, X-Frame-Options, X-Content-Type-Options on every response | General |
 
 ### Query Pipeline
 
@@ -51,33 +58,42 @@ requires a change in a single adapter file.
 HTTP Request
     │
     ▼
-APIKeyMiddleware          ← identity enforcement (ASGI layer)
+RequestIDMiddleware         ← assigns correlation ID (or reuses gateway-provided)
     │
     ▼
-RateLimitMiddleware       ← per-key sliding-window quota
+AccessLogMiddleware         ← structured log: method, path, status, duration_ms, IP
+    │
+    ▼
+SecurityHeadersMiddleware   ← HSTS, CSP, X-Frame-Options, nosniff, no-store
+    │
+    ▼
+APIKeyMiddleware            ← identity enforcement (ASGI layer)
+    │
+    ▼
+RateLimitMiddleware         ← per-key sliding-window quota + X-RateLimit-* headers
     │
     ▼
 SecurityGateway.evaluate()
   ├─ Structural validation (length, null bytes)
-  ├─ Unicode normalization
-  ├─ Heuristic threat scoring (injection signatures)
+  ├─ Unicode NFC normalization
+  ├─ Heuristic threat scoring (injection signatures + entropy)
   └─ Deep sanitization (HTML/template stripping)
     │
     ▼
-VectorStore.similarity_search()   ← ChromaDB
+VectorStore.similarity_search()   ← ChromaDB (adapter pattern)
     │
     ▼
-LLMClient.generate()              ← Ollama (local, private)
+LLMClient.generate()              ← Ollama (local, air-gapped)
     │
     ▼
 OutputSanitizer.sanitize()
   ├─ Length truncation
   ├─ HTML stripping
-  ├─ Reflection detection         ← blocks if LLM echoed injection payload
+  ├─ Reflection detection          ← blocks if LLM echoed injection payload
   └─ PII pattern flagging
     │
     ▼
-JSON Response
+JSON Response (with X-Request-ID + X-Response-Time)
 ```
 
 ### Ingestion Pipeline
@@ -89,7 +105,7 @@ File Upload (multipart/form-data)
 File size check (< 50 MB)
     │
     ▼
-ParserRegistry.detect_mime_type() ← magic bytes, not Content-Type
+ParserRegistry.detect_mime_type()  ← magic bytes, not Content-Type
     │
     ▼
 Parser (TXT / Markdown / PDF / DOCX)
@@ -114,16 +130,18 @@ ChromaDB upsert
 
 | Concern | Technology |
 |---|---|
-| API | FastAPI 0.115+, uvicorn |
+| API framework | FastAPI 0.115+, Uvicorn |
 | Validation | Pydantic v2, pydantic-settings |
-| Vector store | ChromaDB (adapter pattern — swappable) |
-| LLM | Ollama (local inference, air-gap compatible) |
+| Vector store | ChromaDB (adapter pattern — swappable for pgvector, Pinecone, etc.) |
+| LLM backend | Ollama (local inference, air-gap compatible) |
 | Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
-| Document parsing | pypdf, python-docx, markdown-it-py |
-| Observability | structlog (JSON in prod, console in dev) |
+| Document parsing | pypdf, python-docx, markdown-it-py, filetype (magic-byte MIME) |
+| Observability | structlog (JSON in prod, console in dev), request ID correlation |
+| Linting | Ruff (lint + format), Mypy (strict mode) |
+| Security scanning | pip-audit (dependencies), Trivy (container image) |
 | Package manager | uv |
-| Containerization | Docker multi-stage + docker-compose |
-| CI | GitHub Actions (lint → scan → test → Docker build) |
+| Containerization | Docker multi-stage build, non-root runtime (UID 1001) |
+| CI/CD | GitHub Actions — lint → security scan → test → Docker build + Trivy |
 
 ---
 
@@ -131,14 +149,14 @@ ChromaDB upsert
 
 ### Prerequisites
 
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) — Python package manager
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) — fast Python package manager
 - [Docker](https://docs.docker.com/get-docker/) + Docker Compose
-- [Ollama](https://ollama.ai/) (optional for local dev without containers)
+- [Ollama](https://ollama.ai/) (optional — included in compose stack)
 
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/your-org/aegis-rag.git
+git clone https://github.com/your-username/aegis-rag.git
 cd aegis-rag
 uv sync --dev
 ```
@@ -147,7 +165,7 @@ uv sync --dev
 
 ```bash
 cp .env.example .env
-# Edit .env — set VALID_API_KEYS and adjust model/store settings
+# Edit .env — set VALID_API_KEYS and adjust model/store settings as needed
 ```
 
 ### 3. Start the stack
@@ -157,17 +175,22 @@ docker compose up -d
 ```
 
 This starts:
-- **Aegis-RAG API** on `http://localhost:8000`
-- **ChromaDB** on `http://localhost:8001`
-- **Ollama** on `http://localhost:11434` (pulls `llama3.2` on first start)
 
-### 4. Index documents
+| Service | URL | Purpose |
+|---|---|---|
+| Aegis-RAG API | `http://localhost:8000` | Main application |
+| ChromaDB | `http://localhost:8001` | Vector store |
+| Ollama | `http://localhost:11434` | Local LLM inference |
+
+### 4. Index a document
 
 ```bash
-uv run python scripts/seed_documents.py --source-dir ./data/docs
+curl -X POST http://localhost:8000/api/v1/documents \
+  -H "X-API-Key: dev-key-change-in-production" \
+  -F "file=@./path/to/document.pdf"
 ```
 
-### 5. Query
+### 5. Query the RAG pipeline
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/query \
@@ -182,13 +205,13 @@ curl -X POST http://localhost:8000/api/v1/query \
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/health` | Liveness probe |
+| `GET` | `/health` | Liveness probe (no dependencies) |
 | `GET` | `/ready` | Readiness probe (checks ChromaDB + Ollama) |
 | `POST` | `/api/v1/query` | Submit a question to the RAG pipeline |
 | `POST` | `/api/v1/documents` | Upload and index a document (TXT, MD, PDF, DOCX) |
-| `GET` | `/api/v1/documents` | List indexed document chunks |
-| `DELETE` | `/api/v1/documents/{id}` | Delete a chunk by ID |
-| `DELETE` | `/api/v1/documents` | Bulk delete by ID list |
+| `GET` | `/api/v1/documents` | List indexed document chunks (paginated) |
+| `DELETE` | `/api/v1/documents/{id}` | Delete a single chunk |
+| `DELETE` | `/api/v1/documents` | Bulk delete by ID list (max 500) |
 
 Interactive docs available at `http://localhost:8000/docs` when `DEBUG=true`.
 
@@ -201,20 +224,24 @@ Interactive docs available at `http://localhost:8000/docs` when `DEBUG=true`.
 ```bash
 uv run pytest                        # all tests with coverage
 uv run pytest tests/unit/            # unit tests only
-uv run pytest tests/integration/     # integration tests
+uv run pytest tests/integration/     # integration tests (requires running stack)
 ```
 
 ### Lint and type-check
 
 ```bash
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
-uv run mypy src/
+uv run ruff check src/ tests/        # lint
+uv run ruff format src/ tests/       # auto-format
+uv run mypy src/                     # strict type checking
 ```
 
-### Dev Container
+### CI Pipeline
 
-Open in VS Code with the Remote - Containers extension. The `.devcontainer/` configuration sets up the full stack automatically, including pre-commit hooks.
+Every push triggers the full pipeline in GitHub Actions:
+
+```
+Ruff lint → Ruff format → Mypy → pip-audit → Unit tests + coverage → Docker build → Trivy scan
+```
 
 ---
 
@@ -222,7 +249,7 @@ Open in VS Code with the Remote - Containers extension. The `.devcontainer/` con
 
 ```
 src/aegis/
-├── config.py                          # pydantic-settings, all env vars
+├── config.py                          # pydantic-settings: all env vars, validation
 ├── domain/
 │   ├── models/                        # Pure data models (no I/O)
 │   ├── ports/                         # Abstract interfaces (VectorStore, LLM, Parser)
@@ -231,15 +258,16 @@ src/aegis/
 │   ├── dtos/                          # Request/response contracts
 │   └── use_cases/                     # QueryRAG, IngestDocuments
 ├── infrastructure/
-│   ├── llm/                           # OllamaAdapter
+│   ├── llm/                           # OllamaAdapter (implements LLMClientPort)
 │   ├── parsers/                       # TXT, Markdown, PDF, DOCX + ParserRegistry
-│   ├── security/                      # SecurityGateway, RateLimiter, OutputSanitizer
-│   └── vector_stores/                 # ChromaDBAdapter
+│   ├── security/                      # SecurityGateway, OutputSanitizer, RateLimiter
+│   └── vector_stores/                 # ChromaDBAdapter (implements VectorStorePort)
 └── interface/
     └── api/
         ├── main.py                    # FastAPI app factory + lifespan
-        ├── dependencies.py            # Object graph wiring
-        ├── middleware/                # APIKeyMiddleware, RateLimitMiddleware
+        ├── dependencies.py            # Dependency injection wiring
+        ├── middleware/                 # RequestID, AccessLog, SecurityHeaders,
+        │                              # APIKey, RateLimit
         └── routes/                    # query, documents, health
 ```
 
