@@ -244,21 +244,27 @@ def reset_prometheus_registry() -> Iterator[None]:
     """
     Resets the Aegis Prometheus registry before and after a test.
 
-    Use this for tests that assert on metric values — otherwise counters from
-    previous tests (same process) contaminate the observation.
+    Use this for tests that assert on metric values — otherwise counters
+    from previous tests (same process) contaminate the observation.
+
+    Labeled metrics store per-label-combo trackers in ``_metrics``; unlabeled
+    metrics hold their count directly in ``_value``. Reset both paths.
     """
     from aegis.infrastructure.observability import metrics as metrics_module
 
-    # Zero out every metric currently registered on our private registry by
-    # clearing each collector's internal state. This avoids the fragility of
-    # unregister+reregister across test runs.
-    for collector in list(metrics_module.registry._collector_to_names.keys()):  # noqa: SLF001
-        if hasattr(collector, "_metrics"):
-            collector._metrics.clear()  # noqa: SLF001
+    def _reset() -> None:
+        for collector in list(metrics_module.registry._collector_to_names.keys()):  # noqa: SLF001
+            # Labeled metrics: drop every per-label child tracker.
+            if hasattr(collector, "_metrics"):
+                collector._metrics.clear()  # noqa: SLF001
+            # Unlabeled counters/gauges: zero out the backing value.
+            value = getattr(collector, "_value", None)
+            if value is not None and hasattr(value, "set"):
+                value.set(0)
+
+    _reset()
     yield
-    for collector in list(metrics_module.registry._collector_to_names.keys()):  # noqa: SLF001
-        if hasattr(collector, "_metrics"):
-            collector._metrics.clear()  # noqa: SLF001
+    _reset()
 
 
 # ── FastAPI app builders ─────────────────────────────────────────────────────
