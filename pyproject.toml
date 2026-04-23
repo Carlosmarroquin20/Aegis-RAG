@@ -101,4 +101,30 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=src/aegis/domain --cov=src/aegis/infrastructure/security --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov --cov-report=term-missing"
+
+# --- Coverage ---
+# Source is measured across the entire `src/aegis` package. Previously only
+# `domain` and `infrastructure/security` were measured, which inflated the
+# reported percentage by excluding the API and application layers.
+[tool.coverage.run]
+source = ["src/aegis"]
+branch = true
+omit = [
+    "src/aegis/**/__init__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+# fail_under is intentionally conservative for now. Ratchet this up as the
+# test suite grows (target: ≥ 75% once middleware and use-case tests land).
+fail_under = 40
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "\\.\\.\\.",
+    "if __name__ == .__main__.:",
+    "pragma: no cover",
+]
