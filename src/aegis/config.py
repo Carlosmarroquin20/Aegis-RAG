@@ -31,6 +31,20 @@ class Settings(BaseSettings):
     # Comma-separated list of valid API keys; in production, load from a secrets manager.
     valid_api_keys: str = Field(default="", description="Comma-separated API keys")
 
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    # Comma-separated list of allowed origins for production (e.g., "https://app.example.com").
+    # Ignored when DEBUG=true (all origins are allowed in debug mode).
+    cors_allowed_origins_str: str = Field(
+        default="",
+        alias="CORS_ALLOWED_ORIGINS",
+        description="Comma-separated allowed origins for CORS",
+    )
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        """Returns the allowed origins as a list for CORSMiddleware."""
+        return [o.strip() for o in self.cors_allowed_origins_str.split(",") if o.strip()]
+
     # ── Rate Limiting ──────────────────────────────────────────────────────────
     rate_limit_requests: int = 60  # requests per window
     rate_limit_window_seconds: int = 60

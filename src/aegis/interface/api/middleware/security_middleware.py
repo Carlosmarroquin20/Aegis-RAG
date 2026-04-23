@@ -1,9 +1,12 @@
 """
-ASGI Security Middleware Stack.
+ASGI Security & Observability Middleware Stack.
 
 Responsibilities separated by concern:
-  - APIKeyMiddleware   : authenticates the caller (identity layer)
-  - RateLimitMiddleware: enforces per-key request quotas (throttle layer)
+  - RequestIDMiddleware       : assigns a unique correlation ID to every request
+  - AccessLogMiddleware       : structured access logging with response timing
+  - SecurityHeadersMiddleware : defence-in-depth HTTP headers on every response
+  - APIKeyMiddleware          : authenticates the caller (identity layer)
+  - RateLimitMiddleware       : enforces per-key request quotas (throttle layer)
 
 These run before any route handler is invoked. Placing them in middleware
 (rather than FastAPI dependencies) ensures they execute even for 404/405 responses,
@@ -48,6 +51,34 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         response.headers["X-Request-ID"] = request_id
 
         structlog.contextvars.unbind_contextvars("request_id")
+        return response
+
+
+class AccessLogMiddleware(BaseHTTPMiddleware):
+    """
+    Structured access log emitted for every request.
+
+    Each log line includes method, path, status code, response time in
+    milliseconds, and client IP — the minimum viable set for production
+    dashboards and incident investigation. The ``X-Response-Time`` header
+    is also set so callers can measure latency from their side.
+    """
+
+    async def dispatch(self, request: Request, call_next: object) -> Response:
+        start = time.monotonic()
+        response: Response = await call_next(request)  # type: ignore[operator]
+        duration_ms = round((time.monotonic() - start) * 1000, 2)
+
+        response.headers["X-Response-Time"] = f"{duration_ms}ms"
+
+        logger.info(
+            "http.access",
+            method=request.method,
+            path=request.url.path,
+            status=response.status_code,
+            duration_ms=duration_ms,
+            client_ip=request.client.host if request.client else "unknown",
+        )
         return response
 
 

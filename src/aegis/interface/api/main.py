@@ -4,7 +4,7 @@ FastAPI application entry point.
 Wiring order matters:
   1. Logging is configured before anything else so startup errors are captured.
   2. Middleware is added in reverse execution order (last added = first to run).
-     Stack order (request direction): RateLimit → APIKey → Routes
+     Stack order (request →): RequestID → AccessLog → SecurityHeaders → RateLimit → APIKey → Routes
   3. The lifespan context manager handles adapter initialization and cleanup.
 """
 
@@ -28,6 +28,7 @@ from aegis.interface.api.dependencies import (
     get_security_gateway,
 )
 from aegis.interface.api.middleware.security_middleware import (
+    AccessLogMiddleware,
     APIKeyMiddleware,
     RateLimitMiddleware,
     RequestIDMiddleware,
@@ -116,18 +117,21 @@ def create_app() -> FastAPI:
     )
 
     # ── CORS ──────────────────────────────────────────────────────────────────
-    # Default to restrictive CORS; configure origins via environment in production.
+    # In production, set CORS_ALLOWED_ORIGINS to the exact frontend domains.
+    # Debug mode permits all origins for local development convenience.
+    origins = ["*"] if cfg.debug else cfg.cors_allowed_origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if cfg.debug else [],
+        allow_origins=origins,
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type", cfg.api_key_header],
     )
 
-    # ── Security Middleware Stack ──────────────────────────────────────────────
-    # Middleware executes in reverse registration order.
-    # Stack order (request →): RequestID → SecurityHeaders → RateLimit → APIKey → Routes
+    # ── Security & Observability Middleware Stack ─────────────────────────────
+    # Middleware executes in reverse registration order (last added = first to run).
+    # Stack (request →): RequestID → AccessLog → SecurityHeaders → RateLimit → APIKey → Routes
     app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(AccessLogMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RateLimitMiddleware, rate_limiter=get_rate_limiter(cfg))
     app.add_middleware(APIKeyMiddleware, settings=cfg)
