@@ -1,0 +1,28 @@
+---
+# Prometheus scrape + alerting config for the Aegis-RAG observability stack.
+# Prometheus runs in the same docker-compose network and resolves the API
+# container by its service name.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: aegis-local
+    service: aegis-rag
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: aegis-rag
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api:8000
+        labels:
+          component: api
+
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090

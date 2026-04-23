@@ -1,0 +1,18 @@
+---
+# Grafana dashboard provider — loads every JSON file in /var/lib/grafana/dashboards
+# on startup. This is how the Aegis-RAG dashboard appears automatically without
+# a manual import step.
+
+apiVersion: 1
+
+providers:
+  - name: Aegis-RAG
+    orgId: 1
+    folder: Aegis
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

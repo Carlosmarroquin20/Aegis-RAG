@@ -1,0 +1,80 @@
+---
+# Alert rules for the Aegis-RAG service.
+#
+# These rules operate on the metrics exposed at /metrics and are evaluated
+# every 15s. Thresholds assume a development baseline; adjust for production
+# workloads based on observed SLOs.
+
+groups:
+  - name: aegis-rag.availability
+    interval: 30s
+    rules:
+      - alert: AegisHighErrorRate
+        expr: |
+          (
+            sum(rate(aegis_http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(aegis_http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aegis-RAG 5xx error rate above 5%"
+          description: >
+            More than 5% of requests are returning 5xx for the last 5 minutes.
+            Check application logs and upstream (ChromaDB, Ollama) availability.
+
+      - alert: AegisAPIDown
+        expr: up{job="aegis-rag"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aegis-RAG scrape target is down"
+          description: "Prometheus has failed to scrape /metrics for 2 minutes."
+
+  - name: aegis-rag.latency
+    interval: 30s
+    rules:
+      - alert: AegisHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(aegis_http_request_duration_seconds_bucket[5m]))
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Aegis-RAG p95 latency above 5s"
+          description: >
+            Sustained p95 latency > 5s usually indicates an LLM generation
+            bottleneck or an under-provisioned embedding step.
+
+  - name: aegis-rag.security
+    interval: 30s
+    rules:
+      - alert: AegisSecurityViolationSpike
+        expr: sum(rate(aegis_security_violations_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained security violation spike"
+          description: >
+            Aegis-RAG is blocking queries at more than 0.2/s for 5 minutes.
+            Review aegis_security_rule_triggers_total to identify which
+            injection signatures are firing.
+
+      - alert: AegisOutputReflectionDetected
+        expr: increase(aegis_output_reflections_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM output reflection detected"
+          description: >
+            The OutputSanitizer blocked at least one LLM response that
+            echoed an injection payload. Investigate the indexed documents
+            for indirect prompt injection.

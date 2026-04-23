@@ -144,15 +144,22 @@ Path labels use the matched FastAPI route template (e.g. `/api/v1/documents/{doc
 
 Every log line is a single JSON object (via `structlog`) with an auto-bound `request_id` field for end-to-end correlation between logs, metrics, and the `X-Request-ID` response header.
 
-Example scrape config:
+### One-command monitoring stack
 
-```yaml
-scrape_configs:
-  - job_name: aegis-rag
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["aegis-rag:8000"]
+`docker compose up` starts Prometheus and Grafana alongside the API. Configuration lives under `infra/`:
+
 ```
+infra/
+├── prometheus/
+│   ├── prometheus.yml     # Scrape config (targets the api service)
+│   └── alerts.yml         # Alert rules: 5xx rate, p95 latency, security spikes, reflection
+└── grafana/
+    ├── provisioning/      # Auto-load the Prometheus datasource + dashboards
+    └── dashboards/
+        └── aegis-rag.json # Production Overview dashboard
+```
+
+The dashboard surfaces four stat tiles at the top (request rate, 5xx rate, p95 latency, blocked queries), followed by HTTP and Security sections with full-resolution time series. The alert rules fire on sustained error-rate spikes, latency regressions, security-violation floods, and any output-reflection event.
 
 ---
 
@@ -204,13 +211,17 @@ cp .env.example .env
 docker compose up -d
 ```
 
-This starts:
+This starts a full stack — API, vector store, LLM, and a pre-configured observability pipeline:
 
 | Service | URL | Purpose |
 |---|---|---|
 | Aegis-RAG API | `http://localhost:8000` | Main application |
 | ChromaDB | `http://localhost:8001` | Vector store |
 | Ollama | `http://localhost:11434` | Local LLM inference |
+| Prometheus | `http://localhost:9090` | Metrics scrape + alert engine |
+| **Grafana** | **`http://localhost:3000`** | **Live dashboard (anonymous viewer access)** |
+
+Grafana ships with the **Aegis-RAG — Production Overview** dashboard pre-provisioned. Open `http://localhost:3000` and you'll immediately see request rate, latency percentiles, security violations, and top triggered injection rules — no import, no setup.
 
 ### 4. Index a document
 
@@ -300,7 +311,12 @@ src/aegis/
         ├── dependencies.py            # Dependency injection wiring
         ├── middleware/                 # RequestID, AccessLog, SecurityHeaders,
         │                              # APIKey, RateLimit
-        └── routes/                    # query, documents, health
+        └── routes/                    # query, documents, health (+ /metrics)
+
+infra/
+├── prometheus/                        # Scrape config + alert rules
+├── grafana/                           # Dashboard JSON + provisioning
+└── terraform/                         # Cloud infrastructure (optional)
 ```
 
 ---
