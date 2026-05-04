@@ -1,244 +1,151 @@
 # Aegis-RAG
 
-**Security-hardened Retrieval-Augmented Generation API for enterprise environments.**
+> **A production-grade RAG system where security is the architecture, not a checklist.**
 
-Aegis-RAG routes every query through an OWASP LLM Top 10 security pipeline before it reaches the RAG engine. The result is a production-grade system where prompt injection, output manipulation, and data exfiltration are mitigated by default rather than bolted on as an afterthought.
+[![Python](https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Ruff](https://img.shields.io/badge/lint-ruff-261230?logo=ruff)](https://github.com/astral-sh/ruff)
+[![Type checked: mypy](https://img.shields.io/badge/mypy-strict-1f5082)](https://mypy-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![OWASP LLM](https://img.shields.io/badge/OWASP_LLM_Top_10-mitigated-d6262c)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 
-> Built with hexagonal architecture, structured observability, and a full CI/CD pipeline — designed to demonstrate real-world MLOps, AppSec, and backend engineering practices.
+Aegis-RAG is a Retrieval-Augmented Generation API designed for environments where you cannot afford to ship "best effort" security. Every query is evaluated by a domain-level **Security Gateway** before any retrieval or generation happens, every LLM response is post-processed by an **Output Sanitizer**, and the whole pipeline is wrapped in a defence-in-depth middleware stack with first-class observability.
+
+The codebase deliberately demonstrates senior-level practices that recruiters and tech leads care about: hexagonal architecture with swappable adapters, strict-typed Python, OWASP LLM Top 10 mitigations, Prometheus + Grafana out of the box, a hardened multi-stage Docker build, and a layered test suite (unit, integration, end-to-end).
 
 ---
 
-## Key Features
+## Engineering Highlights
 
-- **Prompt injection defence** — 11 heuristic signatures + Shannon entropy analysis, applied after NFC Unicode normalization to defeat homoglyph and encoding attacks.
-- **Output sanitization** — length enforcement, HTML stripping, prompt-reflection detection, and PII pattern flagging on every LLM response.
-- **Defence-in-depth middleware** — API key authentication, sliding-window rate limiting, security response headers (HSTS, CSP, X-Frame-Options), request ID correlation, and structured access logging with response timing.
-- **Adapter-based architecture** — swap ChromaDB for pgvector, or Ollama for OpenAI, by changing a single file. No domain code is affected.
-- **Air-gap compatible** — runs entirely on local infrastructure (Ollama + ChromaDB). No data leaves the network.
-- **Prometheus-ready** — `/metrics` endpoint exposes request counters, latency histograms, and security violations for SRE dashboards and alerting.
+- **Defence in depth, by design.** Five ASGI middlewares (RequestID, AccessLog, SecurityHeaders, APIKey, RateLimit) execute *before* any route handler, so 404s and 405s receive the same hardening as authenticated traffic.
+- **Bounded label cardinality.** Prometheus path labels collapse to the matched FastAPI route template (`/api/v1/documents/{doc_id}`), never the raw URL — a subtle but production-critical decision.
+- **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
+- **Magic-byte file detection.** Document uploads are dispatched to parsers based on actual file content, not the attacker-controllable `Content-Type` header.
+- **Hexagonal for real.** The `LLMClientPort` and `VectorStorePort` interfaces mean swapping Ollama for OpenAI or ChromaDB for pgvector is a one-file change — and there are fakes in the test suite that prove it.
+- **Air-gap compatible.** The full stack runs on local infrastructure (Ollama + ChromaDB). No data ever leaves the network.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Interface          FastAPI routes, ASGI middleware stack           │
-│                     RequestID → AccessLog → SecurityHeaders →      │
-│                     RateLimit → APIKey → Routes                    │
-├─────────────────────────────────────────────────────────────────────┤
-│  Application        Use cases (QueryRAG, IngestDocuments), DTOs    │
-├─────────────────────────────────────────────────────────────────────┤
-│  Domain             Models, Ports (abstract interfaces),           │
-│                     ChunkingService                                │
-├─────────────────────────────────────────────────────────────────────┤
-│  Infrastructure     ChromaDB adapter, Ollama adapter, Parsers,     │
-│                     SecurityGateway, OutputSanitizer, RateLimiter  │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  Interface     FastAPI routes + middleware stack                     │
+│                RequestID → AccessLog → SecurityHeaders →             │
+│                RateLimit → APIKey → Routes                           │
+├──────────────────────────────────────────────────────────────────────┤
+│  Application   Use cases (QueryRAG, IngestDocuments) · DTOs          │
+├──────────────────────────────────────────────────────────────────────┤
+│  Domain        Models · Ports (abstract) · ChunkingService           │
+├──────────────────────────────────────────────────────────────────────┤
+│  Infrastructure  ChromaDB · Ollama · Parsers · SecurityGateway       │
+│                  OutputSanitizer · RateLimiter · Prometheus metrics  │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 Each layer depends only inward. Infrastructure adapters implement domain ports — no business logic is coupled to any vendor SDK.
 
----
-
-## Security Controls (OWASP LLM Top 10)
-
-| Threat | Control | OWASP |
-|---|---|---|
-| Prompt injection | 11 regex signatures + entropy scoring + Unicode NFC normalization | LLM01 |
-| Insecure output handling | Length cap, HTML stripping, reflection detection, PII flagging | LLM02 |
-| System prompt disclosure | Signature rules block probing queries ("show me your prompt") | LLM07 |
-| API abuse | Per-key sliding-window rate limiter with burst allowance | LLM06 |
-| Sensitive data exposure | API key auth at ASGI level, non-root container, no-store cache | LLM06 |
-| File upload attacks | Magic-byte MIME detection, 50 MB hard cap before parsing | General |
-| Browser-side attacks | HSTS, CSP, X-Frame-Options, X-Content-Type-Options on every response | General |
-
-### Query Pipeline
+### Request flow
 
 ```
 HTTP Request
     │
-    ▼
-RequestIDMiddleware         ← assigns correlation ID (or reuses gateway-provided)
+    ▼  Middleware stack: correlation ID · access log · security headers · auth · rate limit
+    │
+    ▼  SecurityGateway.evaluate()      ← LLM01 · structural + Unicode NFC + 11 signatures + entropy
+    │
+    ▼  VectorStore.similarity_search() ← ChromaDB (swappable port)
+    │
+    ▼  LLMClient.generate()            ← Ollama (local, air-gapped)
+    │
+    ▼  OutputSanitizer.sanitize()      ← LLM02 · length cap · HTML strip · reflection guard · PII scan
     │
     ▼
-AccessLogMiddleware         ← structured log: method, path, status, duration_ms, IP
-    │
-    ▼
-SecurityHeadersMiddleware   ← HSTS, CSP, X-Frame-Options, nosniff, no-store
-    │
-    ▼
-APIKeyMiddleware            ← identity enforcement (ASGI layer)
-    │
-    ▼
-RateLimitMiddleware         ← per-key sliding-window quota + X-RateLimit-* headers
-    │
-    ▼
-SecurityGateway.evaluate()
-  ├─ Structural validation (length, null bytes)
-  ├─ Unicode NFC normalization
-  ├─ Heuristic threat scoring (injection signatures + entropy)
-  └─ Deep sanitization (HTML/template stripping)
-    │
-    ▼
-VectorStore.similarity_search()   ← ChromaDB (adapter pattern)
-    │
-    ▼
-LLMClient.generate()              ← Ollama (local, air-gapped)
-    │
-    ▼
-OutputSanitizer.sanitize()
-  ├─ Length truncation
-  ├─ HTML stripping
-  ├─ Reflection detection          ← blocks if LLM echoed injection payload
-  └─ PII pattern flagging
-    │
-    ▼
-JSON Response (with X-Request-ID + X-Response-Time)
+JSON Response  (with X-Request-ID, X-Response-Time, X-RateLimit-* headers)
 ```
 
-### Ingestion Pipeline
+Document ingestion follows the same hexagonal pattern: magic-byte MIME detection → parser dispatch (TXT/MD/PDF/DOCX) → `ChunkingService` (paragraph → sentence → word fallback with overlap stitching) → content-addressed deduplication → vector store upsert.
 
-```
-File Upload (multipart/form-data)
-    │
-    ▼
-File size check (< 50 MB)
-    │
-    ▼
-ParserRegistry.detect_mime_type()  ← magic bytes, not Content-Type
-    │
-    ▼
-Parser (TXT / Markdown / PDF / DOCX)
-    │
-    ▼
-ChunkingService
-  ├─ Paragraph splitting
-  ├─ Sentence-boundary splitting
-  ├─ Word-boundary fallback
-  └─ Overlap stitching + content-addressed IDs
-    │
-    ▼
-Deduplication (hash-based, idempotent upsert)
-    │
-    ▼
-ChromaDB upsert
-```
+---
+
+## Security Controls — OWASP LLM Top 10
+
+| Threat | Control | OWASP |
+|---|---|---|
+| Prompt injection | 11 regex signatures + Shannon entropy + Unicode NFC normalization | LLM01 |
+| Insecure output handling | Length cap · HTML strip · reflection detection · PII flagging | LLM02 |
+| System-prompt disclosure | Signature rules block probing queries (*"show me your prompt"*) | LLM07 |
+| API abuse | Per-key sliding-window rate limiter with burst allowance | LLM06 |
+| Sensitive data exposure | API key auth at ASGI level · non-root container · `Cache-Control: no-store` | LLM06 |
+| File-upload attacks | Magic-byte MIME detection · 50 MB hard cap before parsing | General |
+| Browser-side attacks | HSTS · CSP `default-src 'none'` · X-Frame-Options DENY · nosniff | General |
 
 ---
 
 ## Observability
 
-Aegis-RAG ships with **Prometheus-native metrics** exposed at `/metrics` for scraping.
+`/metrics` exposes Prometheus-native metrics on the live port. The full observability stack (Prometheus + Grafana) is wired into `docker compose` and ships pre-provisioned — no manual import.
 
-| Metric | Type | Labels | Purpose |
-|---|---|---|---|
-| `aegis_http_requests_total` | Counter | `method`, `path`, `status` | Request volume & error rate (SLO input) |
-| `aegis_http_request_duration_seconds` | Histogram | `method`, `path` | Latency percentiles (p50, p95, p99) |
-| `aegis_security_violations_total` | Counter | `threat_level` | Blocked queries grouped by severity |
-| `aegis_security_rule_triggers_total` | Counter | `rule` | Which injection signatures are hitting |
-| `aegis_output_reflections_total` | Counter | — | LLM outputs blocked by reflection detection |
-| `aegis_rag_queries_total` | Counter | — | Queries that reached the retrieval stage |
+| Metric | Type | Purpose |
+|---|---|---|
+| `aegis_http_requests_total` | Counter | Request volume & error rate (SLO input) |
+| `aegis_http_request_duration_seconds` | Histogram | Latency percentiles (p50/p95/p99) |
+| `aegis_security_violations_total` | Counter | Blocked queries grouped by threat level |
+| `aegis_security_rule_triggers_total` | Counter | Which injection signatures are firing |
+| `aegis_output_reflections_total` | Counter | LLM responses blocked by reflection guard |
+| `aegis_rag_queries_total` | Counter | Queries that reached the retrieval stage |
 
-Path labels use the matched FastAPI route template (e.g. `/api/v1/documents/{doc_id}`) — not the raw URL — to keep label cardinality bounded.
+Logs are single-line JSON via `structlog` with an auto-bound `request_id` for end-to-end correlation between logs, metrics, traces, and the `X-Request-ID` response header.
 
-Every log line is a single JSON object (via `structlog`) with an auto-bound `request_id` field for end-to-end correlation between logs, metrics, and the `X-Request-ID` response header.
-
-### One-command monitoring stack
-
-`docker compose up` starts Prometheus and Grafana alongside the API. Configuration lives under `infra/`:
-
-```
-infra/
-├── prometheus/
-│   ├── prometheus.yml     # Scrape config (targets the api service)
-│   └── alerts.yml         # Alert rules: 5xx rate, p95 latency, security spikes, reflection
-└── grafana/
-    ├── provisioning/      # Auto-load the Prometheus datasource + dashboards
-    └── dashboards/
-        └── aegis-rag.json # Production Overview dashboard
-```
-
-The dashboard surfaces four stat tiles at the top (request rate, 5xx rate, p95 latency, blocked queries), followed by HTTP and Security sections with full-resolution time series. The alert rules fire on sustained error-rate spikes, latency regressions, security-violation floods, and any output-reflection event.
+The pre-provisioned Grafana dashboard surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security sections into full-resolution time series. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, and any output-reflection event.
 
 ---
 
 ## Tech Stack
 
-| Concern | Technology |
-|---|---|
-| API framework | FastAPI 0.115+, Uvicorn |
-| Validation | Pydantic v2, pydantic-settings |
-| Vector store | ChromaDB (adapter pattern — swappable for pgvector, Pinecone, etc.) |
-| LLM backend | Ollama (local inference, air-gap compatible) |
-| Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
-| Document parsing | pypdf, python-docx, markdown-it-py, filetype (magic-byte MIME) |
-| Observability | structlog (JSON in prod), request ID correlation, Prometheus `/metrics` |
-| Linting | Ruff (lint + format), Mypy (strict mode) |
-| Security scanning | pip-audit (dependencies), Trivy (container image) |
-| Package manager | uv |
-| Containerization | Docker multi-stage build, non-root runtime (UID 1001) |
-| CI/CD | GitHub Actions — lint → security scan → test → Docker build + Trivy |
+- **API & runtime** — FastAPI 0.115+, Uvicorn, Pydantic v2 (strict), `uv` package manager
+- **RAG core** — ChromaDB · Ollama · `sentence-transformers/all-MiniLM-L6-v2` · pypdf · python-docx · markdown-it-py
+- **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy
+- **Observability** — `structlog` · `prometheus-client` · Grafana with provisioned dashboards
+- **Delivery** — Multi-stage Docker (non-root UID 1001) · GitHub Actions CI · docker-compose for local stack
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) — fast Python package manager
-- [Docker](https://docs.docker.com/get-docker/) + Docker Compose
-- [Ollama](https://ollama.ai/) (optional — included in compose stack)
-
-### 1. Clone and install
-
 ```bash
 git clone https://github.com/your-username/aegis-rag.git
 cd aegis-rag
-uv sync --dev
-```
-
-### 2. Configure environment
-
-```bash
 cp .env.example .env
-# Edit .env — set VALID_API_KEYS and adjust model/store settings as needed
-```
-
-### 3. Start the stack
-
-```bash
 docker compose up -d
 ```
 
-This starts a full stack — API, vector store, LLM, and a pre-configured observability pipeline:
+That single `docker compose up` starts the full stack — API, vector store, LLM, Prometheus, and a pre-loaded Grafana dashboard:
 
-| Service | URL | Purpose |
+| Service | URL | Notes |
 |---|---|---|
 | Aegis-RAG API | `http://localhost:8000` | Main application |
 | ChromaDB | `http://localhost:8001` | Vector store |
-| Ollama | `http://localhost:11434` | Local LLM inference |
-| Prometheus | `http://localhost:9090` | Metrics scrape + alert engine |
-| **Grafana** | **`http://localhost:3000`** | **Live dashboard (anonymous viewer access)** |
+| Ollama | `http://localhost:11434` | Pulls `llama3.2` on first start |
+| Prometheus | `http://localhost:9090` | Scrape + alerting |
+| **Grafana** | **`http://localhost:3000`** | **Live dashboard, anonymous viewer access** |
 
-Grafana ships with the **Aegis-RAG — Production Overview** dashboard pre-provisioned. Open `http://localhost:3000` and you'll immediately see request rate, latency percentiles, security violations, and top triggered injection rules — no import, no setup.
-
-### 4. Index a document
+Then index a document and run a query:
 
 ```bash
+# Upload
 curl -X POST http://localhost:8000/api/v1/documents \
   -H "X-API-Key: dev-key-change-in-production" \
-  -F "file=@./path/to/document.pdf"
-```
+  -F "file=@./README.md"
 
-### 5. Query the RAG pipeline
-
-```bash
+# Query
 curl -X POST http://localhost:8000/api/v1/query \
   -H "Content-Type: application/json" \
   -H "X-API-Key: dev-key-change-in-production" \
-  -d '{"query": "What is the remote work policy?", "top_k": 5}'
+  -d '{"query": "What is the security model?", "top_k": 5}'
 ```
+
+Or run the same flow as a single test: `uv run pytest -m e2e --no-cov`.
 
 ---
 
@@ -246,62 +153,49 @@ curl -X POST http://localhost:8000/api/v1/query \
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/health` | Liveness probe (no dependencies) |
-| `GET` | `/ready` | Readiness probe (checks ChromaDB + Ollama) |
-| `GET` | `/metrics` | Prometheus metrics (scrape target) |
+| `GET`  | `/health` | Liveness probe (no dependencies) |
+| `GET`  | `/ready`  | Readiness probe (checks ChromaDB + Ollama) |
+| `GET`  | `/metrics` | Prometheus scrape target |
 | `POST` | `/api/v1/query` | Submit a question to the RAG pipeline |
 | `POST` | `/api/v1/documents` | Upload and index a document (TXT, MD, PDF, DOCX) |
-| `GET` | `/api/v1/documents` | List indexed document chunks (paginated) |
+| `GET`  | `/api/v1/documents` | List indexed chunks (paginated) |
 | `DELETE` | `/api/v1/documents/{id}` | Delete a single chunk |
 | `DELETE` | `/api/v1/documents` | Bulk delete by ID list (max 500) |
 
-Interactive docs available at `http://localhost:8000/docs` when `DEBUG=true`.
+Interactive Swagger docs are served at `http://localhost:8000/docs` when `DEBUG=true`.
 
 ---
 
-## Development
+## Testing
 
-### Run tests
-
-```bash
-uv run pytest                        # unit + integration with coverage (default)
-uv run pytest tests/unit/            # unit tests only
-uv run pytest tests/integration/     # integration tests with in-memory adapters
-```
-
-### End-to-end tests
-
-E2E tests are opt-in and run against the live docker-compose stack:
+The suite is layered so each level catches what the others cannot.
 
 ```bash
-docker compose up -d                 # start API + ChromaDB + Ollama
-uv run pytest -m e2e --no-cov        # ~20 assertions over the real HTTP surface
+uv run pytest                       # unit + integration, with coverage gate
+uv run pytest tests/unit/           # fast, no I/O, ~80 tests
+uv run pytest tests/integration/    # in-memory adapters, ingestion pipeline
+uv run pytest -m e2e --no-cov       # full HTTP surface against docker-compose
 ```
 
-The suite verifies authentication, security headers, request-ID propagation, rate-limit headers, the Prometheus endpoint, injection blocking, and a full **ingest → query → retrieval** roundtrip. If the stack is unreachable, every e2e test skips with a clear message — CI never fails on a forgotten `docker compose up`.
-
-Override the target environment via env vars to run the same suite against staging:
+**End-to-end tests** issue real requests through the live middleware stack. They auto-skip with a clear message if `docker compose` is not up, so CI never fails on a forgotten container. Point them at any environment via env vars:
 
 ```bash
 AEGIS_E2E_BASE_URL=https://staging.example.com \
-AEGIS_E2E_API_KEY=<key> \
-uv run pytest -m e2e --no-cov
+AEGIS_E2E_API_KEY=<key> uv run pytest -m e2e --no-cov
 ```
 
-### Lint and type-check
+**Lint, format, type-check:**
 
 ```bash
-uv run ruff check src/ tests/        # lint
-uv run ruff format src/ tests/       # auto-format
-uv run mypy src/                     # strict type checking
+uv run ruff check src/ tests/
+uv run ruff format src/ tests/
+uv run mypy src/
 ```
 
-### CI Pipeline
-
-Every push triggers the full pipeline in GitHub Actions:
+**CI pipeline** (GitHub Actions, every push):
 
 ```
-Ruff lint → Ruff format → Mypy → pip-audit → Unit tests + coverage → Docker build → Trivy scan
+Ruff lint → Ruff format → Mypy strict → pip-audit → Unit tests + coverage → Docker build → Trivy scan
 ```
 
 ---
@@ -310,36 +204,25 @@ Ruff lint → Ruff format → Mypy → pip-audit → Unit tests + coverage → D
 
 ```
 src/aegis/
-├── config.py                          # pydantic-settings: all env vars, validation
-├── domain/
-│   ├── models/                        # Pure data models (no I/O)
-│   ├── ports/                         # Abstract interfaces (VectorStore, LLM, Parser)
-│   └── services/                      # ChunkingService
-├── application/
-│   ├── dtos/                          # Request/response contracts
-│   └── use_cases/                     # QueryRAG, IngestDocuments
-├── infrastructure/
-│   ├── llm/                           # OllamaAdapter (implements LLMClientPort)
-│   ├── observability/                 # Prometheus metrics (counters, histograms)
-│   ├── parsers/                       # TXT, Markdown, PDF, DOCX + ParserRegistry
-│   ├── security/                      # SecurityGateway, OutputSanitizer, RateLimiter
-│   └── vector_stores/                 # ChromaDBAdapter (implements VectorStorePort)
-└── interface/
-    └── api/
-        ├── main.py                    # FastAPI app factory + lifespan
-        ├── dependencies.py            # Dependency injection wiring
-        ├── middleware/                 # RequestID, AccessLog, SecurityHeaders,
-        │                              # APIKey, RateLimit
-        └── routes/                    # query, documents, health (+ /metrics)
+├── domain/           # Models · Ports · ChunkingService            (no I/O)
+├── application/      # Use cases · DTOs                            (orchestration)
+├── infrastructure/   # ChromaDB · Ollama · Parsers · Security      (adapters)
+│   └── observability/  # Prometheus metrics
+└── interface/api/    # FastAPI app · middleware · routes           (HTTP boundary)
 
 infra/
-├── prometheus/                        # Scrape config + alert rules
-├── grafana/                           # Dashboard JSON + provisioning
-└── terraform/                         # Cloud infrastructure (optional)
+├── prometheus/       # Scrape config + alert rules
+├── grafana/          # Dashboard JSON + provisioning
+└── terraform/        # Cloud infrastructure (optional)
+
+tests/
+├── unit/             # Pure-function tests + middleware + use case
+├── integration/      # Use case ↔ adapter wiring with in-memory fakes
+└── e2e/              # Full stack roundtrip (opt-in via -m e2e)
 ```
 
 ---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
