@@ -101,7 +101,12 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov --cov-report=term-missing"
+# E2E tests are opt-in: they require the docker-compose stack to be running.
+# Run them explicitly with `pytest -m e2e --no-cov`.
+addopts = "--cov --cov-report=term-missing -m 'not e2e'"
+markers = [
+    "e2e: end-to-end tests that require the docker-compose stack to be running",
+]
 
 # --- Coverage ---
 # Source is measured across the entire `src/aegis` package. Previously only

@@ -264,9 +264,28 @@ Interactive docs available at `http://localhost:8000/docs` when `DEBUG=true`.
 ### Run tests
 
 ```bash
-uv run pytest                        # all tests with coverage
+uv run pytest                        # unit + integration with coverage (default)
 uv run pytest tests/unit/            # unit tests only
-uv run pytest tests/integration/     # integration tests (requires running stack)
+uv run pytest tests/integration/     # integration tests with in-memory adapters
+```
+
+### End-to-end tests
+
+E2E tests are opt-in and run against the live docker-compose stack:
+
+```bash
+docker compose up -d                 # start API + ChromaDB + Ollama
+uv run pytest -m e2e --no-cov        # ~20 assertions over the real HTTP surface
+```
+
+The suite verifies authentication, security headers, request-ID propagation, rate-limit headers, the Prometheus endpoint, injection blocking, and a full **ingest → query → retrieval** roundtrip. If the stack is unreachable, every e2e test skips with a clear message — CI never fails on a forgotten `docker compose up`.
+
+Override the target environment via env vars to run the same suite against staging:
+
+```bash
+AEGIS_E2E_BASE_URL=https://staging.example.com \
+AEGIS_E2E_API_KEY=<key> \
+uv run pytest -m e2e --no-cov
 ```
 
 ### Lint and type-check
