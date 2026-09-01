@@ -35,11 +35,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# ── uv provider ───────────────────────────────────────────────────────────────
+# Pin the uv binary via a named stage. BuildKit does not expand build ARGs inside
+# a COPY --from image reference, but it does in a FROM (where global ARGs are in
+# scope), so alias the image here and COPY from the alias below.
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
 # ── Stage 2: Builder ──────────────────────────────────────────────────────────
 FROM base AS builder
 
 # Install uv for fast, reproducible dependency resolution.
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
