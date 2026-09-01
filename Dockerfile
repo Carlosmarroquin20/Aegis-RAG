@@ -58,6 +58,9 @@ COPY pyproject.toml uv.lock* ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy application source after deps to maximize layer cache hits.
+# README.md is required because pyproject sets `readme = "README.md"`; hatchling
+# reads it while building the project wheel, so the build fails without it.
+COPY README.md ./README.md
 COPY src/ ./src/
 
 # Install the project itself (editable=false for production).
