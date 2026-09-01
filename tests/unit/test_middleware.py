@@ -254,3 +254,61 @@ class TestMiddlewareComposition:
         assert "X-Request-ID" in response.headers
         assert "X-Response-Time" in response.headers
         assert response.headers["x-content-type-options"] == "nosniff"
+
+
+# ── Production middleware ordering ────────────────────────────────────────────
+
+
+class TestProductionMiddlewareOrder:
+    """
+    Regression guard for the middleware registration order in ``create_app()``.
+
+    Starlette runs the LAST-added middleware FIRST (outermost), and
+    ``app.user_middleware`` is ordered outermost-first (index 0 == last added).
+    The effective request order must be:
+
+        RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → routes
+
+    Two properties this locks down (both were broken by the previous ordering):
+      - RequestID is outermost, so ``request_id`` is bound before any other
+        middleware emits a log line — otherwise the access log and auth-rejection
+        log lines carry no correlation id.
+      - CORS sits outside APIKey, so preflight ``OPTIONS`` requests are answered
+        before authentication instead of being rejected with a 403.
+    """
+
+    def test_effective_request_order(self) -> None:
+        from aegis.interface.api.main import create_app
+
+        app = create_app()
+        names = [m.cls.__name__ for m in app.user_middleware]
+
+        assert names == [
+            "RequestIDMiddleware",
+            "AccessLogMiddleware",
+            "SecurityHeadersMiddleware",
+            "CORSMiddleware",
+            "APIKeyMiddleware",
+            "RateLimitMiddleware",
+        ]
+
+    def test_request_id_is_outermost(self) -> None:
+        """RequestID must run before AccessLog so access logs are correlatable."""
+        from aegis.interface.api.main import create_app
+
+        names = [m.cls.__name__ for m in create_app().user_middleware]
+        assert names.index("RequestIDMiddleware") < names.index("AccessLogMiddleware")
+
+    def test_cors_runs_before_authentication(self) -> None:
+        """CORS must be outside APIKey so preflight requests bypass auth."""
+        from aegis.interface.api.main import create_app
+
+        names = [m.cls.__name__ for m in create_app().user_middleware]
+        assert names.index("CORSMiddleware") < names.index("APIKeyMiddleware")
+
+    def test_rate_limit_runs_after_authentication(self) -> None:
+        """RateLimit must be inside APIKey so it can read the validated key."""
+        from aegis.interface.api.main import create_app
+
+        names = [m.cls.__name__ for m in create_app().user_middleware]
+        assert names.index("APIKeyMiddleware") < names.index("RateLimitMiddleware")

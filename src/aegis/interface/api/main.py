@@ -3,8 +3,12 @@ FastAPI application entry point.
 
 Wiring order matters:
   1. Logging is configured before anything else so startup errors are captured.
-  2. Middleware is added in reverse execution order (last added = first to run).
-     Stack order (request →): RequestID → AccessLog → SecurityHeaders → RateLimit → APIKey → Routes
+  2. Middleware runs outermost-first, and Starlette runs the *last-added* middleware
+     first. Adapters are therefore registered inner-to-outer so the effective
+     request order is:
+       RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → Routes
+     This guarantees the request_id context var is bound before any other
+     middleware logs, and that CORS preflight is answered before authentication.
   3. The lifespan context manager handles adapter initialization and cleanup.
 """
 
@@ -116,25 +120,31 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── CORS ──────────────────────────────────────────────────────────────────
-    # In production, set CORS_ALLOWED_ORIGINS to the exact frontend domains.
-    # Debug mode permits all origins for local development convenience.
+    # ── Security & Observability Middleware Stack ─────────────────────────────
+    # Starlette executes the LAST-added middleware FIRST (outermost). Adapters are
+    # therefore registered inner-to-outer so the effective request order is:
+    #   RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → Routes
+    #
+    # Ordering rationale:
+    #   - RequestID is outermost so the request_id context var is bound before any
+    #     other middleware emits a log line (access log, auth rejection, etc.).
+    #   - CORS sits outside APIKey so preflight OPTIONS requests are answered before
+    #     authentication, instead of being rejected with a 403.
+    #   - RateLimit is innermost of the security pair so it runs AFTER APIKey and can
+    #     read the validated key from request.state.
     origins = ["*"] if cfg.debug else cfg.cors_allowed_origins
+
+    app.add_middleware(RateLimitMiddleware, rate_limiter=get_rate_limiter(cfg))
+    app.add_middleware(APIKeyMiddleware, settings=cfg)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type", cfg.api_key_header],
     )
-
-    # ── Security & Observability Middleware Stack ─────────────────────────────
-    # Middleware executes in reverse registration order (last added = first to run).
-    # Stack (request →): RequestID → AccessLog → SecurityHeaders → RateLimit → APIKey → Routes
-    app.add_middleware(RequestIDMiddleware)
-    app.add_middleware(AccessLogMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(RateLimitMiddleware, rate_limiter=get_rate_limiter(cfg))
-    app.add_middleware(APIKeyMiddleware, settings=cfg)
+    app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(RequestIDMiddleware)
 
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health.router)
