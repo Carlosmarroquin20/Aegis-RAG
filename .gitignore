@@ -15,7 +15,7 @@ venv/
 env/
 
 # uv
-uv.lock
+# Note: uv.lock IS committed intentionally for reproducible builds.
 
 # Testing
 .pytest_cache/
@@ -84,3 +84,7 @@ chroma_data/
 
 # ── Jupyter / notebook checkpoints ────────────────────────────────────────────
 .ipynb_checkpoints/
+
+# ── Local AI-assistant scaffolding (not part of the published project) ────────
+CLAUDE.md
+.claude/
