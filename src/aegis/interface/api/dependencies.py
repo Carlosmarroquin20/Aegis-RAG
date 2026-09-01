@@ -15,7 +15,7 @@ from functools import lru_cache
 
 from aegis.application.use_cases.ingest_documents import IngestDocumentsUseCase
 from aegis.application.use_cases.query_rag import QueryRAGUseCase
-from aegis.config import Settings, get_settings
+from aegis.config import get_settings
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
@@ -25,8 +25,8 @@ from aegis.infrastructure.vector_stores.chromadb_adapter import ChromaDBAdapter
 
 
 @lru_cache(maxsize=1)
-def get_security_gateway(settings: Settings | None = None) -> SecurityGateway:
-    cfg = settings or get_settings()
+def get_security_gateway() -> SecurityGateway:
+    cfg = get_settings()
     return SecurityGateway(strict_mode=cfg.security_strict_mode)
 
 
@@ -36,8 +36,8 @@ def get_output_sanitizer() -> OutputSanitizer:
 
 
 @lru_cache(maxsize=1)
-def get_rate_limiter(settings: Settings | None = None) -> RateLimiter:
-    cfg = settings or get_settings()
+def get_rate_limiter() -> RateLimiter:
+    cfg = get_settings()
     policy = RateLimitPolicy(
         requests_per_window=cfg.rate_limit_requests,
         window_seconds=cfg.rate_limit_window_seconds,
@@ -57,8 +57,8 @@ def get_parser_registry() -> ParserRegistry:
 
 
 @lru_cache(maxsize=1)
-def get_ollama_adapter(settings: Settings | None = None) -> OllamaAdapter:
-    cfg = settings or get_settings()
+def get_ollama_adapter() -> OllamaAdapter:
+    cfg = get_settings()
     return OllamaAdapter(
         base_url=cfg.ollama_base_url,
         model=cfg.ollama_model,
@@ -67,7 +67,7 @@ def get_ollama_adapter(settings: Settings | None = None) -> OllamaAdapter:
 
 
 @lru_cache(maxsize=1)
-def get_chromadb_adapter(settings: Settings | None = None) -> ChromaDBAdapter:
+def get_chromadb_adapter() -> ChromaDBAdapter:
     """
     Builds the ChromaDB adapter with a SentenceTransformers embedding function.
     The adapter is NOT initialized here — that happens in the lifespan handler
@@ -75,7 +75,7 @@ def get_chromadb_adapter(settings: Settings | None = None) -> ChromaDBAdapter:
     """
     from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
-    cfg = settings or get_settings()
+    cfg = get_settings()
     embedding_fn = SentenceTransformerEmbeddingFunction(
         model_name=cfg.embedding_model,
         device=cfg.embedding_device,

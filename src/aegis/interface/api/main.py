@@ -50,10 +50,12 @@ def _configure_logging(settings_obj: object) -> None:
 
     cfg: Settings = settings_obj  # type: ignore[assignment]
 
+    # NOTE: structlog.stdlib.add_logger_name is intentionally omitted. It reads
+    # ``logger.name``, which does not exist on the PrintLogger produced by
+    # PrintLoggerFactory, so including it raises AttributeError on every log call.
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
     ]
@@ -85,13 +87,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("startup.begin", app=cfg.app_name, version=cfg.app_version)
 
     # Warm up the security gateway (pre-compiles regex patterns).
-    get_security_gateway(cfg)
+    get_security_gateway()
 
     # Pre-load the parser registry (deferred imports in parsers run at first get).
     get_parser_registry()
 
     # Initialize the vector store (creates collection if absent).
-    vector_store = get_chromadb_adapter(cfg)
+    vector_store = get_chromadb_adapter()
     await vector_store.initialize()
 
     logger.info("startup.complete")
@@ -99,7 +101,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Graceful shutdown: release the LLM HTTP client connection pool.
     logger.info("shutdown.begin")
-    llm = get_ollama_adapter(cfg)
+    llm = get_ollama_adapter()
     await llm.aclose()
     logger.info("shutdown.complete")
 
@@ -134,7 +136,7 @@ def create_app() -> FastAPI:
     #     read the validated key from request.state.
     origins = ["*"] if cfg.debug else cfg.cors_allowed_origins
 
-    app.add_middleware(RateLimitMiddleware, rate_limiter=get_rate_limiter(cfg))
+    app.add_middleware(RateLimitMiddleware, rate_limiter=get_rate_limiter())
     app.add_middleware(APIKeyMiddleware, settings=cfg)
     app.add_middleware(
         CORSMiddleware,
