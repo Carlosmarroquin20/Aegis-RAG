@@ -14,8 +14,11 @@
 #   - Read-only filesystem compatible (all writes go to /tmp or mounted volumes)
 # ─────────────────────────────────────────────────────────────────────────────
 
+# UV_VERSION must be recent enough to read the committed uv.lock format
+# (lockfile version 1 / revision 3). Keep it aligned with the uv used to
+# regenerate the lock; an older uv will reject the lockfile under --frozen.
 ARG PYTHON_VERSION=3.11
-ARG UV_VERSION=0.5.0
+ARG UV_VERSION=0.12.9
 
 # ── Stage 1: Base ─────────────────────────────────────────────────────────────
 FROM python:${PYTHON_VERSION}-slim AS base
