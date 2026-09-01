@@ -46,7 +46,19 @@ jobs:
         run: uv sync --dev
 
       - name: Run pip-audit
-        run: uv run pip-audit --requirement <(uv export --no-hashes)
+        # ChromaDB currently carries four advisories (PYSEC-2026-311,
+        # CVE-2026-45830, CVE-2026-45831, CVE-2026-45833) that have no fixed
+        # upstream release. They are formally risk-accepted and documented in
+        # SECURITY.md: ChromaDB is an internal-only dependency that is never
+        # exposed to untrusted clients, and Aegis runs single-tenant with a fixed
+        # embedding model, so none of the described vectors are reachable in this
+        # deployment. Remove these ignores once an upstream fix is published.
+        run: |
+          uv run pip-audit --requirement <(uv export --no-hashes) \
+            --ignore-vuln PYSEC-2026-311 \
+            --ignore-vuln CVE-2026-45830 \
+            --ignore-vuln CVE-2026-45831 \
+            --ignore-vuln CVE-2026-45833
 
   test:
     name: Unit Tests
