@@ -7,12 +7,14 @@ no timestamps expire mid-test, making assertions deterministic.
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 
 from aegis.infrastructure.security.rate_limiter import (
     InMemoryRateLimitStore,
-    RateLimitPolicy,
     RateLimiter,
+    RateLimitPolicy,
 )
 
 _WINDOW = 3600  # 1 hour — timestamps never expire within a single test run
@@ -34,7 +36,7 @@ class TestRateLimitPolicy:
 
     def test_policy_is_immutable(self) -> None:
         policy = RateLimitPolicy(requests_per_window=10, window_seconds=60)
-        with pytest.raises(Exception):  # frozen dataclass raises FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):  # frozen dataclass forbids mutation
             policy.requests_per_window = 99  # type: ignore[misc]
 
 

@@ -144,9 +144,7 @@ class TestAccessLogMiddleware:
         # Strip "ms" and ensure the prefix is a positive float.
         assert float(response_time[:-2]) >= 0.0
 
-    def test_records_http_requests_total_counter(
-        self, reset_prometheus_registry: None
-    ) -> None:
+    def test_records_http_requests_total_counter(self, reset_prometheus_registry: None) -> None:
         from aegis.infrastructure.observability.metrics import registry
 
         client = _build_app(AccessLogMiddleware)
@@ -171,9 +169,7 @@ class TestAccessLogMiddleware:
         )
         assert count == 1.0
 
-    def test_uses_route_template_not_raw_path(
-        self, reset_prometheus_registry: None
-    ) -> None:
+    def test_uses_route_template_not_raw_path(self, reset_prometheus_registry: None) -> None:
         """
         Path parameters must collapse into the route template to keep
         Prometheus label cardinality bounded.
@@ -203,14 +199,12 @@ class TestAccessLogMiddleware:
         assert raw_abc is None
         assert raw_xyz is None
 
-    def test_counts_status_codes_separately(
-        self, reset_prometheus_registry: None
-    ) -> None:
+    def test_counts_status_codes_separately(self, reset_prometheus_registry: None) -> None:
         from aegis.infrastructure.observability.metrics import registry
 
         client = _build_app(AccessLogMiddleware)
-        client.get("/ping")                 # 200
-        client.get("/does-not-exist")       # 404
+        client.get("/ping")  # 200
+        client.get("/does-not-exist")  # 404
 
         ok = registry.get_sample_value(
             "aegis_http_requests_total",

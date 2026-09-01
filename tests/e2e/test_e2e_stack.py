@@ -46,9 +46,7 @@ class TestStackHealth:
         response = e2e_client.get("/health")
         assert response.status_code == 200
 
-    def test_metrics_endpoint_exposes_prometheus_text(
-        self, e2e_client: httpx.Client
-    ) -> None:
+    def test_metrics_endpoint_exposes_prometheus_text(self, e2e_client: httpx.Client) -> None:
         response = e2e_client.get("/metrics")
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/plain")
@@ -67,9 +65,7 @@ class TestSecurityEnforcement:
         )
         assert response.status_code == 403
 
-    def test_query_with_invalid_api_key_returns_403(
-        self, e2e_client: httpx.Client
-    ) -> None:
+    def test_query_with_invalid_api_key_returns_403(self, e2e_client: httpx.Client) -> None:
         response = e2e_client.post(
             "/api/v1/query",
             json={"query": "anything", "top_k": 1},
@@ -112,17 +108,13 @@ class TestObservability:
         assert "strict-transport-security" in response.headers
         assert "content-security-policy" in response.headers
 
-    def test_request_id_is_generated_when_absent(
-        self, e2e_client: httpx.Client
-    ) -> None:
+    def test_request_id_is_generated_when_absent(self, e2e_client: httpx.Client) -> None:
         response = e2e_client.get("/health")
         request_id = response.headers.get("x-request-id", "")
         # Server uses uuid4().hex → 32 lowercase hex chars.
         assert re.fullmatch(r"[0-9a-f]{32}", request_id) is not None
 
-    def test_request_id_is_echoed_back_when_provided(
-        self, e2e_client: httpx.Client
-    ) -> None:
+    def test_request_id_is_echoed_back_when_provided(self, e2e_client: httpx.Client) -> None:
         upstream_id = "trace-from-gateway-12345"
         response = e2e_client.get(
             "/health",

@@ -91,9 +91,7 @@ class TestMetricsEndpointValuePropagation:
         #   aegis_security_violations_total{threat_level="BLOCKED"} 2.0
         assert 'aegis_security_violations_total{threat_level="BLOCKED"} 2.0' in body
 
-    def test_rag_query_counter_appears_in_body(
-        self, reset_prometheus_registry: None
-    ) -> None:
+    def test_rag_query_counter_appears_in_body(self, reset_prometheus_registry: None) -> None:
         from aegis.infrastructure.observability.metrics import rag_queries_total
 
         rag_queries_total.inc()
@@ -101,9 +99,7 @@ class TestMetricsEndpointValuePropagation:
         body = _build_client().get("/metrics").text
         assert "aegis_rag_queries_total 1.0" in body
 
-    def test_rule_triggers_are_counted_per_rule(
-        self, reset_prometheus_registry: None
-    ) -> None:
+    def test_rule_triggers_are_counted_per_rule(self, reset_prometheus_registry: None) -> None:
         from aegis.infrastructure.observability.metrics import security_rule_triggers_total
 
         security_rule_triggers_total.labels(rule="instruction_override").inc()
@@ -111,7 +107,5 @@ class TestMetricsEndpointValuePropagation:
         security_rule_triggers_total.labels(rule="persona_hijack").inc()
 
         body = _build_client().get("/metrics").text
-        assert (
-            'aegis_security_rule_triggers_total{rule="instruction_override"} 1.0' in body
-        )
+        assert 'aegis_security_rule_triggers_total{rule="instruction_override"} 1.0' in body
         assert 'aegis_security_rule_triggers_total{rule="persona_hijack"} 2.0' in body
