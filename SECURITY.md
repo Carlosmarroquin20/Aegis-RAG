@@ -17,6 +17,24 @@ described vector is not reachable in this system's deployment model, the advisor
 is formally risk-accepted, recorded below (VEX-style), and suppressed in CI with
 an explicit `--ignore-vuln` entry. Every acceptance carries a re-evaluation date.
 
+## Container Image Scanning
+
+The production Docker image is scanned by Trivy on every push (see the
+`docker-build` job in `.github/workflows/ci.yml`), failing the build on
+`CRITICAL`/`HIGH` findings. The scan is configured to fail only on issues we can
+actually act on:
+
+- **`ignore-unfixed: true`** — advisories with no fixed version are not
+  remediable by a version bump. The ones that matter (ChromaDB) are risk-accepted
+  in the register below; the remainder are transient base-image OS advisories that
+  clear as the upstream `python:3.11-slim` image is rebuilt.
+- **`.trivyignore`** — a short, commented list of advisories that report a fix but
+  where the fix is not directly applicable (packages vendored inside `setuptools`'
+  `_vendor` tree), each assessed as a non-reachable build-time code path.
+
+The image itself is kept minimal (CPU-only PyTorch, multi-stage build, no build
+tools in the final layer) which also keeps the scan's attack surface small.
+
 ## Accepted Risks Register
 
 > Deployment assumptions that back these acceptances: ChromaDB runs as an
@@ -28,7 +46,7 @@ an explicit `--ignore-vuln` entry. Every acceptance carries a re-evaluation date
 
 | Advisory | Package | Description | Reachable here? | Rationale |
 |---|---|---|---|---|
-| PYSEC-2026-311 | chromadb | Pre-auth code injection via a malicious model repository with `trust_remote_code=true` on a collections endpoint. | No | ChromaDB's HTTP API is not exposed to untrusted clients; Aegis never enables `trust_remote_code` nor forwards attacker-controlled model repositories. |
+| PYSEC-2026-311 / CVE-2026-45829 | chromadb | Pre-auth code injection via a malicious model repository with `trust_remote_code=true` on a collections endpoint. | No | ChromaDB's HTTP API is not exposed to untrusted clients; Aegis never enables `trust_remote_code` nor forwards attacker-controlled model repositories. |
 | CVE-2026-45833 | chromadb | Authenticated code injection via `trust_remote_code` with `UPDATE_COLLECTION` permission. | No | Same as above; there is a single trusted client (the Aegis API) and `trust_remote_code` is never enabled. |
 | CVE-2026-45830 | chromadb | Missing authorization validation lets an authenticated user act across tenants. | No | Single-tenant, single-collection deployment; there is no second tenant to cross into, and no untrusted authenticated principals. |
 | CVE-2026-45831 | chromadb | `SimpleRBACAuthorizationProvider` does not scope permissions to a tenant/database/collection. | No | Aegis does not rely on ChromaDB's RBAC provider for isolation; access is single-tenant behind the API-key-authenticated Aegis gateway. |

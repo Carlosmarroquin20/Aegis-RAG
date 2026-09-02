@@ -1,0 +1,13 @@
+# Trivy vulnerability exceptions — see SECURITY.md for the full rationale.
+#
+# Advisories that have NO upstream fix are handled generically by
+# `--ignore-unfixed` in the CI Trivy step (they cannot be remediated by a
+# version bump). This file only lists advisories that DO report a fixed version
+# but that we cannot apply directly, each assessed as low risk.
+#
+# jaraco.context and wheel are not installed as standalone packages — they are
+# vendored inside setuptools' `_vendor` tree, so the "fixed" standalone releases
+# cannot be applied without an upstream setuptools revendor. Both are build-time
+# code paths that the running service never executes.
+CVE-2026-23949
+CVE-2026-24049

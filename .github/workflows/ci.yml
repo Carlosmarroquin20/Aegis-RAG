@@ -104,3 +104,11 @@ jobs:
           format: table
           exit-code: "1"
           severity: CRITICAL,HIGH
+          scanners: vuln
+          # Fail only on vulnerabilities we can actually remediate. Advisories
+          # with no upstream fix are dropped by ignore-unfixed and tracked in
+          # SECURITY.md; specific fixed-but-not-applicable ones are listed in
+          # .trivyignore. See SECURITY.md for the full policy and rationale.
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          timeout: 10m
