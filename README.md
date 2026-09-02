@@ -97,6 +97,8 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 Logs are single-line JSON via `structlog` with an auto-bound `request_id` for end-to-end correlation between logs, metrics, traces, and the `X-Request-ID` response header.
 
+**Distributed tracing (OpenTelemetry)** is opt-in (`TRACING_ENABLED`). When on, the FastAPI server span and the HTTPX call to Ollama are auto-instrumented, the query use case emits a child span per pipeline stage (`security.evaluate` → `rag.retrieve` → `llm.generate` → `output.sanitize`), and every log line carries the active `trace_id`/`span_id` so logs pivot to their trace. Spans export over OTLP/HTTP; `docker compose up` ships a Jaeger backend at `http://localhost:16686`. The SDK lives in the optional `otel` extra, so the base image stays lean when tracing is off.
+
 The pre-provisioned Grafana dashboard surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security sections into full-resolution time series. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, and any output-reflection event.
 
 ---
@@ -129,6 +131,7 @@ That single `docker compose up` starts the full stack — API, vector store, LLM
 | Ollama | `http://localhost:11434` | Pulls `llama3.2` on first start |
 | Prometheus | `http://localhost:9090` | Scrape + alerting |
 | **Grafana** | **`http://localhost:3000`** | **Live dashboard, anonymous viewer access** |
+| Jaeger | `http://localhost:16686` | Distributed traces (OpenTelemetry) |
 
 Then index a document and run a query:
 
