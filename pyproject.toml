@@ -157,9 +157,10 @@ omit = [
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
-# fail_under is intentionally conservative for now. Ratchet this up as the
-# test suite grows (target: ≥ 75% once middleware and use-case tests land).
-fail_under = 40
+# The suite (unit + integration) sits around 85%; the gate is set below that with
+# headroom so a small refactor does not fail CI on coverage alone. Raise it as
+# coverage climbs.
+fail_under = 80
 exclude_also = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",

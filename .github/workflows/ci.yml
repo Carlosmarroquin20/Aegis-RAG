@@ -84,7 +84,9 @@ jobs:
         run: uv sync --dev
 
       - name: Run tests
-        run: uv run pytest tests/unit/ -v --cov-report=xml
+        # Unit + integration (both hermetic; integration uses in-memory fakes).
+        # The coverage gate (fail_under) is enforced here via the default addopts.
+        run: uv run pytest tests/unit tests/integration -v --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
