@@ -19,11 +19,16 @@ services:
       - CHROMA_PORT=8000
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.2
+      # Share the rate-limit window across workers via Redis (swappable backend).
+      - RATE_LIMIT_BACKEND=redis
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       chromadb:
         condition: service_healthy
       ollama:
         condition: service_started
+      redis:
+        condition: service_healthy
     volumes:
       # Mount source for live reload during development.
       - ./src:/app/src:ro
@@ -56,6 +61,20 @@ services:
       - aegis-net
     # Pull the default model on first startup.
     entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2 && wait"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Not published to the host — only the API needs it, over the internal network.
+    volumes:
+      - redis-data:/data
+    networks:
+      - aegis-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   # ── Observability stack ─────────────────────────────────────────────────────
@@ -105,6 +124,7 @@ services:
 volumes:
   chroma-data:
   ollama-models:
+  redis-data:
   prometheus-data:
   grafana-data:
 
