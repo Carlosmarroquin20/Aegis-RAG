@@ -22,6 +22,11 @@ services:
       # Share the rate-limit window across workers via Redis (swappable backend).
       - RATE_LIMIT_BACKEND=redis
       - REDIS_URL=redis://redis:6379/0
+      # Export traces to Jaeger over OTLP/HTTP (view them at http://localhost:16686).
+      - TRACING_ENABLED=true
+      - OTEL_EXPORTER=otlp
+      - OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=aegis-rag
     depends_on:
       chromadb:
         condition: service_healthy
@@ -29,6 +34,8 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     volumes:
       # Mount source for live reload during development.
       - ./src:/app/src:ro
@@ -75,6 +82,19 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
+
+  # ── Tracing backend ─────────────────────────────────────────────────────────
+  # Jaeger all-in-one receives OTLP spans from the API and serves the trace UI.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686" # Jaeger UI
+      # OTLP receivers (4317 gRPC / 4318 HTTP) stay on the internal network.
+    networks:
+      - aegis-net
     restart: unless-stopped
 
   # ── Observability stack ─────────────────────────────────────────────────────

@@ -54,10 +54,11 @@ ENV UV_COMPILE_BYTECODE=1 \
 COPY pyproject.toml uv.lock* ./
 
 # Install production dependencies only into an isolated venv.
-# --frozen ensures the lockfile is respected; --no-dev excludes test tools;
-# --extra redis bundles the optional Redis rate-limiter backend so it can be
-# selected at runtime via RATE_LIMIT_BACKEND without rebuilding.
-RUN uv sync --frozen --no-dev --extra redis --no-install-project
+# --frozen ensures the lockfile is respected; --no-dev excludes test tools; the
+# redis + otel extras bundle the optional Redis rate-limiter backend and the
+# OpenTelemetry stack so both can be enabled at runtime (RATE_LIMIT_BACKEND /
+# TRACING_ENABLED) without rebuilding.
+RUN uv sync --frozen --no-dev --extra redis --extra otel --no-install-project
 
 # Copy application source after deps to maximize layer cache hits.
 # README.md is required because pyproject sets `readme = "README.md"`; hatchling
@@ -66,7 +67,7 @@ COPY README.md ./README.md
 COPY src/ ./src/
 
 # Install the project itself (editable=false for production).
-RUN uv sync --frozen --no-dev --extra redis
+RUN uv sync --frozen --no-dev --extra redis --extra otel
 
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 FROM base AS runtime
