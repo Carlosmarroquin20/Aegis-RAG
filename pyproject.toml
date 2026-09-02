@@ -23,6 +23,11 @@ dependencies = [
     # Vector store & embeddings
     "chromadb>=0.6.0",
     "sentence-transformers>=3.3.0",
+    # Torch is pulled in transitively by sentence-transformers. Pin it explicitly
+    # and resolve it from the CPU-only PyTorch index (see [tool.uv.sources] below)
+    # so the image ships ~1.5 GB of CPU wheels instead of ~6 GB of unused CUDA
+    # libraries. The service runs embeddings on CPU (embedding_device="cpu").
+    "torch>=2.2.0",
     # Document parsing (Phase 2)
     "pypdf>=5.1.0",
     "python-docx>=1.1.0",
@@ -52,6 +57,17 @@ build-backend = "hatchling.build"
 packages = ["src/aegis"]
 
 # --- uv workspace settings ---
+# Resolve torch from PyTorch's CPU-only wheel index. `explicit = true` means only
+# packages explicitly mapped in [tool.uv.sources] use this index, so nothing else
+# is affected. This keeps the production image small and CUDA-free.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.3.0",
