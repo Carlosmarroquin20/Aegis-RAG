@@ -213,7 +213,7 @@ src/aegis/
 infra/
 ├── prometheus/       # Scrape config + alert rules
 ├── grafana/          # Dashboard JSON + provisioning
-└── terraform/        # Cloud infrastructure (optional)
+└── terraform/        # AWS EC2 IaC — VPC + EC2 running the compose stack (opt-in)
 
 tests/
 ├── unit/             # Pure-function tests + middleware + use case

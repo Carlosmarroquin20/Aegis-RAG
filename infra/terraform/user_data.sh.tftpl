@@ -1,0 +1,47 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# Cloud-init bootstrap for the Aegis-RAG stack (Amazon Linux 2023).
+# Rendered by Terraform's templatefile(); the app_repo_url, valid_api_keys and
+# ollama_model template tokens are substituted at plan time.
+#
+# This brings up the DEVELOPMENT docker-compose stack (build from source). It is
+# deliberately simple. For production you would:
+#   - ship a hardened compose override (DEBUG off, real TLS termination),
+#   - pull secrets from SSM Parameter Store / Secrets Manager instead of baking
+#     them into user-data (which is readable via the instance metadata service),
+#   - and build the image in CI and pull it, rather than building on the box.
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+dnf update -y
+dnf install -y docker git
+
+systemctl enable --now docker
+
+# Install the docker compose v2 plugin.
+COMPOSE_VERSION="v2.29.7"
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -SL "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-x86_64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# Fetch the application.
+cd /opt
+git clone "${app_repo_url}" aegis-rag
+cd aegis-rag
+
+# Override the development defaults with values supplied by Terraform. In a real
+# deployment, replace this with a fetch from SSM Parameter Store, e.g.:
+#   VALID_API_KEYS="$(aws ssm get-parameter --with-decryption \
+#     --name /aegis-rag/valid_api_keys --query Parameter.Value --output text)"
+cat > docker-compose.override.yml <<'OVERRIDE'
+services:
+  api:
+    environment:
+      - VALID_API_KEYS=${valid_api_keys}
+      - OLLAMA_MODEL=${ollama_model}
+  ollama:
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull ${ollama_model} && wait"]
+OVERRIDE
+
+docker compose up -d --build

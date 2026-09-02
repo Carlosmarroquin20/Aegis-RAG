@@ -51,6 +51,12 @@ sentence_transformers/
 infra/terraform/.terraform/
 infra/terraform/*.tfstate
 infra/terraform/*.tfstate.backup
+# Real variable values may hold secrets — commit only the example.
+infra/terraform/*.tfvars
+!infra/terraform/*.tfvars.example
+infra/terraform/crash.log
+infra/terraform/crash.*.log
+# Note: .terraform.lock.hcl IS committed (provider version pinning).
 
 # ── Secrets & credentials — NEVER commit ─────────────────────────────────────
 *.pem

@@ -1,0 +1,32 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is gitignored so your
+# real values never land in version control.
+
+aws_region   = "us-east-1"
+project_name = "aegis-rag"
+environment  = "dev"
+
+# Ollama needs memory. t3.large (8 GB) is the practical floor and is NOT
+# free-tier. Use t3.micro only for a no-cost `terraform plan` / smoke test.
+instance_type  = "t3.large"
+root_volume_gb = 40
+
+# Lock the API down to known callers. The app also enforces API-key auth.
+# Example: your office egress IP as a /32.
+api_ingress_cidr = "203.0.113.4/32"
+
+# Keep Grafana closed and reach it over SSM port-forwarding instead.
+grafana_ingress_cidr = ""
+
+# Administration is via SSM Session Manager by default (no SSH port). Only set
+# these if you specifically want SSH.
+enable_ssh     = false
+ssh_admin_cidr = "203.0.113.4/32"
+ssh_key_name   = ""
+
+# For anything real, leave this as-is and inject the key from SSM Parameter
+# Store in user_data instead — user-data and state are not a secrets store.
+# valid_api_keys = "change-me-in-production"
+
+extra_tags = {
+  Owner = "you@example.com"
+}
