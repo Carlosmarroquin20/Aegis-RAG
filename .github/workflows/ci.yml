@@ -46,15 +46,20 @@ jobs:
         run: uv sync --dev
 
       - name: Run pip-audit
-        # ChromaDB currently carries four advisories (PYSEC-2026-311,
-        # CVE-2026-45830, CVE-2026-45831, CVE-2026-45833) that have no fixed
-        # upstream release. They are formally risk-accepted and documented in
-        # SECURITY.md: ChromaDB is an internal-only dependency that is never
-        # exposed to untrusted clients, and Aegis runs single-tenant with a fixed
-        # embedding model, so none of the described vectors are reachable in this
-        # deployment. Remove these ignores once an upstream fix is published.
+        # Audit the installed environment rather than an exported requirements
+        # file: torch is pinned to a CPU-only build (2.x+cpu) that lives on the
+        # PyTorch index, not PyPI, so a requirements-file audit cannot resolve it.
+        # Auditing the synced venv reads installed metadata directly and avoids
+        # re-resolution.
+        #
+        # ChromaDB carries four advisories (PYSEC-2026-311, CVE-2026-45830,
+        # CVE-2026-45831, CVE-2026-45833) with no fixed upstream release. They are
+        # formally risk-accepted and documented in SECURITY.md: ChromaDB is an
+        # internal-only dependency never exposed to untrusted clients, and Aegis
+        # runs single-tenant with a fixed embedding model, so none of the vectors
+        # are reachable. Remove these ignores once an upstream fix ships.
         run: |
-          uv run pip-audit --requirement <(uv export --no-hashes) \
+          uv run pip-audit \
             --ignore-vuln PYSEC-2026-311 \
             --ignore-vuln CVE-2026-45830 \
             --ignore-vuln CVE-2026-45831 \
