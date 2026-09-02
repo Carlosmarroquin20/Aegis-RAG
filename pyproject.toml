@@ -36,6 +36,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Distributed rate-limiter backend (RedisRateLimitStore). Optional so the base
+# install stays lean; enable with `pip install "aegis-rag[redis]"`.
+redis = ["redis>=5.2.0"]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
@@ -47,6 +50,8 @@ dev = [
     "respx>=0.21.0",     # Mock HTTPX calls in tests
     "pytest-mock>=3.14.0",
     "pip-audit>=2.7.0",  # Dependency vulnerability scanner (used in CI)
+    "fakeredis>=2.26.0", # In-memory Redis for RedisRateLimitStore tests
+    "redis>=5.2.0",      # Present so the Redis store can be imported in tests
 ]
 
 [build-system]
@@ -80,6 +85,8 @@ dev-dependencies = [
     "respx>=0.21.0",
     "pytest-mock>=3.14.0",
     "pip-audit>=2.7.0",
+    "fakeredis>=2.26.0",
+    "redis>=5.2.0",
 ]
 
 # --- Linter ---

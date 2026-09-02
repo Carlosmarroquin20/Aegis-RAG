@@ -19,7 +19,13 @@ from aegis.config import get_settings
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
-from aegis.infrastructure.security.rate_limiter import RateLimiter, RateLimitPolicy
+from aegis.infrastructure.security.rate_limiter import (
+    InMemoryRateLimitStore,
+    RateLimiter,
+    RateLimitPolicy,
+    RateLimitStore,
+    RedisRateLimitStore,
+)
 from aegis.infrastructure.security.security_gateway import SecurityGateway
 from aegis.infrastructure.vector_stores.chromadb_adapter import ChromaDBAdapter
 
@@ -43,7 +49,14 @@ def get_rate_limiter() -> RateLimiter:
         window_seconds=cfg.rate_limit_window_seconds,
         burst_allowance=cfg.rate_limit_burst,
     )
-    return RateLimiter(policy=policy)
+    # Swapping the persistence backend is a one-line change here; nothing in the
+    # RateLimiter, the middleware, or the routes is aware of which store is used.
+    store: RateLimitStore
+    if cfg.rate_limit_backend == "redis":
+        store = RedisRateLimitStore(cfg.redis_url)
+    else:
+        store = InMemoryRateLimitStore()
+    return RateLimiter(policy=policy, store=store)
 
 
 @lru_cache(maxsize=1)

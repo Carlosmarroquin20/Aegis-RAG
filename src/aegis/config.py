@@ -49,6 +49,20 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 60  # requests per window
     rate_limit_window_seconds: int = 60
     rate_limit_burst: int = 10  # burst headroom above baseline
+    # Backend for the sliding-window store. "memory" is per-process (single worker
+    # only); "redis" shares the window across workers/replicas. The redis backend
+    # requires the optional dependency: pip install "aegis-rag[redis]".
+    rate_limit_backend: str = "memory"  # "memory" | "redis"
+    redis_url: str = "redis://localhost:6379/0"
+
+    @field_validator("rate_limit_backend")
+    @classmethod
+    def validate_rate_limit_backend(cls, v: str) -> str:
+        allowed = {"memory", "redis"}
+        lowered = v.lower()
+        if lowered not in allowed:
+            raise ValueError(f"rate_limit_backend must be one of {allowed}")
+        return lowered
 
     # ── Vector Store (ChromaDB) ────────────────────────────────────────────────
     chroma_host: str = "localhost"

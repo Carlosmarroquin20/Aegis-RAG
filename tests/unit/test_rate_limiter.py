@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 
+import fakeredis
 import pytest
 
 from aegis.infrastructure.security.rate_limiter import (
     InMemoryRateLimitStore,
     RateLimiter,
     RateLimitPolicy,
+    RedisRateLimitStore,
 )
 
 _WINDOW = 3600  # 1 hour — timestamps never expire within a single test run
@@ -161,3 +163,84 @@ class TestRateLimiterPeek:
         result = limiter.peek("new_user")
         assert result.remaining == 10
         assert result.allowed
+
+
+# ── RedisRateLimitStore (fakeredis) ──────────────────────────────────────────
+
+
+@pytest.fixture()
+def redis_store() -> RedisRateLimitStore:
+    """A Redis-backed store wired to an in-memory fakeredis client."""
+    return RedisRateLimitStore(client=fakeredis.FakeStrictRedis())
+
+
+class TestRedisRateLimitStore:
+    def test_record_returns_one_timestamp_on_first_call(
+        self, redis_store: RedisRateLimitStore
+    ) -> None:
+        assert len(redis_store.record_and_get("key", _WINDOW)) == 1
+
+    def test_second_record_returns_two_timestamps(self, redis_store: RedisRateLimitStore) -> None:
+        redis_store.record_and_get("key", _WINDOW)
+        assert len(redis_store.record_and_get("key", _WINDOW)) == 2
+
+    def test_peek_does_not_add_timestamps(self, redis_store: RedisRateLimitStore) -> None:
+        redis_store.record_and_get("key", _WINDOW)
+        assert len(redis_store.peek("key", _WINDOW)) == 1
+        assert len(redis_store.peek("key", _WINDOW)) == 1
+
+    def test_keys_are_isolated(self, redis_store: RedisRateLimitStore) -> None:
+        redis_store.record_and_get("alice", _WINDOW)
+        redis_store.record_and_get("alice", _WINDOW)
+        redis_store.record_and_get("bob", _WINDOW)
+        assert len(redis_store.peek("alice", _WINDOW)) == 2
+        assert len(redis_store.peek("bob", _WINDOW)) == 1
+
+    def test_unknown_key_peek_returns_empty(self, redis_store: RedisRateLimitStore) -> None:
+        assert redis_store.peek("ghost", _WINDOW) == []
+
+    def test_expired_timestamps_are_evicted_on_record(
+        self, redis_store: RedisRateLimitStore
+    ) -> None:
+        # A zero-length window means every previously recorded request has already
+        # aged out, so each record starts a fresh single-entry window.
+        redis_store.record_and_get("key", 0)
+        assert len(redis_store.record_and_get("key", 0)) == 1
+
+    def test_concurrent_members_at_same_timestamp_coexist(
+        self, redis_store: RedisRateLimitStore
+    ) -> None:
+        # Unique members must prevent same-score requests from overwriting.
+        counts = [len(redis_store.record_and_get("key", _WINDOW)) for _ in range(3)]
+        assert counts == [1, 2, 3]
+
+
+class TestRateLimiterWithRedisBackend:
+    """The RateLimiter must behave identically regardless of the injected store."""
+
+    def _limiter(self) -> RateLimiter:
+        return RateLimiter(
+            RateLimitPolicy(3, _WINDOW, burst_allowance=2),
+            store=RedisRateLimitStore(client=fakeredis.FakeStrictRedis()),
+        )
+
+    def test_requests_within_effective_limit_are_allowed(self) -> None:
+        limiter = self._limiter()
+        results = [limiter.check_and_record("user") for _ in range(5)]  # 3 + 2 burst
+        assert all(r.allowed for r in results)
+
+    def test_request_beyond_effective_limit_is_blocked(self) -> None:
+        limiter = self._limiter()
+        for _ in range(5):
+            limiter.check_and_record("user")
+        blocked = limiter.check_and_record("user")
+        assert not blocked.allowed
+        assert blocked.remaining == 0
+        assert blocked.retry_after is not None
+
+    def test_keys_have_independent_quotas(self) -> None:
+        limiter = self._limiter()
+        for _ in range(5):
+            limiter.check_and_record("alice")
+        assert not limiter.check_and_record("alice").allowed
+        assert limiter.check_and_record("bob").allowed
