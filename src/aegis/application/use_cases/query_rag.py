@@ -23,6 +23,7 @@ from aegis.infrastructure.observability.metrics import (
     security_rule_triggers_total,
     security_violations_total,
 )
+from aegis.infrastructure.observability.tracing import tracer
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
 from aegis.infrastructure.security.security_gateway import SecurityGateway
 
@@ -55,8 +56,12 @@ class QueryRAGUseCase:
         log = logger.bind(top_k=request.top_k)
 
         # ── Security evaluation: must precede all I/O ──────────────────────────
-        raw_query = RawQuery(text=request.query)
-        gateway_result = self._gateway.evaluate(raw_query)
+        with tracer.start_as_current_span("security.evaluate") as span:
+            raw_query = RawQuery(text=request.query)
+            gateway_result = self._gateway.evaluate(raw_query)
+            span.set_attribute("aegis.threat_level", gateway_result.assessment.level.name)
+            span.set_attribute("aegis.score", gateway_result.assessment.score)
+            span.set_attribute("aegis.blocked", gateway_result.blocked)
 
         if gateway_result.blocked:
             log.warning(
@@ -83,16 +88,24 @@ class QueryRAGUseCase:
 
         # ── Retrieval ──────────────────────────────────────────────────────────
         rag_queries_total.inc()
-        documents = await self._vector_store.similarity_search(sanitized_text, k=request.top_k)
+        with tracer.start_as_current_span("rag.retrieve") as span:
+            span.set_attribute("aegis.top_k", request.top_k)
+            documents = await self._vector_store.similarity_search(sanitized_text, k=request.top_k)
+            span.set_attribute("aegis.doc_count", len(documents))
         log.info("use_case.retrieved", doc_count=len(documents))
 
         # ── Generation ────────────────────────────────────────────────────────
-        raw_answer = await self._llm_client.generate(sanitized_text, documents)
+        with tracer.start_as_current_span("llm.generate") as span:
+            span.set_attribute("aegis.context_docs", len(documents))
+            raw_answer = await self._llm_client.generate(sanitized_text, documents)
 
         # ── Output sanitization (LLM02) ────────────────────────────────────────
         # OutputReflectionError is intentionally NOT caught here: it propagates
         # to the route handler which returns HTTP 500 (pipeline failure, not user error).
-        sanitized = self._output_sanitizer.sanitize(raw_answer, query_hash=query_hash)
+        # The span therefore records that failure, which is the desired signal.
+        with tracer.start_as_current_span("output.sanitize") as span:
+            sanitized = self._output_sanitizer.sanitize(raw_answer, query_hash=query_hash)
+            span.set_attribute("aegis.reflection_detected", sanitized.reflection_detected)
         if sanitized.has_warnings:
             log.warning(
                 "use_case.output_warnings",
