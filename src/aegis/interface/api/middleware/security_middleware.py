@@ -19,6 +19,7 @@ import time
 import uuid
 
 import structlog
+from opentelemetry import trace
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -54,6 +55,8 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: object) -> Response:
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
         structlog.contextvars.bind_contextvars(request_id=request_id)
+        # Tie request_id to the active server span (no-op when tracing is off).
+        trace.get_current_span().set_attribute("aegis.request_id", request_id)
 
         response: Response = await call_next(request)  # type: ignore[operator]
         response.headers["X-Request-ID"] = request_id

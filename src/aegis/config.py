@@ -82,6 +82,16 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"  # "json" | "console"
 
+    # ── Tracing (OpenTelemetry) ─────────────────────────────────────────────────
+    # Off by default (air-gap friendly). When enabled, the SDK + exporters +
+    # instrumentation are required: pip install "aegis-rag[otel]".
+    tracing_enabled: bool = False
+    # Where spans go: "console" prints them (dev, no backend needed); "otlp" ships
+    # them over OTLP/HTTP to a collector/Jaeger/Tempo at otlp_endpoint.
+    otel_exporter: str = "console"  # "console" | "otlp"
+    otlp_endpoint: str = "http://localhost:4318"
+    otel_service_name: str = "aegis-rag"
+
     @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, v: str) -> str:
@@ -90,6 +100,15 @@ class Settings(BaseSettings):
         if upper not in allowed:
             raise ValueError(f"log_level must be one of {allowed}")
         return upper
+
+    @field_validator("otel_exporter")
+    @classmethod
+    def validate_otel_exporter(cls, v: str) -> str:
+        allowed = {"console", "otlp"}
+        lowered = v.lower()
+        if lowered not in allowed:
+            raise ValueError(f"otel_exporter must be one of {allowed}")
+        return lowered
 
     @property
     def api_keys_set(self) -> frozenset[str]:

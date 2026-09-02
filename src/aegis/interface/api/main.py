@@ -24,6 +24,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from aegis.config import get_settings
+from aegis.infrastructure.observability.tracing import (
+    add_trace_context,
+    configure_tracing,
+    instrument_app,
+    shutdown_tracing,
+)
 from aegis.interface.api.dependencies import (
     get_chromadb_adapter,
     get_ollama_adapter,
@@ -55,6 +61,7 @@ def _configure_logging(settings_obj: object) -> None:
     # PrintLoggerFactory, so including it raises AttributeError on every log call.
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
+        add_trace_context,  # trace_id/span_id when a span is active (no-op otherwise)
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
@@ -103,6 +110,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("shutdown.begin")
     llm = get_ollama_adapter()
     await llm.aclose()
+    if cfg.tracing_enabled:
+        shutdown_tracing()  # flush any batched spans before exit
     logger.info("shutdown.complete")
 
 
@@ -147,6 +156,13 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(RequestIDMiddleware)
+
+    # ── Tracing (OpenTelemetry) ───────────────────────────────────────────────
+    # Opt-in. When enabled, the server span wraps the whole request (added last =
+    # outermost), and HTTPX calls to Ollama are traced automatically.
+    if cfg.tracing_enabled:
+        configure_tracing(cfg)
+        instrument_app(app)
 
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health.router)

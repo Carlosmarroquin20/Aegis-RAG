@@ -20,6 +20,9 @@ dependencies = [
     # Observability — structured JSON logs + Prometheus metrics
     "structlog>=24.4.0",
     "prometheus-client>=0.21.0",
+    # Tracing API only (lightweight, no-op without an SDK). The SDK, OTLP exporter
+    # and auto-instrumentation live in the optional "otel" extra.
+    "opentelemetry-api>=1.20.0",
     # Vector store & embeddings
     "chromadb>=0.6.0",
     "sentence-transformers>=3.3.0",
@@ -39,6 +42,14 @@ dependencies = [
 # Distributed rate-limiter backend (RedisRateLimitStore). Optional so the base
 # install stays lean; enable with `pip install "aegis-rag[redis]"`.
 redis = ["redis>=5.2.0"]
+# OpenTelemetry SDK + OTLP/HTTP exporter + auto-instrumentation. Enable tracing
+# with TRACING_ENABLED=true and `pip install "aegis-rag[otel]"`.
+otel = [
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
+    "opentelemetry-instrumentation-fastapi>=0.40b0",
+    "opentelemetry-instrumentation-httpx>=0.40b0",
+]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
@@ -52,6 +63,11 @@ dev = [
     "pip-audit>=2.7.0",  # Dependency vulnerability scanner (used in CI)
     "fakeredis>=2.26.0", # In-memory Redis for RedisRateLimitStore tests
     "redis>=5.2.0",      # Present so the Redis store can be imported in tests
+    # OpenTelemetry SDK + instrumentation so tracing can be exercised in tests.
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-instrumentation-fastapi>=0.40b0",
+    "opentelemetry-instrumentation-httpx>=0.40b0",
+    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
 ]
 
 [build-system]
@@ -87,6 +103,10 @@ dev-dependencies = [
     "pip-audit>=2.7.0",
     "fakeredis>=2.26.0",
     "redis>=5.2.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-instrumentation-fastapi>=0.40b0",
+    "opentelemetry-instrumentation-httpx>=0.40b0",
+    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
 ]
 
 # --- Linter ---
