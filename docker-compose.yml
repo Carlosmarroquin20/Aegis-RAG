@@ -57,7 +57,9 @@ services:
     restart: unless-stopped
 
   chromadb:
-    image: chromadb/chroma:0.6.0
+    # Must match the chromadb client version resolved in uv.lock (1.5.x); an
+    # older server rejects the client's collection API with KeyError('_type').
+    image: chromadb/chroma:1.5.9
     ports:
       - "8001:8000"
     volumes:
