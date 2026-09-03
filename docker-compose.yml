@@ -43,6 +43,19 @@ services:
       - aegis-net
     restart: unless-stopped
 
+  # Demo web console (React SPA served by nginx, which reverse-proxies /api to
+  # the API — so the browser sees a single origin at http://localhost:8080).
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    networks:
+      - aegis-net
+    restart: unless-stopped
+
   chromadb:
     image: chromadb/chroma:0.6.0
     ports:

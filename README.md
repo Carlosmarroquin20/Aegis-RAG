@@ -126,6 +126,7 @@ That single `docker compose up` starts the full stack — API, vector store, LLM
 
 | Service | URL | Notes |
 |---|---|---|
+| **Web Console** | **`http://localhost:8080`** | **React demo UI (query · upload · security demo)** |
 | Aegis-RAG API | `http://localhost:8000` | Main application |
 | ChromaDB | `http://localhost:8001` | Vector store |
 | Ollama | `http://localhost:11434` | Pulls `llama3.2` on first start |
@@ -222,6 +223,8 @@ tests/
 ├── unit/             # Pure-function tests + middleware + use case
 ├── integration/      # Use case ↔ adapter wiring with in-memory fakes
 └── e2e/              # Full stack roundtrip (opt-in via -m e2e)
+
+frontend/             # React + Vite + TS demo console (query · upload · security demo)
 ```
 
 ---
