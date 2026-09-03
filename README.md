@@ -8,20 +8,29 @@
 [![Type checked: mypy](https://img.shields.io/badge/mypy-strict-1f5082)](https://mypy-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![OWASP LLM](https://img.shields.io/badge/OWASP_LLM_Top_10-mitigated-d6262c)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
+[![CI](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-~85%25-brightgreen)](#testing)
 
 Aegis-RAG is a Retrieval-Augmented Generation API designed for environments where you cannot afford to ship "best effort" security. Every query is evaluated by a domain-level **Security Gateway** before any retrieval or generation happens, every LLM response is post-processed by an **Output Sanitizer**, and the whole pipeline is wrapped in a defence-in-depth middleware stack with first-class observability.
 
-The codebase deliberately demonstrates senior-level practices that recruiters and tech leads care about: hexagonal architecture with swappable adapters, strict-typed Python, OWASP LLM Top 10 mitigations, Prometheus + Grafana out of the box, a hardened multi-stage Docker build, and a layered test suite (unit, integration, end-to-end).
+The codebase deliberately demonstrates senior-level practices that recruiters and tech leads care about: hexagonal architecture with swappable adapters, strict-typed Python, OWASP LLM Top 10 mitigations, logs + metrics + distributed traces out of the box, a hardened multi-stage Docker build, a layered test suite (unit, integration, end-to-end), AWS Terraform, and a React demo console.
+
+<p align="center">
+  <img src="docs/security-demo.png" alt="Aegis-RAG web console — adversarial security probes" width="720">
+  <br>
+  <em>The web console's security demo: fire prompt-injection payloads at the live gateway and watch them get blocked before any retrieval happens.</em>
+</p>
 
 ---
 
 ## Engineering Highlights
 
-- **Defence in depth, by design.** Five ASGI middlewares (RequestID, AccessLog, SecurityHeaders, APIKey, RateLimit) execute *before* any route handler, so 404s and 405s receive the same hardening as authenticated traffic.
+- **Defence in depth, by design.** The ASGI middleware chain (RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit) executes *before* any route handler, so 404s and 405s receive the same hardening as authenticated traffic. RequestID sits outermost, so every log line and span carries the same correlation ID.
 - **Bounded label cardinality.** Prometheus path labels collapse to the matched FastAPI route template (`/api/v1/documents/{doc_id}`), never the raw URL — a subtle but production-critical decision.
 - **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
 - **Magic-byte file detection.** Document uploads are dispatched to parsers based on actual file content, not the attacker-controllable `Content-Type` header.
-- **Hexagonal for real.** The `LLMClientPort` and `VectorStorePort` interfaces mean swapping Ollama for OpenAI or ChromaDB for pgvector is a one-file change — and there are fakes in the test suite that prove it.
+- **Hexagonal for real.** The `LLMClientPort`, `VectorStorePort` and `RateLimitStore` interfaces mean swapping Ollama for OpenAI, ChromaDB for pgvector, or the in-memory rate limiter for the shared **Redis** backend is a one-file change — and there are fakes in the test suite that prove it.
+- **Three pillars of observability.** Structured JSON logs, Prometheus metrics, and opt-in **OpenTelemetry** traces (a span per pipeline stage) all correlate through a single `request_id` / `trace_id`.
 - **Air-gap compatible.** The full stack runs on local infrastructure (Ollama + ChromaDB). No data ever leaves the network.
 
 ---
@@ -31,15 +40,16 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Interface     FastAPI routes + middleware stack                     │
-│                RequestID → AccessLog → SecurityHeaders →             │
-│                RateLimit → APIKey → Routes                           │
+│                RequestID → AccessLog → SecurityHeaders → CORS →      │
+│                APIKey → RateLimit → Routes                           │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Application   Use cases (QueryRAG, IngestDocuments) · DTOs          │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Domain        Models · Ports (abstract) · ChunkingService           │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Infrastructure  ChromaDB · Ollama · Parsers · SecurityGateway       │
-│                  OutputSanitizer · RateLimiter · Prometheus metrics  │
+│                  OutputSanitizer · RateLimiter (memory/Redis)        │
+│                  Prometheus metrics · OpenTelemetry tracing          │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -107,17 +117,19 @@ The pre-provisioned Grafana dashboard surfaces request rate, error rate, p95 lat
 
 - **API & runtime** — FastAPI 0.115+, Uvicorn, Pydantic v2 (strict), `uv` package manager
 - **RAG core** — ChromaDB · Ollama · `sentence-transformers/all-MiniLM-L6-v2` · pypdf · python-docx · markdown-it-py
-- **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy
-- **Observability** — `structlog` · `prometheus-client` · Grafana with provisioned dashboards
-- **Delivery** — Multi-stage Docker (non-root UID 1001) · GitHub Actions CI · docker-compose for local stack
+- **Rate limiting** — in-process sliding window, or a shared **Redis** backend (same port, one config flag)
+- **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy · ~85% test coverage
+- **Observability** — `structlog` (JSON) · `prometheus-client` + Grafana dashboards · **OpenTelemetry** traces to Jaeger
+- **Frontend** — React 18 · Vite 5 · TypeScript (strict) · Tailwind CSS (demo console)
+- **Delivery & infra** — Multi-stage Docker (non-root, CPU-only Torch, ~1.8 GB) · GitHub Actions CI · docker-compose · **AWS Terraform** (opt-in)
 
 ---
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-username/aegis-rag.git
-cd aegis-rag
+git clone https://github.com/Carlosmarroquin20/Aegis-RAG.git
+cd Aegis-RAG
 cp .env.example .env
 docker compose up -d
 ```
@@ -153,6 +165,22 @@ Or run the same flow as a single test: `uv run pytest -m e2e --no-cov`.
 
 ---
 
+## Web Console
+
+A React + TypeScript demo UI ships with the stack at **http://localhost:8080**, with three tabs:
+
+- **Query** — ask a question and see the grounded answer, the retrieved sources with relevance scores, and the threat level the gateway assigned.
+- **Documents** — upload and index a TXT / MD / PDF / DOCX file.
+- **Security demo** — fire curated prompt-injection payloads at the live gateway and watch which are blocked (with threat level and reason) before any retrieval or generation.
+
+The `X-API-Key` is entered in the UI and kept only in the browser's `localStorage`. For frontend development, `cd frontend && npm run dev` runs Vite with a proxy to the API — see [`frontend/README.md`](frontend/README.md).
+
+<p align="center">
+  <img src="docs/web-console.png" alt="Aegis-RAG web console — query panel" width="720">
+</p>
+
+---
+
 ## API Reference
 
 | Method | Endpoint | Description |
@@ -175,11 +203,14 @@ Interactive Swagger docs are served at `http://localhost:8000/docs` when `DEBUG=
 The suite is layered so each level catches what the others cannot.
 
 ```bash
-uv run pytest                       # unit + integration, with coverage gate
-uv run pytest tests/unit/           # fast, no I/O, ~80 tests
+uv run pytest                       # unit + integration, 80% coverage gate (~85% actual)
+uv run pytest tests/unit/           # fast, no I/O
 uv run pytest tests/integration/    # in-memory adapters, ingestion pipeline
 uv run pytest -m e2e --no-cov       # full HTTP surface against docker-compose
 ```
+
+Over 200 tests span the security gateway, output sanitizer, rate limiter (both backends),
+tracing spans, middleware, use cases, adapters and routes.
 
 **End-to-end tests** issue real requests through the live middleware stack. They auto-skip with a clear message if `docker compose` is not up, so CI never fails on a forgotten container. Point them at any environment via env vars:
 
@@ -196,10 +227,14 @@ uv run ruff format src/ tests/
 uv run mypy src/
 ```
 
-**CI pipeline** (GitHub Actions, every push):
+**CI pipeline** (GitHub Actions, every push — five parallel jobs):
 
 ```
-Ruff lint → Ruff format → Mypy strict → pip-audit → Unit tests + coverage → Docker build → Trivy scan
+Ruff (lint + format) · Mypy strict     ┐
+Frontend build (tsc + Vite)            ├─→ all green required
+pip-audit (dependency CVEs)            │
+Unit + integration tests · 80% gate    │
+Docker build · Trivy image scan        ┘
 ```
 
 ---
@@ -211,7 +246,7 @@ src/aegis/
 ├── domain/           # Models · Ports · ChunkingService            (no I/O)
 ├── application/      # Use cases · DTOs                            (orchestration)
 ├── infrastructure/   # ChromaDB · Ollama · Parsers · Security      (adapters)
-│   └── observability/  # Prometheus metrics
+│   └── observability/  # Prometheus metrics · OpenTelemetry tracing
 └── interface/api/    # FastAPI app · middleware · routes           (HTTP boundary)
 
 infra/
