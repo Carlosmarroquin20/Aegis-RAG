@@ -16,7 +16,7 @@ Aegis-RAG is a Retrieval-Augmented Generation API designed for environments wher
 The codebase deliberately demonstrates senior-level practices that recruiters and tech leads care about: hexagonal architecture with swappable adapters, strict-typed Python, OWASP LLM Top 10 mitigations, logs + metrics + distributed traces out of the box, a hardened multi-stage Docker build, a layered test suite (unit, integration, end-to-end), AWS Terraform, and a React demo console.
 
 <p align="center">
-  <img src="docs/security-demo.png" alt="Aegis-RAG web console — adversarial security probes" width="720">
+  <img src="docs/security-demo.gif" alt="Aegis-RAG web console — prompt-injection probes blocked by the live gateway" width="720">
   <br>
   <em>The web console's security demo: fire prompt-injection payloads at the live gateway and watch them get blocked before any retrieval happens.</em>
 </p>
