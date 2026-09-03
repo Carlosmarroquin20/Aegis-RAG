@@ -50,6 +50,11 @@ otel = [
     "opentelemetry-instrumentation-fastapi>=0.40b0",
     "opentelemetry-instrumentation-httpx>=0.40b0",
 ]
+
+# Dev tooling (tests, lint, type-check, audit). PEP 735 dependency group,
+# installed by `uv sync` / `uv sync --dev` (the default) and excluded by
+# `--no-dev`. Not a runtime dependency, so it is not a project extra.
+[dependency-groups]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
@@ -88,26 +93,6 @@ explicit = true
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu" }]
-
-[tool.uv]
-dev-dependencies = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.24.0",
-    "pytest-cov>=6.0.0",
-    "httpx>=0.28.0",
-    "ruff>=0.8.0",
-    "mypy>=1.13.0",
-    "pre-commit>=4.0.0",
-    "respx>=0.21.0",
-    "pytest-mock>=3.14.0",
-    "pip-audit>=2.7.0",
-    "fakeredis>=2.26.0",
-    "redis>=5.2.0",
-    "opentelemetry-sdk>=1.20.0",
-    "opentelemetry-instrumentation-fastapi>=0.40b0",
-    "opentelemetry-instrumentation-httpx>=0.40b0",
-    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
-]
 
 # --- Linter ---
 [tool.ruff]
