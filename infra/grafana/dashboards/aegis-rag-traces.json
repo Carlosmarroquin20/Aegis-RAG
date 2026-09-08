@@ -137,8 +137,8 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "100 * sum(rate(traces_span_metrics_calls_total{service_name=\"aegis-rag\",status_code=\"STATUS_CODE_ERROR\"}[5m])) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name=\"aegis-rag\"}[5m])), 0.001)",
-          "legendFormat": "5xx %",
+          "expr": "100 * (sum(rate(traces_span_metrics_calls_total{service_name=\"aegis-rag\",status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)) / clamp_min(sum(rate(traces_span_metrics_calls_total{service_name=\"aegis-rag\"}[5m])), 0.001)",
+          "legendFormat": "error %",
           "refId": "A",
           "exemplar": false
         }
