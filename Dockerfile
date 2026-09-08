@@ -69,6 +69,18 @@ COPY src/ ./src/
 # Install the project itself (editable=false for production).
 RUN uv sync --frozen --no-dev --extra redis --extra otel
 
+# ── Pre-bake the embedding model ──────────────────────────────────────────────
+# The API loads a SentenceTransformers model at startup. Fetching it from the
+# HuggingFace Hub on first boot breaks the project's air-gap guarantee, makes
+# startup slow and non-deterministic, and fails whenever the Hub — or its Xet CAS
+# backend, which is prone to stalling — is unreachable. Materialize it into the
+# image now, via the exact code path used at runtime, so the container boots
+# fully offline. HF_HUB_DISABLE_XET forces plain HTTPS and sidesteps the stall.
+ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+ENV HF_HOME=/app/hf-cache \
+    HF_HUB_DISABLE_XET=1
+RUN /app/.venv/bin/python -c "from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction as F; F(model_name='${EMBEDDING_MODEL}', device='cpu')"
+
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 FROM base AS runtime
 
@@ -78,16 +90,24 @@ RUN groupadd --gid 1001 aegis && \
 
 WORKDIR /app
 
-# Copy the pre-built virtualenv and source; do NOT copy build tools.
+# Copy the pre-built virtualenv, source, and the pre-baked model cache; do NOT
+# copy build tools.
 COPY --from=builder --chown=aegis:aegis /app/.venv /app/.venv
 COPY --from=builder --chown=aegis:aegis /app/src /app/src
+COPY --from=builder --chown=aegis:aegis /app/hf-cache /app/hf-cache
 
 USER aegis
 
+# HF_HOME points at the baked cache; the OFFLINE flags make huggingface_hub and
+# transformers load the embedding model straight from it and never touch the
+# network — the air-gap guarantee holds and startup is fast and deterministic.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app/src" \
     LOG_FORMAT="json" \
-    LOG_LEVEL="INFO"
+    LOG_LEVEL="INFO" \
+    HF_HOME="/app/hf-cache" \
+    HF_HUB_OFFLINE="1" \
+    TRANSFORMERS_OFFLINE="1"
 
 EXPOSE 8000
 
@@ -95,8 +115,12 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
+# structlog owns application logging (configured at startup); the AccessLog
+# middleware emits the structured per-request line, so uvicorn's own access log
+# is suppressed. Do NOT pass `--log-config /dev/null`: uvicorn feeds it to
+# logging.config.fileConfig, which raises "is an empty file" and crash-loops.
 CMD ["uvicorn", "aegis.interface.api.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--workers", "1", \
-     "--log-config", "/dev/null"]
+     "--no-access-log"]

@@ -67,7 +67,15 @@ services:
     networks:
       - aegis-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      # The chroma 1.5.x image is near-distroless: no curl, wget, or python on
+      # PATH — only bash. Probe the HTTP heartbeat with bash's built-in /dev/tcp
+      # and assert a real 200, so `condition: service_healthy` gates the API
+      # start on Chroma actually answering, not merely the port being open.
+      test:
+        - CMD
+        - bash
+        - -c
+        - "exec 3<>/dev/tcp/localhost/8000; printf 'GET /api/v2/heartbeat HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3; grep -q '200 OK' <&3"
       interval: 10s
       timeout: 5s
       retries: 5

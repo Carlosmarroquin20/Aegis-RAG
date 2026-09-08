@@ -24,5 +24,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
 
+# Probe over IPv4 explicitly: nginx only `listen 80;` (IPv4), but "localhost"
+# resolves to IPv6 [::1] first in this image, so wget to localhost is refused
+# and the container would never report healthy.
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-    CMD wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1
+    CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
