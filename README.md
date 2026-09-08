@@ -107,9 +107,9 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 Logs are single-line JSON via `structlog` with an auto-bound `request_id` for end-to-end correlation between logs, metrics, traces, and the `X-Request-ID` response header.
 
-**Distributed tracing (OpenTelemetry)** is opt-in (`TRACING_ENABLED`). When on, the FastAPI server span and the HTTPX call to Ollama are auto-instrumented, the query use case emits a child span per pipeline stage (`security.evaluate` → `rag.retrieve` → `llm.generate` → `output.sanitize`), and every log line carries the active `trace_id`/`span_id` so logs pivot to their trace. Spans export over OTLP/HTTP; `docker compose up` ships a Jaeger backend at `http://localhost:16686`. The SDK lives in the optional `otel` extra, so the base image stays lean when tracing is off.
+**Distributed tracing (OpenTelemetry)** is opt-in (`TRACING_ENABLED`). When on, the FastAPI server span and the HTTPX call to Ollama are auto-instrumented, the query use case emits a child span per pipeline stage (`security.evaluate` → `rag.retrieve` → `llm.generate` → `output.sanitize`), and every log line carries the active `trace_id`/`span_id` so logs pivot to their trace. Spans export over OTLP/HTTP to an **OpenTelemetry Collector**, which fans them out two ways: the raw traces to a Jaeger backend at `http://localhost:16686`, and — via the **spanmetrics connector** — trace-derived RED metrics to Prometheus. The SDK lives in the optional `otel` extra, so the base image stays lean when tracing is off.
 
-The pre-provisioned Grafana dashboard surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security sections into full-resolution time series. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, and any output-reflection event.
+Two pre-provisioned Grafana dashboards ship with the stack. **Production Overview** surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security into full-resolution time series. **Trace Analytics** turns the pipeline spans into per-stage RED charts (call rate, errors, and p50/p95/p99 latency for `security.evaluate` / `rag.retrieve` / `llm.generate` / `output.sanitize`), plus a SecurityGateway breakdown by threat level — and each latency exemplar links straight to its trace in Jaeger. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, and any output-reflection event.
 
 ---
 
@@ -119,7 +119,7 @@ The pre-provisioned Grafana dashboard surfaces request rate, error rate, p95 lat
 - **RAG core** — ChromaDB · Ollama · `sentence-transformers/all-MiniLM-L6-v2` · pypdf · python-docx · markdown-it-py
 - **Rate limiting** — in-process sliding window, or a shared **Redis** backend (same port, one config flag)
 - **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy · ~85% test coverage
-- **Observability** — `structlog` (JSON) · `prometheus-client` + Grafana dashboards · **OpenTelemetry** traces to Jaeger
+- **Observability** — `structlog` (JSON) · `prometheus-client` + Grafana dashboards · **OpenTelemetry** traces via an OTel Collector (spanmetrics → Prometheus) to Jaeger
 - **Frontend** — React 18 · Vite 5 · TypeScript (strict) · Tailwind CSS (demo console)
 - **Delivery & infra** — Multi-stage Docker (non-root, CPU-only Torch, ~1.8 GB) · GitHub Actions CI · docker-compose · **AWS Terraform** (opt-in)
 
@@ -143,8 +143,9 @@ That single `docker compose up` starts the full stack — API, vector store, LLM
 | ChromaDB | `http://localhost:8001` | Vector store |
 | Ollama | `http://localhost:11434` | Pulls `llama3.2` on first start |
 | Prometheus | `http://localhost:9090` | Scrape + alerting |
-| **Grafana** | **`http://localhost:3000`** | **Live dashboard, anonymous viewer access** |
+| **Grafana** | **`http://localhost:3000`** | **Overview + Trace Analytics dashboards, anonymous viewer access** |
 | Jaeger | `http://localhost:16686` | Distributed traces (OpenTelemetry) |
+| OTel Collector | `http://localhost:8889/metrics` | Span-derived RED metrics (spanmetrics) |
 
 Then index a document and run a query:
 

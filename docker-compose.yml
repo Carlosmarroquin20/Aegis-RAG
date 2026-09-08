@@ -22,10 +22,12 @@ services:
       # Share the rate-limit window across workers via Redis (swappable backend).
       - RATE_LIMIT_BACKEND=redis
       - REDIS_URL=redis://redis:6379/0
-      # Export traces to Jaeger over OTLP/HTTP (view them at http://localhost:16686).
+      # Export spans to the OpenTelemetry Collector over OTLP/HTTP. The collector
+      # forwards them to Jaeger (trace UI at http://localhost:16686) and derives
+      # span metrics for Grafana.
       - TRACING_ENABLED=true
       - OTEL_EXPORTER=otlp
-      - OTLP_ENDPOINT=http://jaeger:4318
+      - OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=aegis-rag
     depends_on:
       chromadb:
@@ -34,7 +36,7 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
-      jaeger:
+      otel-collector:
         condition: service_started
     volumes:
       # Mount source for live reload during development.
@@ -120,6 +122,22 @@ services:
       - aegis-net
     restart: unless-stopped
 
+  # OTLP hub: receives spans from the API, forwards traces to Jaeger, and derives
+  # span metrics (RED per pipeline stage) that Prometheus scrapes at :8889.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    command: ["--config=/etc/otel/collector.yaml"]
+    volumes:
+      - ./infra/otel-collector/config.yaml:/etc/otel/collector.yaml:ro
+    ports:
+      - "8889:8889" # span-derived metrics (scraped by Prometheus)
+    depends_on:
+      jaeger:
+        condition: service_started
+    networks:
+      - aegis-net
+    restart: unless-stopped
+
   # ── Observability stack ─────────────────────────────────────────────────────
   # Prometheus scrapes the API /metrics endpoint; Grafana ships with a
   # pre-provisioned dashboard and Prometheus datasource, so `docker compose up`
@@ -138,6 +156,8 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=7d"
       - "--web.enable-lifecycle"
+      # Store exemplars so a latency spike in Grafana links to its trace in Jaeger.
+      - "--enable-feature=exemplar-storage"
     networks:
       - aegis-net
     depends_on:

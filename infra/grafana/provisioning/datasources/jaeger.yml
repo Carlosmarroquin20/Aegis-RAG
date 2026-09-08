@@ -1,0 +1,21 @@
+---
+# Jaeger datasource — lets Grafana render OpenTelemetry traces directly and
+# resolves the trace_id exemplars carried by the span metrics, so a data point
+# on the Trace Analytics dashboard links straight to its trace.
+
+apiVersion: 1
+
+datasources:
+  - name: Jaeger
+    type: jaeger
+    uid: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: true
+    jsonData:
+      # Correlate a trace back to the service's request-rate metric in Prometheus.
+      tracesToMetrics:
+        datasourceUid: Prometheus
+        queries:
+          - name: Request rate for this span
+            query: 'sum(rate(calls_total{service_name="$${__span.tags.service}", span_name="$${__span.name}"}[5m]))'

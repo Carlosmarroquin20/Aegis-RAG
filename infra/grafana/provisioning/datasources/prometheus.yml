@@ -7,9 +7,15 @@ apiVersion: 1
 datasources:
   - name: Prometheus
     type: prometheus
+    uid: Prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
     editable: true
     jsonData:
       timeInterval: 15s
+      # Turn a span-metric exemplar's trace_id into a link that opens the trace
+      # in the Jaeger datasource — one click from a latency spike to its trace.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger

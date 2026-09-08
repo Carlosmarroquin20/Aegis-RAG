@@ -22,6 +22,18 @@ scrape_configs:
         labels:
           component: api
 
+  # Span-derived RED metrics from the OpenTelemetry Collector's spanmetrics
+  # connector (calls_total, duration_milliseconds_*). Exposes exemplars, so
+  # scrape via OpenMetrics to carry the trace_id through to Grafana.
+  - job_name: otel-collector-spanmetrics
+    metrics_path: /metrics
+    honor_labels: true
+    static_configs:
+      - targets:
+          - otel-collector:8889
+        labels:
+          component: otel-collector
+
   - job_name: prometheus
     static_configs:
       - targets:

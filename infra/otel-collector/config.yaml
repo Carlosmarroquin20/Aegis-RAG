@@ -1,0 +1,70 @@
+# OpenTelemetry Collector — the OTLP hub for the Aegis-RAG stack.
+#
+# The API exports OTLP/HTTP spans here. The collector fans them out two ways:
+#   1. forwards the raw traces to Jaeger for storage and trace-level drill-down;
+#   2. feeds the spanmetrics connector, which derives RED metrics (request rate,
+#      errors, latency histogram) per span — turning the app's own pipeline spans
+#      (security.evaluate, rag.retrieve, llm.generate, output.sanitize) into
+#      Prometheus series that Grafana charts. This is the canonical OpenTelemetry
+#      way to get trace-based service metrics without instrumenting them by hand.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Bound memory before it becomes a problem, then batch for efficient export.
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  batch:
+    timeout: 5s
+
+connectors:
+  # Derives call counts and a latency histogram from spans. The extra dimensions
+  # promote the app's own span attributes to metric labels so the dashboard can
+  # break generation/security down by outcome. Exemplars carry a trace_id, letting
+  # Grafana jump from a latency spike straight to the offending trace in Jaeger.
+  spanmetrics:
+    histogram:
+      unit: ms
+      # Buckets span sub-ms (SecurityGateway, sanitizer) to tens of seconds: LLM
+      # generation on CPU routinely exceeds 10s, and a top bucket below the real
+      # p95 leaves the quantile in the unbounded +Inf bucket and returns NaN.
+      explicit:
+        buckets:
+          [2ms, 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2s, 5s, 10s, 20s, 30s, 60s]
+    dimensions:
+      - name: aegis.threat_level
+      - name: aegis.blocked
+    exemplars:
+      enabled: true
+    metrics_flush_interval: 15s
+
+exporters:
+  # Traces land in Jaeger (OTLP gRPC receiver, TLS disabled on the internal net).
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  # Span-derived metrics are scraped by Prometheus at :8889. OpenMetrics is on so
+  # exemplars (trace_id) are exposed for metric-to-trace correlation in Grafana.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    enable_open_metrics: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/jaeger, spanmetrics]
+    metrics/spanmetrics:
+      receivers: [spanmetrics]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
