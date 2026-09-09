@@ -94,3 +94,6 @@ chroma_data/
 # ── Local AI-assistant scaffolding (not part of the published project) ────────
 CLAUDE.md
 .claude/
+
+# Archify render artifacts — the JSON specs are the source of truth; HTML is a build output
+docs/diagrams/*.html

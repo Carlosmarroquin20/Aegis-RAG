@@ -55,7 +55,7 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 
 Each layer depends only inward. Infrastructure adapters implement domain ports — no business logic is coupled to any vendor SDK.
 
-> **▶ [Open the interactive system map](https://raw.githack.com/Carlosmarroquin20/Aegis-RAG/main/docs/diagrams/aegis-architecture.html)** — pan/zoom, guided views, and a theme toggle. The runtime topology (everything `docker compose up` starts), its trust boundaries, and the observability fan-out. Authored as a validated [JSON spec](docs/diagrams/aegis-architecture.json) and rendered with [Archify](https://github.com/tt-a1i/archify).
+> **System map** — the runtime topology every `docker compose up` starts, its trust boundaries, and the observability fan-out, authored as a validated [JSON spec](docs/diagrams/aegis-architecture.json) (diagram-as-code, rendered to an interactive HTML map with [Archify](https://github.com/tt-a1i/archify)). See [`docs/diagrams/`](docs/diagrams/) to render or export it.
 
 ### Request flow
 
@@ -76,7 +76,7 @@ HTTP Request
 JSON Response  (with X-Request-ID, X-Response-Time, X-RateLimit-* headers)
 ```
 
-> **▶ [Open the interactive sequence diagram](https://raw.githack.com/Carlosmarroquin20/Aegis-RAG/main/docs/diagrams/aegis-query-sequence.html)** — the same security-first flow with activation bars and phase bands, showing the gateway screening every query *before* retrieval and the sanitizer guarding every response ([JSON spec](docs/diagrams/aegis-query-sequence.json)).
+> **Sequence diagram** — the same security-first flow with activation bars and phase bands, showing the SecurityGateway screening every query *before* retrieval and the OutputSanitizer guarding every response, as a [JSON spec](docs/diagrams/aegis-query-sequence.json) (diagram-as-code).
 
 Document ingestion follows the same hexagonal pattern: magic-byte MIME detection → parser dispatch (TXT/MD/PDF/DOCX) → `ChunkingService` (paragraph → sentence → word fallback with overlap stitching) → content-addressed deduplication → vector store upsert.
 
