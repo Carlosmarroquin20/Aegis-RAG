@@ -111,6 +111,14 @@ Logs are single-line JSON via `structlog` with an auto-bound `request_id` for en
 
 Two pre-provisioned Grafana dashboards ship with the stack. **Production Overview** surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security into full-resolution time series. **Trace Analytics** turns the pipeline spans into per-stage RED charts (call rate, errors, and p50/p95/p99 latency for `security.evaluate` / `rag.retrieve` / `llm.generate` / `output.sanitize`), plus a SecurityGateway breakdown by threat level — and each latency exemplar links straight to its trace in Jaeger. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, and any output-reflection event.
 
+<p align="center">
+  <img src="docs/grafana-traces-overview.png" alt="Grafana Trace Analytics — overview tiles and per-stage RED charts" width="760">
+  <br>
+  <img src="docs/grafana-traces-detail.png" alt="Grafana Trace Analytics — HTTP server spans and SecurityGateway verdicts by threat level" width="760">
+  <br>
+  <em>The Trace Analytics dashboard, built entirely from OpenTelemetry spans via the collector's spanmetrics connector: per-stage RED for the RAG pipeline (LLM generation dominates p95 at tens of seconds on CPU), HTTP routes, and SecurityGateway verdicts broken down by threat level.</em>
+</p>
+
 ---
 
 ## Tech Stack
