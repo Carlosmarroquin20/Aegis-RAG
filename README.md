@@ -55,28 +55,63 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 
 Each layer depends only inward. Infrastructure adapters implement domain ports — no business logic is coupled to any vendor SDK.
 
-> **System map** — the runtime topology every `docker compose up` starts, its trust boundaries, and the observability fan-out, authored as a validated [JSON spec](docs/diagrams/aegis-architecture.json) (diagram-as-code, rendered to an interactive HTML map with [Archify](https://github.com/tt-a1i/archify)). See [`docs/diagrams/`](docs/diagrams/) to render or export it.
+The runtime topology — everything a single `docker compose up` starts, its trust boundaries, and the observability fan-out:
+
+```mermaid
+flowchart LR
+    client(["Web Console<br/>React SPA · :8080"])
+    subgraph stack["Local stack · docker compose (aegis-net) — air-gapped by design"]
+      direction LR
+      subgraph ingress["Ingress · API key · rate limit · security headers"]
+        api["Aegis-RAG API<br/>FastAPI · hexagonal :8000"]
+      end
+      redis[("Redis<br/>rate-limit store")]
+      chroma[("ChromaDB<br/>vector store")]
+      ollama["Ollama<br/>LLM · llama3.2"]
+      otel["OTel Collector<br/>OTLP · spanmetrics"]
+      jaeger["Jaeger<br/>traces"]
+      prom["Prometheus<br/>metrics"]
+      grafana["Grafana<br/>dashboards"]
+    end
+    client -->|query · ingest| api
+    api --> chroma
+    api --> ollama
+    api -.->|rate limit| redis
+    api -.->|OTLP spans| otel
+    otel -.->|traces| jaeger
+    prom -.->|scrape| otel
+    grafana -->|query| prom
+    style api stroke:#e11d63,stroke-width:2px
+```
+
+> **Interactive system map** — the same topology as an explorable map (pan/zoom, guided views, theme toggle), authored as a validated [JSON spec](docs/diagrams/aegis-architecture.json) (diagram-as-code) and rendered with [Archify](https://github.com/tt-a1i/archify).
 
 ### Request flow
 
-```
-HTTP Request
-    │
-    ▼  Middleware stack: correlation ID · access log · security headers · auth · rate limit
-    │
-    ▼  SecurityGateway.evaluate()      ← LLM01 · structural + Unicode NFC + 11 signatures + entropy
-    │
-    ▼  VectorStore.similarity_search() ← ChromaDB (swappable port)
-    │
-    ▼  LLMClient.generate()            ← Ollama (local, air-gapped)
-    │
-    ▼  OutputSanitizer.sanitize()      ← LLM02 · length cap · HTML strip · reflection guard · PII scan
-    │
-    ▼
-JSON Response  (with X-Request-ID, X-Response-Time, X-RateLimit-* headers)
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant A as Aegis-RAG API
+    participant G as SecurityGateway
+    participant S as ChromaDB
+    participant L as Ollama
+    participant O as OutputSanitizer
+    C->>A: POST /api/v1/query
+    Note over A: middleware — API key · rate limit · security headers
+    A->>G: evaluate(query) · LLM01
+    G-->>A: CLEAN
+    A->>S: similarity_search
+    S-->>A: top-k chunks
+    A->>L: generate(context, query)
+    L-->>A: answer
+    A->>O: sanitize(answer) · LLM02
+    O-->>A: clean
+    A-->>C: 200 JSON {answer, sources}
+    Note over A,G: a BLOCKED verdict short-circuits to HTTP 400 — no retrieval, no LLM call
 ```
 
-> **Sequence diagram** — the same security-first flow with activation bars and phase bands, showing the SecurityGateway screening every query *before* retrieval and the OutputSanitizer guarding every response, as a [JSON spec](docs/diagrams/aegis-query-sequence.json) (diagram-as-code).
+> **Interactive sequence** — the same security-first flow as an explorable diagram with activation bars and phase bands, as a [JSON spec](docs/diagrams/aegis-query-sequence.json) (diagram-as-code, rendered with Archify).
 
 Document ingestion follows the same hexagonal pattern: magic-byte MIME detection → parser dispatch (TXT/MD/PDF/DOCX) → `ChunkingService` (paragraph → sentence → word fallback with overlap stitching) → content-addressed deduplication → vector store upsert.
 

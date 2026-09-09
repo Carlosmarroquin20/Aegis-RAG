@@ -11,8 +11,8 @@ diagrams reviewable in pull requests and never lets them drift into stale screen
 | [`aegis-architecture.json`](aegis-architecture.json) | Runtime topology, trust boundaries, observability fan-out |
 | [`aegis-query-sequence.json`](aegis-query-sequence.json) | The security-first query pipeline, message by message |
 
-Static previews live next to each spec (`*.png`) and are embedded in the top-level
-[`README.md`](../../README.md#architecture).
+The top-level [`README.md`](../../README.md#architecture) shows a Mermaid overview of each diagram
+inline (rendered natively by GitHub); these specs are the richer, interactive Archify counterparts.
 
 ## Render or export
 
