@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aegis-RAG — Interactive Diagrams</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; min-height: 100vh; display: grid; place-items: center;
+        background: #0b1220; color: #e5edf5;
+        font: 16px/1.6 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      main { width: min(680px, 90vw); padding: 40px 0; }
+      h1 { font-size: 1.6rem; margin: 0 0 4px; }
+      p.sub { margin: 0 0 28px; color: #9fb2c8; }
+      a.card {
+        display: block; text-decoration: none; color: inherit;
+        border: 1px solid #22334a; border-radius: 12px; padding: 18px 20px;
+        margin: 12px 0; background: #101b2d; transition: border-color .15s, transform .15s;
+      }
+      a.card:hover { border-color: #e11d63; transform: translateY(-2px); }
+      a.card h2 { margin: 0 0 4px; font-size: 1.1rem; }
+      a.card span { color: #9fb2c8; font-size: .95rem; }
+      footer { margin-top: 28px; color: #6b7f96; font-size: .9rem; }
+      footer a { color: #7fb0ff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Aegis-RAG — Interactive Diagrams</h1>
+      <p class="sub">Explorable system maps rendered from validated JSON specs (pan/zoom, guided views, theme toggle).</p>
+      <a class="card" href="aegis-architecture.html">
+        <h2>System Architecture &rarr;</h2>
+        <span>Runtime topology, trust boundaries, and the observability fan-out.</span>
+      </a>
+      <a class="card" href="aegis-query-sequence.html">
+        <h2>Security-First Query Pipeline &rarr;</h2>
+        <span>The query path message by message — screened before retrieval, sanitized on the way out.</span>
+      </a>
+      <footer>
+        Source &amp; specs: <a href="https://github.com/Carlosmarroquin20/Aegis-RAG">github.com/Carlosmarroquin20/Aegis-RAG</a>
+      </footer>
+    </main>
+  </body>
+</html>
