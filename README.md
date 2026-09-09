@@ -84,7 +84,7 @@ flowchart LR
     style api stroke:#e11d63,stroke-width:2px
 ```
 
-> **Interactive system map** — the same topology as an explorable map (pan/zoom, guided views, theme toggle), authored as a validated [JSON spec](docs/diagrams/aegis-architecture.json) (diagram-as-code) and rendered with [Archify](https://github.com/tt-a1i/archify).
+> **▶ [Open the interactive system map](https://carlosmarroquin20.github.io/Aegis-RAG/aegis-architecture.html)** — the same topology as an explorable map (pan/zoom, guided views, theme toggle), authored as a validated [JSON spec](docs/diagrams/aegis-architecture.json) (diagram-as-code) and rendered with [Archify](https://github.com/tt-a1i/archify).
 
 ### Request flow
 
@@ -111,7 +111,7 @@ sequenceDiagram
     Note over A,G: a BLOCKED verdict short-circuits to HTTP 400 — no retrieval, no LLM call
 ```
 
-> **Interactive sequence** — the same security-first flow as an explorable diagram with activation bars and phase bands, as a [JSON spec](docs/diagrams/aegis-query-sequence.json) (diagram-as-code, rendered with Archify).
+> **▶ [Open the interactive sequence](https://carlosmarroquin20.github.io/Aegis-RAG/aegis-query-sequence.html)** — the same security-first flow as an explorable diagram with activation bars and phase bands, as a [JSON spec](docs/diagrams/aegis-query-sequence.json) (diagram-as-code, rendered with Archify).
 
 Document ingestion follows the same hexagonal pattern: magic-byte MIME detection → parser dispatch (TXT/MD/PDF/DOCX) → `ChunkingService` (paragraph → sentence → word fallback with overlap stitching) → content-addressed deduplication → vector store upsert.
 

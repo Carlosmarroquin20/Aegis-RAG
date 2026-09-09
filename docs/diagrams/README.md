@@ -12,7 +12,9 @@ diagrams reviewable in pull requests and never lets them drift into stale screen
 | [`aegis-query-sequence.json`](aegis-query-sequence.json) | The security-first query pipeline, message by message |
 
 The top-level [`README.md`](../../README.md#architecture) shows a Mermaid overview of each diagram
-inline (rendered natively by GitHub); these specs are the richer, interactive Archify counterparts.
+inline (rendered natively by GitHub); these specs are the richer, interactive Archify counterparts,
+published live at **[carlosmarroquin20.github.io/Aegis-RAG](https://carlosmarroquin20.github.io/Aegis-RAG/)**
+(GitHub Pages, served from the `gh-pages` branch so `main` stays free of build artifacts).
 
 ## Render or export
 
