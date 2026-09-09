@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Aegis-RAG — System Architecture",
+    "output": "aegis-architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "request-path",
+        "label": "Primary query path",
+        "focus": [
+          "client",
+          "api",
+          "chroma",
+          "ollama"
+        ],
+        "note": "Follow a query from the console through the security-first RAG pipeline."
+      },
+      {
+        "id": "security",
+        "label": "Security ingress",
+        "focus": [
+          "client",
+          "api",
+          "redis"
+        ],
+        "note": "Every request is authenticated, rate-limited, and screened before any retrieval."
+      },
+      {
+        "id": "observability",
+        "label": "Observability",
+        "focus": [
+          "api",
+          "otel",
+          "jaeger",
+          "prometheus",
+          "grafana"
+        ],
+        "note": "Spans fan out to traces and span-derived metrics."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "client",
+      "type": "external",
+      "label": "Web Console",
+      "sublabel": "React SPA · nginx :8080",
+      "pos": [
+        40,
+        310
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Aegis-RAG API",
+      "sublabel": "FastAPI · hexagonal :8000",
+      "pos": [
+        340,
+        306
+      ],
+      "size": [
+        170,
+        74
+      ],
+      "tag": "OWASP LLM Top 10"
+    },
+    {
+      "id": "redis",
+      "type": "database",
+      "label": "Redis",
+      "sublabel": "rate-limit store :6379",
+      "pos": [
+        660,
+        70
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "chroma",
+      "type": "database",
+      "label": "ChromaDB",
+      "sublabel": "vector store :8000",
+      "pos": [
+        660,
+        220
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "ollama",
+      "type": "backend",
+      "label": "Ollama",
+      "sublabel": "LLM · llama3.2 :11434",
+      "pos": [
+        660,
+        390
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "otel",
+      "type": "messagebus",
+      "label": "OTel Collector",
+      "sublabel": "OTLP · spanmetrics",
+      "pos": [
+        560,
+        600
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "jaeger",
+      "type": "backend",
+      "label": "Jaeger",
+      "sublabel": "traces :16686",
+      "pos": [
+        300,
+        600
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "prometheus",
+      "type": "backend",
+      "label": "Prometheus",
+      "sublabel": "metrics :9090",
+      "pos": [
+        850,
+        600
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "grafana",
+      "type": "frontend",
+      "label": "Grafana",
+      "sublabel": "dashboards :3000",
+      "pos": [
+        850,
+        310
+      ],
+      "size": [
+        150,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Local stack · docker compose (aegis-net) — air-gapped by design",
+      "wraps": [
+        "api",
+        "redis",
+        "chroma",
+        "ollama",
+        "otel",
+        "jaeger",
+        "prometheus",
+        "grafana"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Ingress: auth · rate limit · headers",
+      "wraps": [
+        "api"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "client-api",
+      "from": "client",
+      "to": "api",
+      "label": "query · ingest",
+      "variant": "emphasis"
+    },
+    {
+      "id": "api-chroma",
+      "from": "api",
+      "to": "chroma"
+    },
+    {
+      "id": "api-ollama",
+      "from": "api",
+      "to": "ollama"
+    },
+    {
+      "id": "api-redis",
+      "from": "api",
+      "to": "redis",
+      "variant": "dashed"
+    },
+    {
+      "id": "api-otel",
+      "from": "api",
+      "to": "otel",
+      "label": "OTLP spans",
+      "variant": "dashed"
+    },
+    {
+      "id": "otel-jaeger",
+      "from": "otel",
+      "to": "jaeger",
+      "label": "traces",
+      "variant": "dashed"
+    },
+    {
+      "id": "prom-otel",
+      "from": "prometheus",
+      "to": "otel",
+      "label": "scrape span metrics",
+      "variant": "dashed"
+    },
+    {
+      "id": "grafana-prom",
+      "from": "grafana",
+      "to": "prometheus",
+      "label": "query",
+      "labelDy": 45
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Security is the architecture",
+      "items": [
+        "SecurityGateway scores every query before retrieval — prompt injection blocked at 400",
+        "OutputSanitizer guards every LLM response (LLM02)",
+        "API-key auth (constant-time) + per-key sliding-window rate limit"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Hexagonal core",
+      "items": [
+        "Ports & adapters — swap ChromaDB or Ollama in one wiring file",
+        "Query path: security -> retrieve -> generate -> sanitize",
+        "Embeddings baked into the image (all-MiniLM-L6-v2) — boots fully offline"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Observability",
+      "items": [
+        "OTLP spans -> collector -> Jaeger + spanmetrics",
+        "Prometheus + Grafana; exemplars jump from a metric to its trace",
+        "Grafana reads traces from Jaeger for one-click drill-down"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Aegis-RAG — Security-First Query Pipeline",
+    "output": "aegis-query-sequence.html",
+    "viewBox": [
+      1000,
+      600
+    ],
+    "column_fit": "spread",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "screen",
+        "label": "Security screen",
+        "focus": [
+          "client",
+          "api",
+          "gateway"
+        ],
+        "note": "Every query is scored before any retrieval or generation."
+      },
+      {
+        "id": "rag",
+        "label": "Retrieve + generate",
+        "focus": [
+          "api",
+          "store",
+          "llm"
+        ],
+        "note": "The RAG pipeline runs only on a CLEAN verdict."
+      },
+      {
+        "id": "guard",
+        "label": "Output guard",
+        "focus": [
+          "api",
+          "sanitizer",
+          "client"
+        ],
+        "note": "Every response is sanitized before it leaves the API."
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "client",
+      "type": "external",
+      "label": "Client",
+      "sublabel": "web console / API"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Aegis-RAG API",
+      "sublabel": "FastAPI middleware"
+    },
+    {
+      "id": "gateway",
+      "type": "security",
+      "label": "SecurityGateway",
+      "sublabel": "LLM01 · pre-retrieval"
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "ChromaDB",
+      "sublabel": "vector store"
+    },
+    {
+      "id": "llm",
+      "type": "backend",
+      "label": "Ollama",
+      "sublabel": "llama3.2"
+    },
+    {
+      "id": "sanitizer",
+      "type": "security",
+      "label": "OutputSanitizer",
+      "sublabel": "LLM02 guard"
+    }
+  ],
+  "segments": [
+    {
+      "from": 165,
+      "to": 250,
+      "label": "Security screen (LLM01)"
+    },
+    {
+      "from": 265,
+      "to": 405,
+      "label": "Retrieve + generate"
+    },
+    {
+      "from": 420,
+      "to": 505,
+      "label": "Sanitize + respond (LLM02)"
+    }
+  ],
+  "messages": [
+    {
+      "id": "req",
+      "from": "client",
+      "to": "api",
+      "y": 178,
+      "label": "POST /api/v1/query",
+      "variant": "emphasis"
+    },
+    {
+      "id": "evaluate",
+      "from": "api",
+      "to": "gateway",
+      "y": 210,
+      "label": "evaluate(query)",
+      "variant": "security"
+    },
+    {
+      "id": "verdict",
+      "from": "gateway",
+      "to": "api",
+      "y": 238,
+      "label": "CLEAN",
+      "variant": "return"
+    },
+    {
+      "id": "search",
+      "from": "api",
+      "to": "store",
+      "y": 278,
+      "label": "similarity_search",
+      "variant": "default"
+    },
+    {
+      "id": "chunks",
+      "from": "store",
+      "to": "api",
+      "y": 306,
+      "label": "top-k chunks",
+      "variant": "return"
+    },
+    {
+      "id": "generate",
+      "from": "api",
+      "to": "llm",
+      "y": 342,
+      "label": "generate(context, query)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "answer",
+      "from": "llm",
+      "to": "api",
+      "y": 396,
+      "label": "answer",
+      "variant": "return"
+    },
+    {
+      "id": "sanitize",
+      "from": "api",
+      "to": "sanitizer",
+      "y": 432,
+      "label": "sanitize(answer)",
+      "variant": "security"
+    },
+    {
+      "id": "clean",
+      "from": "sanitizer",
+      "to": "api",
+      "y": 460,
+      "label": "clean",
+      "variant": "return"
+    },
+    {
+      "id": "resp",
+      "from": "api",
+      "to": "client",
+      "y": 492,
+      "label": "200 JSON {answer, sources}",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "api",
+      "from": 182,
+      "to": 496,
+      "type": "backend"
+    },
+    {
+      "participant": "gateway",
+      "from": 206,
+      "to": 242,
+      "type": "security"
+    },
+    {
+      "participant": "store",
+      "from": 274,
+      "to": 310,
+      "type": "database"
+    },
+    {
+      "participant": "llm",
+      "from": 338,
+      "to": 400,
+      "type": "backend"
+    },
+    {
+      "participant": "sanitizer",
+      "from": 428,
+      "to": 464,
+      "type": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Security-first ingress",
+      "items": [
+        "API key (constant-time) + per-key rate limit run in middleware before the route",
+        "SecurityGateway screens every query before retrieval (LLM01)",
+        "A BLOCKED verdict short-circuits to HTTP 400 — no retrieval, no LLM call"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Grounded RAG",
+      "items": [
+        "Retrieval and generation run only on a CLEAN verdict",
+        "Answer grounded in top-k chunks from ChromaDB",
+        "System prompt treats retrieved docs as untrusted data (indirect-injection guard)"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Output guard",
+      "items": [
+        "OutputSanitizer checks every response (LLM02)",
+        "A reflection leak fails loud as HTTP 500 — never a silent leak",
+        "Each stage is wrapped in an OpenTelemetry span"
+      ]
+    }
+  ]
+}
