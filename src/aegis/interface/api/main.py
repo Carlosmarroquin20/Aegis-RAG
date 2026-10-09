@@ -126,8 +126,12 @@ def create_app() -> FastAPI:
             "Hardened Retrieval-Augmented Generation API with OWASP LLM Top 10 controls. "
             "All queries are evaluated by the SecurityGateway before reaching the RAG pipeline."
         ),
-        docs_url="/docs" if cfg.debug else None,  # Disable Swagger UI in production.
+        # The interactive docs AND the raw schema are debug-only. Disabling just the
+        # UIs is not enough: /openapi.json is a public path (no API key), so leaving
+        # it on would hand an unauthenticated caller the full route/parameter map.
+        docs_url="/docs" if cfg.debug else None,
         redoc_url="/redoc" if cfg.debug else None,
+        openapi_url="/openapi.json" if cfg.debug else None,
         lifespan=lifespan,
     )
 
