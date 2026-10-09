@@ -7,6 +7,8 @@ Responsibilities separated by concern:
   - SecurityHeadersMiddleware : defence-in-depth HTTP headers on every response
   - APIKeyMiddleware          : authenticates the caller (identity layer)
   - RateLimitMiddleware       : enforces per-key request quotas (throttle layer)
+  - ErrorBoundaryMiddleware   : turns unhandled route errors into a 500 response
+                                that still travels back through the stack above
 
 These run before any route handler is invoked. Placing them in middleware
 (rather than FastAPI dependencies) ensures they execute even for 404/405 responses,
@@ -41,6 +43,32 @@ logger = structlog.get_logger(__name__)
 _PUBLIC_PATHS: frozenset[str] = frozenset(
     {"/health", "/ready", "/metrics", "/docs", "/openapi.json", "/redoc"}
 )
+
+INTERNAL_ERROR_DETAIL = "An internal error occurred. Check server logs."
+
+
+class ErrorBoundaryMiddleware(BaseHTTPMiddleware):
+    """
+    Converts an unhandled exception from the routes into a generic 500 response.
+
+    Must be the INNERMOST middleware. Starlette routes a catch-all
+    ``Exception`` handler through ServerErrorMiddleware, which sits outside
+    every user middleware; a response built there never passes back through the
+    stack. Without this boundary a 500 would therefore ship without security
+    headers or an ``X-Request-ID``, and would be missing from the access log and
+    from ``aegis_http_requests_total`` — hiding failures from the 5xx alert.
+
+    HTTPException and request-validation errors are unaffected: Starlette
+    resolves those inside the router, before they can reach this layer.
+    """
+
+    async def dispatch(self, request: Request, call_next: object) -> Response:
+        try:
+            return await call_next(request)  # type: ignore[no-any-return,operator]
+        except Exception:
+            logger.exception("unhandled_exception", method=request.method, path=request.url.path)
+            # Never expose internal exception details to the caller.
+            return JSONResponse(status_code=500, content={"detail": INTERNAL_ERROR_DETAIL})
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):

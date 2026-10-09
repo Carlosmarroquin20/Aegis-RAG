@@ -261,14 +261,17 @@ class TestProductionMiddlewareOrder:
     ``app.user_middleware`` is ordered outermost-first (index 0 == last added).
     The effective request order must be:
 
-        RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → routes
+        RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit
+          → ErrorBoundary → routes
 
-    Two properties this locks down (both were broken by the previous ordering):
+    Properties this locks down (the first two were broken by an earlier ordering):
       - RequestID is outermost, so ``request_id`` is bound before any other
         middleware emits a log line — otherwise the access log and auth-rejection
         log lines carry no correlation id.
       - CORS sits outside APIKey, so preflight ``OPTIONS`` requests are answered
         before authentication instead of being rejected with a 403.
+      - ErrorBoundary is innermost, so a 500 raised by a route travels back
+        through every other middleware (see TestUnhandledRouteErrors).
     """
 
     def test_effective_request_order(self) -> None:
@@ -284,6 +287,7 @@ class TestProductionMiddlewareOrder:
             "CORSMiddleware",
             "APIKeyMiddleware",
             "RateLimitMiddleware",
+            "ErrorBoundaryMiddleware",
         ]
 
     def test_request_id_is_outermost(self) -> None:

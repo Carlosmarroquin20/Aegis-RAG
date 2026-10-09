@@ -6,9 +6,11 @@ Wiring order matters:
   2. Middleware runs outermost-first, and Starlette runs the *last-added* middleware
      first. Adapters are therefore registered inner-to-outer so the effective
      request order is:
-       RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → Routes
+       RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit
+         → ErrorBoundary → Routes
      This guarantees the request_id context var is bound before any other
-     middleware logs, and that CORS preflight is answered before authentication.
+     middleware logs, that CORS preflight is answered before authentication, and
+     that a 500 from a route is still logged, counted and given security headers.
   3. The lifespan context manager handles adapter initialization and cleanup.
 """
 
@@ -38,8 +40,10 @@ from aegis.interface.api.dependencies import (
     get_security_gateway,
 )
 from aegis.interface.api.middleware.security_middleware import (
+    INTERNAL_ERROR_DETAIL,
     AccessLogMiddleware,
     APIKeyMiddleware,
+    ErrorBoundaryMiddleware,
     RateLimitMiddleware,
     RequestIDMiddleware,
     SecurityHeadersMiddleware,
@@ -68,6 +72,9 @@ def _configure_logging(settings_obj: object) -> None:
     ]
 
     if cfg.log_format == "json":
+        # Render exc_info into an "exception" string field. ConsoleRenderer formats
+        # tracebacks itself, so this processor belongs to the JSON chain only.
+        shared_processors.append(structlog.processors.format_exc_info)
         renderer = structlog.processors.JSONRenderer()
     else:
         renderer = structlog.dev.ConsoleRenderer()  # type: ignore[assignment]
@@ -138,7 +145,8 @@ def create_app() -> FastAPI:
     # ── Security & Observability Middleware Stack ─────────────────────────────
     # Starlette executes the LAST-added middleware FIRST (outermost). Adapters are
     # therefore registered inner-to-outer so the effective request order is:
-    #   RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → Routes
+    #   RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit
+    #     → ErrorBoundary → Routes
     #
     # Ordering rationale:
     #   - RequestID is outermost so the request_id context var is bound before any
@@ -147,8 +155,11 @@ def create_app() -> FastAPI:
     #     authentication, instead of being rejected with a 403.
     #   - RateLimit is innermost of the security pair so it runs AFTER APIKey and can
     #     read the validated key from request.state.
+    #   - ErrorBoundary is innermost of all, so the 500 it builds for an unhandled
+    #     route error flows back out through every layer above it.
     origins = ["*"] if cfg.debug else cfg.cors_allowed_origins
 
+    app.add_middleware(ErrorBoundaryMiddleware)
     app.add_middleware(RateLimitMiddleware, rate_limiter=get_rate_limiter())
     app.add_middleware(APIKeyMiddleware, settings=cfg)
     app.add_middleware(
@@ -173,19 +184,18 @@ def create_app() -> FastAPI:
     app.include_router(query.router)
     app.include_router(documents.router)
 
-    # ── Global Exception Handlers ─────────────────────────────────────────────
+    # ── Last-resort exception handler ─────────────────────────────────────────
+    # Route errors are handled by ErrorBoundaryMiddleware. This only fires for a
+    # failure inside the middleware stack itself (e.g. the rate-limit store being
+    # unreachable); it keeps the response body generic in that case too.
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         structlog.get_logger(__name__).error(
-            "unhandled_exception",
+            "unhandled_middleware_exception",
             path=request.url.path,
-            exc_type=type(exc).__name__,
+            exc_info=exc,
         )
-        # Never expose internal exception details in production responses.
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "An internal error occurred. Check server logs."},
-        )
+        return JSONResponse(status_code=500, content={"detail": INTERNAL_ERROR_DETAIL})
 
     return app
 

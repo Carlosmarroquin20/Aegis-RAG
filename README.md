@@ -41,7 +41,7 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Interface     FastAPI routes + middleware stack                     │
 │                RequestID → AccessLog → SecurityHeaders → CORS →      │
-│                APIKey → RateLimit → Routes                           │
+│                APIKey → RateLimit → ErrorBoundary → Routes           │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Application   Use cases (QueryRAG, IngestDocuments) · DTOs          │
 ├──────────────────────────────────────────────────────────────────────┤
