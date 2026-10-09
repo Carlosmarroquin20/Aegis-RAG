@@ -73,6 +73,16 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      - name: Validate nginx config
+        # The SPA build above never touches nginx.conf, so a syntax error there
+        # would only surface when the container fails to start. Parse it with the
+        # same nginx the image ships. `api` is the compose-network upstream; give
+        # it a dummy address because nginx resolves proxy_pass hosts at load time.
+        run: |
+          docker run --rm --add-host api:127.0.0.1 \
+            -v "$PWD/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine nginx -t
+
   security-scan:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
