@@ -17,6 +17,8 @@ preventing information leakage about undiscovered endpoints.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import math
 import re
 import time
@@ -51,6 +53,14 @@ INTERNAL_ERROR_DETAIL = "An internal error occurred. Check server logs."
 # UUIDs (with or without dashes), ULIDs and W3C trace IDs. ASCII is spelled out
 # because \w would also admit Unicode letters.
 _REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._\-]{1,64}")
+
+# 64 bits of the key digest: ample to keep clients apart, useless for recovering
+# or verifying a key offline.
+_CLIENT_ID_HEX_CHARS = 16
+
+
+def _digest(api_key: str) -> bytes:
+    return hashlib.sha256(api_key.encode()).digest()
 
 
 class ErrorBoundaryMiddleware(BaseHTTPMiddleware):
@@ -186,24 +196,34 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
     Validates the X-API-Key header against the configured key set.
 
     Security notes:
-    - Uses a constant-time set lookup (frozenset.__contains__) rather than
-      a linear search or ORM query to avoid timing side-channels.
+    - Keys are compared as SHA-256 digests with hmac.compare_digest, against
+      every configured key and without an early exit. A set lookup is not
+      constant-time: it hashes the candidate and then runs a short-circuiting
+      string comparison on the bucket hit. Digesting first also equalizes the
+      length, which compare_digest would otherwise leak.
     - Returns 403 (not 401) for missing keys to avoid revealing that
       authentication via API key is expected on this endpoint.
-    - The key is stored in request.state for downstream use (e.g., rate limiter).
+    - Downstream layers receive ``request.state.client_id``, a truncated digest
+      of the key, never the key itself. It is a stable per-key identifier that
+      is safe to use as a rate-limit bucket name and to write to logs.
     """
 
     def __init__(self, app: ASGIApp, settings: Settings) -> None:
         super().__init__(app)
         self._header_name = settings.api_key_header
-        self._valid_keys = settings.api_keys_set
+        self._valid_key_digests = tuple(_digest(key) for key in settings.api_keys_set)
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
         if request.url.path in _PUBLIC_PATHS:
             return await call_next(request)  # type: ignore[no-any-return,operator]
 
-        api_key = request.headers.get(self._header_name, "")
-        if not api_key or api_key not in self._valid_keys:
+        candidate = _digest(request.headers.get(self._header_name, ""))
+        authenticated = False
+        for valid in self._valid_key_digests:
+            # Bitwise OR, not `or`/any(): every key is compared on every request.
+            authenticated |= hmac.compare_digest(candidate, valid)
+
+        if not authenticated:
             logger.warning(
                 "auth.rejected",
                 path=request.url.path,
@@ -214,15 +234,14 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Forbidden: valid API key required."},
             )
 
-        # Attach the validated key to request state for the rate limiter.
-        request.state.api_key = api_key
+        request.state.client_id = candidate.hex()[:_CLIENT_ID_HEX_CHARS]
         return await call_next(request)  # type: ignore[no-any-return,operator]
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
     Sliding-window rate limiter enforced per validated API key.
-    Must run AFTER APIKeyMiddleware so request.state.api_key is populated.
+    Must run AFTER APIKeyMiddleware so request.state.client_id is populated.
     """
 
     def __init__(self, app: ASGIApp, rate_limiter: RateLimiter) -> None:
@@ -233,8 +252,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path in _PUBLIC_PATHS:
             return await call_next(request)  # type: ignore[no-any-return,operator]
 
-        api_key: str = getattr(request.state, "api_key", "anonymous")
-        result = self._limiter.check_and_record(api_key)
+        client_id: str = getattr(request.state, "client_id", "anonymous")
+        result = self._limiter.check_and_record(client_id)
 
         # Always attach rate-limit headers, even on allowed requests.
         # This gives clients visibility into their quota without requiring an extra call.

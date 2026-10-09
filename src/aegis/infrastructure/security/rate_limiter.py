@@ -1,5 +1,5 @@
 """
-Sliding-window rate limiter with per-API-key isolation.
+Sliding-window rate limiter with per-client isolation.
 
 Architecture:
   - RateLimitStore is a port; swap InMemoryRateLimitStore for RedisRateLimitStore
@@ -97,7 +97,7 @@ class RedisRateLimitStore(RateLimitStore):
     """
     Shared, multi-worker sliding-window store backed by a Redis sorted set.
 
-    Each API key maps to a ZSET whose members are unique request tokens scored by
+    Each client maps to a ZSET whose members are unique request tokens scored by
     their wall-clock timestamp. This is the correct backend for any deployment
     with more than one process (uvicorn ``--workers N``, Gunicorn, several
     replicas): every worker reads and writes the same window, so counts are not
@@ -164,7 +164,7 @@ class RateLimiter:
 
     Usage:
         limiter = RateLimiter(policy=RateLimitPolicy(60, 60, burst_allowance=10))
-        result = limiter.check_and_record(api_key)
+        result = limiter.check_and_record(client_id)
         if not result.allowed:
             raise HTTPException(429, headers={"Retry-After": str(result.retry_after)})
     """
@@ -183,13 +183,17 @@ class RateLimiter:
         """Requests admitted per window, burst allowance included."""
         return self._max_requests
 
-    def check_and_record(self, api_key: str) -> RateLimitResult:
+    def check_and_record(self, client_id: str) -> RateLimitResult:
         """
         Records the request and returns whether it is permitted.
+
+        ``client_id`` names the bucket and is written to logs and to the store's
+        keyspace, so pass an opaque identifier, never a credential.
+
         The request is always recorded; callers must reject if result.allowed is False.
         This "count then check" approach prevents under-counting under race conditions.
         """
-        timestamps = self._store.record_and_get(api_key, self._policy.window_seconds)
+        timestamps = self._store.record_and_get(client_id, self._policy.window_seconds)
         count = len(timestamps)
 
         reset_at = timestamps[0] + self._policy.window_seconds if timestamps else time.time()
@@ -198,7 +202,7 @@ class RateLimiter:
             retry_after = max(0.0, reset_at - time.time())
             logger.warning(
                 "rate_limit.exceeded",
-                api_key_prefix=api_key[:8],
+                client_id=client_id,
                 request_count=count,
                 max_allowed=self._max_requests,
             )
@@ -215,9 +219,9 @@ class RateLimiter:
             reset_at=reset_at,
         )
 
-    def peek(self, api_key: str) -> RateLimitResult:
+    def peek(self, client_id: str) -> RateLimitResult:
         """Non-mutating check — useful for pre-flight validation without side effects."""
-        timestamps = self._store.peek(api_key, self._policy.window_seconds)
+        timestamps = self._store.peek(client_id, self._policy.window_seconds)
         count = len(timestamps)
         reset_at = timestamps[0] + self._policy.window_seconds if timestamps else time.time()
         remaining = max(0, self._max_requests - count)
