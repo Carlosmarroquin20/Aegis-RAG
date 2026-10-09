@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from aegis.application.dtos.rag_dtos import (
     QueryRequest,
     QueryResponse,
+    SecurityRejectionDetail,
     SecurityRejectionResponse,
 )
 from aegis.application.use_cases.query_rag import QueryRAGUseCase, SecurityViolationError
@@ -51,9 +52,9 @@ async def query_rag(
         # The detail is intentionally vague to avoid revealing detection logic.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "message": str(exc),
-                "query_hash": exc.query_hash[:16],  # truncated for logs; full hash in audit
-                "threat_level": exc.threat_level,
-            },
+            detail=SecurityRejectionDetail(
+                message=str(exc),
+                query_hash=exc.query_hash[:16],  # truncated; the audit log has the full hash
+                threat_level=exc.threat_level,
+            ).model_dump(),
         ) from exc

@@ -36,9 +36,22 @@ class QueryResponse(BaseModel):
     threat_level: str  # "CLEAN" | "SUSPICIOUS" — always CLEAN in non-strict mode reach here
 
 
-class SecurityRejectionResponse(BaseModel):
-    """Returned when the SecurityGateway blocks a query."""
+class SecurityRejectionDetail(BaseModel):
+    """Why a query was refused, without disclosing which rule matched."""
 
-    detail: str
+    message: str
+    # First 16 hex chars of the query's SHA-256: enough to find the audit log
+    # entry, which carries the full hash and the triggered rules.
     query_hash: str
-    threat_level: str = "BLOCKED"
+    threat_level: str  # "BLOCKED" | "SUSPICIOUS" (the latter only in strict mode)
+
+
+class SecurityRejectionResponse(BaseModel):
+    """
+    Body of the HTTP 400 returned when the SecurityGateway blocks a query.
+
+    The fields are nested under ``detail`` because the route raises an
+    HTTPException, and FastAPI serializes its payload under that key.
+    """
+
+    detail: SecurityRejectionDetail
