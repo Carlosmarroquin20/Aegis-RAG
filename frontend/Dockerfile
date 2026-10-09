@@ -10,8 +10,11 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install dependencies first for better layer caching.
-COPY package.json package-lock.json* ./
-RUN npm ci || npm install
+# `npm ci` only: it installs exactly what package-lock.json pins and fails if the
+# lockfile is missing or out of sync. Falling back to `npm install` would quietly
+# resolve fresh versions and ship a bundle that was never tested.
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 RUN npm run build
