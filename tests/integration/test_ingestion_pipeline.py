@@ -37,7 +37,7 @@ def use_case(vector_store: FakeVectorStore, registry: ParserRegistry) -> IngestD
     return IngestDocumentsUseCase(
         vector_store=vector_store,
         parser_registry=registry,
-        default_collection="test_collection",
+        collection="test_collection",
     )
 
 
@@ -205,7 +205,7 @@ class TestDeduplication:
 
         store = LookupFails()
         use_case = IngestDocumentsUseCase(
-            vector_store=store, parser_registry=registry, default_collection="c"
+            vector_store=store, parser_registry=registry, collection="c"
         )
         content = b"Stable document content for deduplication testing. " * 5
 
@@ -216,17 +216,16 @@ class TestDeduplication:
         assert result.chunks_created == len(store.stored) > 0
 
 
-# ── Custom Collection ──────────────────────────────────────────────────────────
+# ── Reported collection ───────────────────────────────────────────────────────
 
 
-class TestCollectionRouting:
-    async def test_custom_collection_in_response(
+class TestReportedCollection:
+    async def test_response_names_the_collection_the_store_writes_to(
         self,
         use_case: IngestDocumentsUseCase,
         default_request: IngestRequest,
     ) -> None:
-        request = IngestRequest(collection="hr_policies", chunk_size=256, overlap=32)
         uploaded = UploadedFile(filename="hr.txt", content=b"HR policy document content. " * 10)
 
-        result = await use_case.execute(uploaded, request)
-        assert result.collection == "hr_policies"
+        result = await use_case.execute(uploaded, default_request)
+        assert result.collection == "test_collection"

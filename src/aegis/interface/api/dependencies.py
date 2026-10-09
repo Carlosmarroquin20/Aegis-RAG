@@ -127,5 +127,5 @@ def get_ingest_use_case() -> IngestDocumentsUseCase:
     return IngestDocumentsUseCase(
         vector_store=get_vector_store(),
         parser_registry=get_parser_registry(),
-        default_collection=cfg.chroma_collection,
+        collection=cfg.chroma_collection,
     )

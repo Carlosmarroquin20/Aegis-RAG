@@ -54,10 +54,6 @@ _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 async def ingest_document(
     file: Annotated[UploadFile, File(description="Document to index (TXT, MD, PDF, DOCX).")],
     use_case: Annotated[IngestDocumentsUseCase, Depends(get_ingest_use_case)],
-    collection: Annotated[
-        str | None,
-        Form(description="Target collection. Defaults to the system default."),
-    ] = None,
     chunk_size: Annotated[int, Form(ge=128, le=4096)] = 512,
     overlap: Annotated[int, Form(ge=0, le=512)] = 64,
 ) -> IngestResponse:
@@ -82,7 +78,7 @@ async def ingest_document(
         content=content,
         declared_mime_type=file.content_type,
     )
-    request = IngestRequest(collection=collection, chunk_size=chunk_size, overlap=overlap)
+    request = IngestRequest(chunk_size=chunk_size, overlap=overlap)
 
     try:
         return await use_case.execute(uploaded, request)

@@ -16,10 +16,6 @@ class QueryRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=8192, description="Natural language question.")
     top_k: int = Field(default=5, ge=1, le=20, description="Number of documents to retrieve.")
-    collection: str | None = Field(
-        default=None,
-        description="Target collection name. Defaults to the configured collection.",
-    )
 
 
 class SourceDocument(BaseModel):

@@ -28,10 +28,6 @@ class UploadedFile(BaseModel):
 class IngestRequest(BaseModel):
     """Parameters accompanying a document upload."""
 
-    collection: str | None = Field(
-        default=None,
-        description="Target collection. Defaults to the configured default collection.",
-    )
     chunk_size: int = Field(
         default=512,
         ge=128,
@@ -53,6 +49,8 @@ class IngestResponse(BaseModel):
     chunks_created: int
     duplicates_skipped: int
     warnings: list[str] = Field(default_factory=list)
+    # The collection the chunks were written to. Reported, not selectable: the
+    # service indexes into the single collection it was configured with.
     collection: str
 
 

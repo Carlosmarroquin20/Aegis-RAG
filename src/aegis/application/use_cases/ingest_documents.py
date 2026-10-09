@@ -51,11 +51,11 @@ class IngestDocumentsUseCase:
         self,
         vector_store: VectorStorePort,
         parser_registry: ParserResolverPort,
-        default_collection: str,
+        collection: str,
     ) -> None:
         self._vector_store = vector_store
         self._registry = parser_registry
-        self._default_collection = default_collection
+        self._collection = collection
 
     async def execute(
         self,
@@ -120,7 +120,7 @@ class IngestDocumentsUseCase:
                 chunks_created=0,
                 duplicates_skipped=0,
                 warnings=warnings,
-                collection=request.collection or self._default_collection,
+                collection=self._collection,
             )
 
         # ── Stage 5: Deduplication ─────────────────────────────────────────────
@@ -158,5 +158,5 @@ class IngestDocumentsUseCase:
             chunks_created=result.chunks_created,
             duplicates_skipped=result.duplicates_skipped,
             warnings=result.warnings,
-            collection=request.collection or self._default_collection,
+            collection=self._collection,
         )
