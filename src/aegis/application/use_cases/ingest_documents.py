@@ -11,7 +11,9 @@ Pipeline stages:
 
 Security considerations:
   - MIME type is verified from magic bytes to prevent file extension spoofing.
-  - File size is bounded before parsing to prevent decompression bombs (PDF/DOCX).
+  - File size is bounded before parsing. That caps the bytes handed to a parser,
+    not what a compressed container inflates to; the DOCX parser enforces its own
+    uncompressed-size budget for that reason.
   - Content is not evaluated by the SecurityGateway — ingested documents are
     trusted source material, not user queries. The gateway protects the query
     path; indirect injection via document content is mitigated at the LLM layer
