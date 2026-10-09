@@ -18,6 +18,7 @@ preventing information leakage about undiscovered endpoints.
 from __future__ import annotations
 
 import math
+import re
 import time
 import uuid
 
@@ -45,6 +46,11 @@ _PUBLIC_PATHS: frozenset[str] = frozenset(
 )
 
 INTERNAL_ERROR_DETAIL = "An internal error occurred. Check server logs."
+
+# Shape of a caller-supplied correlation ID we are willing to propagate. Covers
+# UUIDs (with or without dashes), ULIDs and W3C trace IDs. ASCII is spelled out
+# because \w would also admit Unicode letters.
+_REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._\-]{1,64}")
 
 
 class ErrorBoundaryMiddleware(BaseHTTPMiddleware):
@@ -75,22 +81,33 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """
     Assigns a unique ID to every request for end-to-end log correlation.
 
-    If the caller provides an X-Request-ID header (e.g., from an API gateway),
-    it is reused; otherwise a UUID4 is generated. The ID is:
+    If the caller provides a well-formed X-Request-ID header (e.g., from an API
+    gateway), it is reused; otherwise a UUID4 is generated. The ID is:
       1. Bound to structlog context vars so every log line includes it.
       2. Echoed back in the X-Request-ID response header for client-side tracing.
+
+    The inbound value is untrusted and ends up in every log line, a span
+    attribute and a response header, so it is accepted only if it looks like an
+    identifier. Anything else (oversized, whitespace, control or non-ASCII
+    characters) is replaced rather than rejected: a bad correlation header is
+    not a reason to fail the request.
     """
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
-        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
+        inbound = request.headers.get("X-Request-ID", "")
+        request_id = inbound if _REQUEST_ID_PATTERN.fullmatch(inbound) else uuid.uuid4().hex
         structlog.contextvars.bind_contextvars(request_id=request_id)
         # Tie request_id to the active server span (no-op when tracing is off).
         trace.get_current_span().set_attribute("aegis.request_id", request_id)
 
-        response: Response = await call_next(request)  # type: ignore[operator]
-        response.headers["X-Request-ID"] = request_id
+        try:
+            response: Response = await call_next(request)  # type: ignore[operator]
+        finally:
+            # Unbind even if the stack below raises, so the ID cannot bleed into
+            # log lines emitted later from the same context.
+            structlog.contextvars.unbind_contextvars("request_id")
 
-        structlog.contextvars.unbind_contextvars("request_id")
+        response.headers["X-Request-ID"] = request_id
         return response
 
 

@@ -68,6 +68,24 @@ class TestRequestIDMiddleware:
         response = client.get("/ping", headers={"X-Request-ID": upstream_id})
         assert response.headers["X-Request-ID"] == upstream_id
 
+    @pytest.mark.parametrize(
+        "untrusted_id",
+        [
+            "a" * 65,  # over the length cap
+            "id with spaces",
+            "id;drop=1",
+            'id"} {"level":"critical',  # attempt to forge a structured log field
+            "<script>alert(1)</script>",
+        ],
+        ids=["too-long", "whitespace", "punctuation", "log-forgery", "markup"],
+    )
+    def test_malformed_caller_id_is_replaced(self, untrusted_id: str) -> None:
+        """An untrusted header must not be reflected or written to logs verbatim."""
+        client = _build_app(RequestIDMiddleware)
+        response = client.get("/ping", headers={"X-Request-ID": untrusted_id})
+        assert response.status_code == 200
+        assert re.fullmatch(r"[0-9a-f]{32}", response.headers["X-Request-ID"]) is not None
+
     def test_each_request_gets_distinct_id_by_default(self) -> None:
         client = _build_app(RequestIDMiddleware)
         first = client.get("/ping").headers["X-Request-ID"]
