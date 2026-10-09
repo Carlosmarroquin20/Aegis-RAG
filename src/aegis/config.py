@@ -16,6 +16,11 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        # The same .env also feeds docker compose's variable interpolation, so it
+        # legitimately holds keys this class does not model (AEGIS_PUBLIC_BIND).
+        # pydantic-settings rejects unknown dotenv keys by default, which would
+        # stop the app from starting over a variable it has no use for.
+        extra="ignore",
     )
 
     # ── Application ────────────────────────────────────────────────────────────
