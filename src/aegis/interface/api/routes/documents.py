@@ -32,7 +32,7 @@ from aegis.application.use_cases.ingest_documents import (
     UnsupportedFileTypeError,
 )
 from aegis.domain.ports.document_parser import ParseError
-from aegis.domain.ports.vector_store import VectorStorePort, VectorStoreUnavailableError
+from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.interface.api.dependencies import get_ingest_use_case, get_vector_store
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
@@ -109,14 +109,7 @@ async def list_documents(
     Full content is never echoed; only a 120-character preview is returned
     to avoid inadvertently leaking sensitive document content via the API.
     """
-    try:
-        chunks = await store.list_documents(limit=limit, offset=offset)
-    except VectorStoreUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Vector store not initialized.",
-        ) from exc
-
+    chunks = await store.list_documents(limit=limit, offset=offset)
     return [
         DocumentListItem(
             id=chunk.id,

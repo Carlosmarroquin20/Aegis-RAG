@@ -13,8 +13,14 @@ from fastapi.testclient import TestClient
 from httpx import Response
 
 from aegis.config import Settings
+from aegis.domain.ports.llm_client import LLMTimeoutError, LLMUnavailableError
+from aegis.domain.ports.vector_store import VectorStoreUnavailableError
 from aegis.interface.api import main
 from aegis.interface.api.dependencies import get_query_use_case
+from aegis.interface.api.error_handlers import (
+    DEPENDENCY_TIMEOUT_DETAIL,
+    DEPENDENCY_UNAVAILABLE_DETAIL,
+)
 
 _KEY = "unit-test-key"
 
@@ -80,3 +86,52 @@ class TestUnhandledRouteErrors:
         exposition = self.client.get("/metrics").text
         expected = 'aegis_http_requests_total{method="POST",path="/api/v1/query",status="500"} 1.0'
         assert expected in exposition
+
+
+class TestDependencyFailures:
+    """Outages of the vector store or the LLM are not internal errors."""
+
+    @staticmethod
+    def _query(monkeypatch: pytest.MonkeyPatch, error: Exception) -> Response:
+        class FailingUseCase:
+            async def execute(self, _request: object) -> None:
+                raise error
+
+        client = _client(monkeypatch, debug=False)
+        client.app.dependency_overrides[get_query_use_case] = FailingUseCase  # type: ignore[attr-defined]
+        return client.post("/api/v1/query", json={"query": "hello"}, headers={"X-API-Key": _KEY})
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            VectorStoreUnavailableError("chroma:8000 refused"),
+            LLMUnavailableError("ollama:11434 refused"),
+        ],
+        ids=["vector-store", "llm"],
+    )
+    def test_unavailable_dependency_returns_retryable_503(
+        self, monkeypatch: pytest.MonkeyPatch, error: Exception
+    ) -> None:
+        response = self._query(monkeypatch, error)
+        assert response.status_code == 503
+        assert response.headers["Retry-After"] == "5"
+        assert response.json() == {"detail": DEPENDENCY_UNAVAILABLE_DETAIL}
+
+    def test_llm_timeout_returns_504(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        response = self._query(monkeypatch, LLMTimeoutError("no answer after 120s"))
+        assert response.status_code == 504
+        assert response.json() == {"detail": DEPENDENCY_TIMEOUT_DETAIL}
+
+    def test_response_does_not_disclose_the_backend_address(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        response = self._query(monkeypatch, LLMUnavailableError("ollama:11434 refused"))
+        assert "ollama" not in response.text
+        assert "11434" not in response.text
+
+    def test_response_still_passes_through_the_middleware_stack(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        response = self._query(monkeypatch, VectorStoreUnavailableError("down"))
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+        assert "X-Request-ID" in response.headers

@@ -13,7 +13,7 @@ import httpx
 import structlog
 
 from aegis.domain.models.document import Document
-from aegis.domain.ports.llm_client import LLMClientPort
+from aegis.domain.ports.llm_client import LLMClientPort, LLMTimeoutError, LLMUnavailableError
 
 logger = structlog.get_logger(__name__)
 
@@ -72,12 +72,24 @@ class OllamaAdapter(LLMClientPort):
         }
 
         logger.debug("llm.request", model=self._model, context_docs=len(context))
-        response = await self._client.post("/api/chat", json=payload)
-        response.raise_for_status()
+        try:
+            response = await self._client.post("/api/chat", json=payload)
+            response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise LLMTimeoutError(f"Ollama did not answer in time: {exc!r}") from exc
+        except httpx.HTTPError as exc:
+            # Connection failures and non-2xx statuses (e.g. 404 when the model
+            # has not been pulled yet).
+            raise LLMUnavailableError(f"Ollama request failed: {exc!r}") from exc
 
-        data = response.json()
-        answer: str = data["message"]["content"]
-        logger.info("llm.response_received", model=self._model, tokens=len(answer.split()))
+        try:
+            answer = response.json()["message"]["content"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise LLMUnavailableError("Ollama returned an unexpected response body") from exc
+        if not isinstance(answer, str):
+            raise LLMUnavailableError("Ollama returned a non-text message content")
+
+        logger.info("llm.response_received", model=self._model, words=len(answer.split()))
         return answer
 
     async def health_check(self) -> bool:

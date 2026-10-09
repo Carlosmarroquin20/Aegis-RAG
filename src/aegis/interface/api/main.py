@@ -39,6 +39,7 @@ from aegis.interface.api.dependencies import (
     get_rate_limiter,
     get_security_gateway,
 )
+from aegis.interface.api.error_handlers import register_dependency_error_handlers
 from aegis.interface.api.middleware.security_middleware import (
     INTERNAL_ERROR_DETAIL,
     AccessLogMiddleware,
@@ -183,6 +184,10 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(query.router)
     app.include_router(documents.router)
+
+    # ── Exception handlers ────────────────────────────────────────────────────
+    # Vector store / LLM outages become 503/504 instead of a generic 500.
+    register_dependency_error_handlers(app)
 
     # ── Last-resort exception handler ─────────────────────────────────────────
     # Route errors are handled by ErrorBoundaryMiddleware. This only fires for a

@@ -216,3 +216,23 @@ class TestBlockingCallsLeaveTheEventLoop:
         client = _FakeClient()
         await _adapter(client=client).health_check()
         assert client.threads != [threading.get_ident()]
+
+
+class TestClientFailuresAreTranslated:
+    """Whatever the vendor client raises, callers only ever see the port's error."""
+
+    @pytest.mark.parametrize(
+        "error",
+        [ConnectionError("refused"), TimeoutError("slow"), ValueError("bad response")],
+        ids=["connection", "timeout", "value"],
+    )
+    async def test_failed_operation_raises_the_domain_error(self, error: Exception) -> None:
+        class Failing(_FakeCollection):
+            def query(self, **kwargs: Any) -> dict[str, Any]:
+                raise error
+
+        with pytest.raises(VectorStoreUnavailableError) as excinfo:
+            await _adapter(Failing()).similarity_search("q")
+        # asyncio re-creates TimeoutError when relaying it from the worker thread,
+        # so compare by type rather than identity.
+        assert type(excinfo.value.__cause__) is type(error)

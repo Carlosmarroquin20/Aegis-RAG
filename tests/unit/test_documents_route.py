@@ -22,6 +22,7 @@ from aegis.domain.models.document import Document
 from aegis.domain.ports.document_parser import ParseError
 from aegis.domain.ports.vector_store import VectorStoreUnavailableError
 from aegis.interface.api.dependencies import get_ingest_use_case, get_vector_store
+from aegis.interface.api.error_handlers import register_dependency_error_handlers
 from aegis.interface.api.routes import documents
 from tests.conftest import FakeVectorStore
 
@@ -163,6 +164,7 @@ class _UninitializedStore(FakeVectorStore):
 def _store_client(store: FakeVectorStore) -> TestClient:
     app = FastAPI()
     app.include_router(documents.router)
+    register_dependency_error_handlers(app)
     app.dependency_overrides[get_vector_store] = lambda: store
     return TestClient(app)
 

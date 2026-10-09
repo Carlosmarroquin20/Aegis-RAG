@@ -12,6 +12,7 @@ import pytest
 import respx
 
 from aegis.domain.models.document import Document
+from aegis.domain.ports.llm_client import LLMTimeoutError, LLMUnavailableError
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 
 _BASE = "http://ollama-test:11434"
@@ -51,13 +52,53 @@ class TestOllamaGenerate:
         assert "alpha" in payload and "beta" in payload
         assert "question?" in payload
 
-    @respx.mock
-    async def test_raises_on_http_error(self) -> None:
-        respx.post(f"{_BASE}/api/chat").mock(return_value=httpx.Response(500))
+
+class TestOllamaFailuresAreTranslated:
+    """No httpx exception may cross the port; callers only know the domain errors."""
+
+    @staticmethod
+    async def _generate() -> str:
         adapter = OllamaAdapter(base_url=_BASE, model="llama3.2")
-        with pytest.raises(httpx.HTTPStatusError):
-            await adapter.generate("q", [])
-        await adapter.aclose()
+        try:
+            return await adapter.generate("q", [])
+        finally:
+            await adapter.aclose()
+
+    @respx.mock
+    @pytest.mark.parametrize("status_code", [404, 500, 503])
+    async def test_error_status_is_unavailable(self, status_code: int) -> None:
+        respx.post(f"{_BASE}/api/chat").mock(return_value=httpx.Response(status_code))
+        with pytest.raises(LLMUnavailableError) as excinfo:
+            await self._generate()
+        assert not isinstance(excinfo.value, LLMTimeoutError)
+
+    @respx.mock
+    async def test_connection_failure_is_unavailable(self) -> None:
+        respx.post(f"{_BASE}/api/chat").mock(side_effect=httpx.ConnectError("refused"))
+        with pytest.raises(LLMUnavailableError):
+            await self._generate()
+
+    @respx.mock
+    async def test_timeout_is_reported_as_timeout(self) -> None:
+        respx.post(f"{_BASE}/api/chat").mock(side_effect=httpx.ReadTimeout("slow model"))
+        with pytest.raises(LLMTimeoutError):
+            await self._generate()
+
+    @respx.mock
+    @pytest.mark.parametrize(
+        "response",
+        [
+            httpx.Response(200, text="<html>proxy error</html>"),
+            httpx.Response(200, json={"error": "model not loaded"}),
+            httpx.Response(200, json={"message": {"content": None}}),
+            httpx.Response(200, json=["unexpected"]),
+        ],
+        ids=["not-json", "missing-message", "null-content", "wrong-shape"],
+    )
+    async def test_malformed_success_body_is_unavailable(self, response: httpx.Response) -> None:
+        respx.post(f"{_BASE}/api/chat").mock(return_value=response)
+        with pytest.raises(LLMUnavailableError):
+            await self._generate()
 
 
 # ── health_check ─────────────────────────────────────────────────────────────

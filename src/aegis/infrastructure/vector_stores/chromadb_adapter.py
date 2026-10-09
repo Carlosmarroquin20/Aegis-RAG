@@ -16,7 +16,7 @@ probes, metrics scrapes and every other in-flight request — for the duration.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import structlog
@@ -77,7 +77,7 @@ class ChromaDBAdapter(VectorStorePort):
         score_threshold: float = 0.0,
     ) -> list[Document]:
         collection = self._require_collection()
-        results = await asyncio.to_thread(
+        results = await self._call(
             collection.query,
             query_texts=[query],
             n_results=k,
@@ -111,7 +111,7 @@ class ChromaDBAdapter(VectorStorePort):
 
     async def add_documents(self, documents: list[Document]) -> None:
         collection = self._require_collection()
-        await asyncio.to_thread(
+        await self._call(
             collection.upsert,
             ids=[doc.id for doc in documents],
             documents=[doc.content for doc in documents],
@@ -121,18 +121,18 @@ class ChromaDBAdapter(VectorStorePort):
 
     async def delete_documents(self, ids: list[str]) -> None:
         collection = self._require_collection()
-        await asyncio.to_thread(collection.delete, ids=ids)
+        await self._call(collection.delete, ids=ids)
         logger.info("vector_store.documents_deleted", count=len(ids))
 
     async def existing_ids(self, ids: list[str]) -> set[str]:
         collection = self._require_collection()
         # get() silently omits unknown ids; include=[] skips payload transfer.
-        result = await asyncio.to_thread(collection.get, ids=ids, include=[])
+        result = await self._call(collection.get, ids=ids, include=[])
         return set(result.get("ids") or [])
 
     async def list_documents(self, limit: int = 20, offset: int = 0) -> list[Document]:
         collection = self._require_collection()
-        result = await asyncio.to_thread(
+        result = await self._call(
             collection.get,
             limit=limit,
             offset=offset,
@@ -161,6 +161,24 @@ class ChromaDBAdapter(VectorStorePort):
             return True
         except Exception:
             return False
+
+    @staticmethod
+    async def _call(operation: Callable[..., Any], /, **kwargs: Any) -> Any:
+        """
+        Runs a blocking client operation on a worker thread and translates any
+        failure into the port's error.
+
+        The catch is deliberately broad: this is the boundary with a remote
+        system, and chromadb surfaces transport problems as a mix of httpx,
+        chromadb and built-in exception types depending on where they occur.
+        None of them should cross the port.
+        """
+        try:
+            return await asyncio.to_thread(operation, **kwargs)
+        except Exception as exc:
+            raise VectorStoreUnavailableError(
+                f"ChromaDB {operation.__name__} failed: {exc!r}"
+            ) from exc
 
     def _require_collection(self) -> Any:
         if self._collection is None:
