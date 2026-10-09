@@ -7,6 +7,8 @@ PII detection, and blocking vs. permissive mode.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from aegis.infrastructure.security.output_sanitizer import (
@@ -143,3 +145,47 @@ class TestHasWarnings:
     def test_pii_triggers_has_warnings(self, sanitizer: OutputSanitizer) -> None:
         result = sanitizer.sanitize("SSN: 987-65-4321.")
         assert result.has_warnings
+
+
+# ── Scan cost ──────────────────────────────────────────────────────────────────
+
+
+class TestScanCostIsBounded:
+    """
+    The sanitizer scans model output, which a poisoned document can shape. A
+    pattern that goes quadratic on it stalls the event loop just like one on the
+    input side would.
+
+    Growth is measured rather than wall time: quadrupling the input must not cost
+    much more than four times as long. A quadratic pattern costs sixteen times
+    as much, so the check is independent of how fast the machine is.
+    """
+
+    @staticmethod
+    def _best_of_three(payload: str) -> float:
+        sanitizer = OutputSanitizer(max_chars=len(payload), block_reflection=False)
+        timings = []
+        for _ in range(3):
+            started = time.perf_counter()
+            sanitizer.sanitize(payload)
+            timings.append(time.perf_counter() - started)
+        return min(timings)
+
+    @pytest.mark.parametrize(
+        "unit",
+        [
+            "a.",  # dotted run: every position is a candidate email local part
+            "1 ",  # digit run for the card and phone patterns
+            "<a ",  # tag openers that never close
+        ],
+        ids=["dotted-run", "digit-run", "open-tags"],
+    )
+    def test_scan_time_grows_linearly_with_output_size(self, unit: str) -> None:
+        small = self._best_of_three(unit * 16_000)
+        large = self._best_of_three(unit * 64_000)
+        assert large < small * 8
+
+    def test_long_but_valid_address_is_still_detected(self) -> None:
+        address = f"{'a' * 64}@{'mail.' * 20}example.com"
+        result = OutputSanitizer().sanitize(f"Contact {address} for details.")
+        assert "email" in result.pii_types_detected
