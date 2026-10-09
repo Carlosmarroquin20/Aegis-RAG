@@ -3,7 +3,8 @@ Security Gateway — OWASP LLM Top 10 enforcement layer.
 
 Every query passes through this pipeline before touching the RAG engine:
   1. Structural validation (length, null bytes)
-  2. Unicode normalization (defeats homoglyph and encoding attacks)
+  2. Unicode normalization (compatibility forms, invisible characters) plus a
+     homoglyph-folded view used only for signature matching
   3. Heuristic threat scoring (injection signatures + entropy analysis)
   4. Deep sanitization (HTML/template stripping)
 
@@ -11,7 +12,8 @@ The gateway is intentionally I/O-free: no network calls, no DB access.
 This keeps it fast (<1 ms for typical queries) and easily testable.
 
 OWASP LLM coverage:
-  LLM01 — Prompt Injection           → _INJECTION_SIGNATURES, _normalize_unicode
+  LLM01 — Prompt Injection           → _INJECTION_SIGNATURES, _normalize_unicode,
+                                       _fold_confusables
   LLM02 — Insecure Output Handling   → enforced at the LLM adapter layer (see llm_client.py)
   LLM06 — Sensitive Information      → rate limiter + API key enforcement (middleware)
   LLM07 — System Prompt Disclosure   → _INJECTION_SIGNATURES (prompt_leakage category)
@@ -155,6 +157,28 @@ _COT_FOLLOW_UPS: Final[list[tuple[re.Pattern[str], int]]] = [
 ]
 _COT_SCORE: Final[int] = 85
 
+# ── Homoglyph folding ─────────────────────────────────────────────────────────
+# Cyrillic and Greek letters that render identically (or nearly so) to Latin ones.
+# Unicode normalization does NOT unify these — they are distinct letters, not
+# compatibility variants — so "ignоre" spelled with U+043E sails past an ASCII
+# signature. The table is intentionally limited to the high-confidence lookalikes
+# from the Unicode confusables data rather than the full set, which would start
+# merging letters that merely resemble each other in some fonts.
+_CONFUSABLES: Final[dict[int, str]] = str.maketrans(
+    {
+        # Cyrillic
+        "а": "a", "в": "b", "е": "e", "к": "k", "м": "m", "н": "h", "о": "o", "р": "p",
+        "с": "c", "т": "t", "у": "y", "х": "x", "і": "i", "ј": "j", "ѕ": "s", "ԁ": "d",
+        "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P",
+        "С": "C", "Т": "T", "У": "Y", "Х": "X", "І": "I", "Ј": "J", "Ѕ": "S",
+        # Greek
+        "α": "a", "ε": "e", "ι": "i", "κ": "k", "ν": "v", "ο": "o", "ρ": "p", "τ": "t",
+        "υ": "u", "χ": "x",
+        "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I", "Κ": "K", "Μ": "M",
+        "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X",
+    }
+)  # fmt: skip
+
 _MAX_QUERY_CHARS: Final[int] = 8192
 _BLOCK_SCORE_THRESHOLD: Final[int] = 80  # Hard block
 _SUSPICIOUS_SCORE_THRESHOLD: Final[int] = 60  # Block only in strict mode
@@ -226,12 +250,16 @@ class SecurityGateway:
             return self._make_blocked(assessment, "Query exceeds maximum allowed length.")
 
         # ── Stage 2: Unicode normalization ────────────────────────────────────
-        # NFC collapses homoglyphs (e.g., Cyrillic 'а' → Latin 'a') and
-        # combining diacritics used to split injection keywords across code points.
+        # Removes the encodings an attacker uses to split or disguise a keyword
+        # without changing how the text reads: compatibility forms (fullwidth,
+        # ligatures), combining sequences, and invisible format characters.
         normalized = _normalize_unicode(raw_query.text)
 
         # ── Stage 3: Heuristic threat scoring ─────────────────────────────────
-        assessment = self._score_threat(normalized, full_hash)
+        # Signatures are matched against a homoglyph-folded view. The fold is
+        # lossy for genuine Cyrillic/Greek text, so it is used for detection only;
+        # the query forwarded to retrieval keeps its original letters.
+        assessment = self._score_threat(_fold_confusables(normalized), full_hash)
         log.info(
             "security.query_assessed",
             threat_level=assessment.level.name,
@@ -317,11 +345,25 @@ class SecurityGateway:
 
 def _normalize_unicode(text: str) -> str:
     """
-    Applies NFC normalization and strips C0/C1 control characters.
-    Preserves standard whitespace (\\n, \\t, \\r) which is needed for code context.
+    Applies NFKC normalization and strips control and format characters.
+
+    NFKC (rather than NFC) folds compatibility variants onto their plain form, so
+    fullwidth letters or an "fi" ligature cannot hide a keyword. Category Cf covers
+    the invisible characters used to split one: zero-width space and joiners, soft
+    hyphen, BOM, and the bidirectional overrides behind "Trojan Source" style
+    reordering. Category Cc is the C0/C1 control range.
+
+    Standard whitespace (\\n, \\t, \\r) is preserved; it is needed for code context.
     """
-    normalized = unicodedata.normalize("NFC", text)
-    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Cc" or ch in "\n\t\r")
+    normalized = unicodedata.normalize("NFKC", text)
+    return "".join(
+        ch for ch in normalized if unicodedata.category(ch) not in ("Cc", "Cf") or ch in "\n\t\r"
+    )
+
+
+def _fold_confusables(text: str) -> str:
+    """Maps Cyrillic/Greek lookalikes onto Latin letters. For signature matching only."""
+    return text.translate(_CONFUSABLES)
 
 
 def _sanitize(text: str) -> str:
