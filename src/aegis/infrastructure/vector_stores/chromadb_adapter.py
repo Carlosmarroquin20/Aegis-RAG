@@ -9,10 +9,12 @@ adapter stays decoupled from any specific embedding model.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import structlog
 
 from aegis.domain.models.document import Document
-from aegis.domain.ports.vector_store import VectorStorePort
+from aegis.domain.ports.vector_store import VectorStorePort, VectorStoreUnavailableError
 
 logger = structlog.get_logger(__name__)
 
@@ -83,7 +85,7 @@ class ChromaDBAdapter(VectorStorePort):
                 Document(
                     id=doc_id,
                     content=content,
-                    metadata={k: str(v) for k, v in metadata.items()},
+                    metadata=_as_str_metadata(metadata),
                     relevance_score=round(similarity, 4),
                 )
             )
@@ -105,6 +107,31 @@ class ChromaDBAdapter(VectorStorePort):
         self._collection.delete(ids=ids)  # type: ignore[union-attr]
         logger.info("vector_store.documents_deleted", count=len(ids))
 
+    async def existing_ids(self, ids: list[str]) -> set[str]:
+        self._assert_initialized()
+        # get() silently omits unknown ids; include=[] skips payload transfer.
+        result = self._collection.get(ids=ids, include=[])  # type: ignore[union-attr]
+        return set(result.get("ids") or [])
+
+    async def list_documents(self, limit: int = 20, offset: int = 0) -> list[Document]:
+        self._assert_initialized()
+        result = self._collection.get(  # type: ignore[union-attr]
+            limit=limit,
+            offset=offset,
+            include=["documents", "metadatas"],
+        )
+        return [
+            Document(id=doc_id, content=content, metadata=_as_str_metadata(metadata))
+            for doc_id, content, metadata in zip(
+                result.get("ids") or [],
+                result.get("documents") or [],
+                result.get("metadatas") or [],
+                strict=False,
+            )
+            # Records written by another client may carry no document text.
+            if content
+        ]
+
     async def health_check(self) -> bool:
         try:
             import chromadb
@@ -117,7 +144,12 @@ class ChromaDBAdapter(VectorStorePort):
 
     def _assert_initialized(self) -> None:
         if self._collection is None:
-            raise RuntimeError(
+            raise VectorStoreUnavailableError(
                 "ChromaDBAdapter.initialize() must be called before use. "
                 "Wire this call into the application lifespan event."
             )
+
+
+def _as_str_metadata(metadata: Mapping[str, object] | None) -> dict[str, str]:
+    """Chroma allows scalar metadata values and null metadata; the domain wants str."""
+    return {key: str(value) for key, value in (metadata or {}).items()}

@@ -77,6 +77,12 @@ class FakeVectorStore(VectorStorePort):
         self.deleted_ids.extend(ids)
         self.stored = [d for d in self.stored if d.id not in ids]
 
+    async def existing_ids(self, ids: list[str]) -> set[str]:
+        return {d.id for d in self.stored} & set(ids)
+
+    async def list_documents(self, limit: int = 20, offset: int = 0) -> list[Document]:
+        return self.stored[offset : offset + limit]
+
     async def health_check(self) -> bool:
         return self._healthy
 

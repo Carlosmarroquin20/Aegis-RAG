@@ -123,21 +123,13 @@ class IngestDocumentsUseCase:
 
         # ── Stage 5: Deduplication ─────────────────────────────────────────────
         # Chunks use content-addressed IDs: re-uploading the same file produces
-        # the same IDs. The vector store's upsert is idempotent, but we track
-        # how many were new vs. already present for observability.
+        # the same IDs. The vector store's upsert is idempotent, so this lookup
+        # exists to skip redundant embedding work and to report how many chunks
+        # were new. It is best-effort: if it fails, everything is upserted.
         existing_ids: set[str] = set()
         try:
-            # Peek at existing IDs by doing a dummy similarity search; production
-            # deployments should use a dedicated ID-existence check if the store
-            # supports it (e.g., ChromaDB's .get(ids=[...])).
-            from aegis.infrastructure.vector_stores.chromadb_adapter import ChromaDBAdapter
-
-            if isinstance(self._vector_store, ChromaDBAdapter):
-                candidate_ids = [c.id for c in all_chunks]
-                existing_ids = await self._get_existing_ids(candidate_ids)
+            existing_ids = await self._vector_store.existing_ids([c.id for c in all_chunks])
         except Exception as exc:  # noqa: BLE001
-            # Deduplication is best-effort; a failure here does not block the upsert
-            # because add_documents() is idempotent on duplicate IDs.
             log.warning("ingestion.dedup_failed", error=str(exc))
 
         new_chunks = [c for c in all_chunks if c.id not in existing_ids]
@@ -166,23 +158,3 @@ class IngestDocumentsUseCase:
             warnings=result.warnings,
             collection=request.collection or self._default_collection,
         )
-
-    async def _get_existing_ids(self, ids: list[str]) -> set[str]:
-        """
-        Checks the vector store for pre-existing chunk IDs.
-        Returns only those IDs that are already indexed.
-        This is a best-effort deduplication — not a correctness guarantee.
-        """
-        from aegis.infrastructure.vector_stores.chromadb_adapter import ChromaDBAdapter
-
-        store = self._vector_store
-        if not isinstance(store, ChromaDBAdapter):
-            return set()
-
-        # ChromaDB collection.get() returns only IDs that exist.
-        from typing import Any, cast
-
-        assert store._collection is not None  # noqa: SLF001
-        collection: Any = cast(Any, store._collection)  # noqa: SLF001
-        result = collection.get(ids=ids, include=[])
-        return set(result.get("ids", []))

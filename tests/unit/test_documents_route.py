@@ -18,9 +18,12 @@ from aegis.application.use_cases.ingest_documents import (
     FileTooLargeError,
     UnsupportedFileTypeError,
 )
+from aegis.domain.models.document import Document
 from aegis.domain.ports.document_parser import ParseError
-from aegis.interface.api.dependencies import get_ingest_use_case
+from aegis.domain.ports.vector_store import VectorStoreUnavailableError
+from aegis.interface.api.dependencies import get_ingest_use_case, get_vector_store
 from aegis.interface.api.routes import documents
+from tests.conftest import FakeVectorStore
 
 
 class _FakeIngestUseCase:
@@ -145,71 +148,80 @@ class TestIngestDocument:
 # ── GET / DELETE /api/v1/documents ───────────────────────────────────────────
 
 
-class _FakeCollection:
-    def get(self, **_kwargs: Any) -> dict[str, Any]:
-        return {
-            "ids": ["chunk-1"],
-            "documents": ["This is the chunk content."],
-            "metadatas": [{"source": "readme.md", "chunk_index": "0"}],
-        }
+_CHUNK = Document(
+    id="chunk-1",
+    content="This is the chunk content.",
+    metadata={"source": "readme.md", "chunk_index": "0"},
+)
 
 
-class _FakeAdapter:
-    def __init__(self, *, initialized: bool = True) -> None:
-        self._collection = _FakeCollection() if initialized else None
-        self.deleted: list[str] = []
-
-    async def delete_documents(self, ids: list[str]) -> None:
-        self.deleted.extend(ids)
+class _UninitializedStore(FakeVectorStore):
+    async def list_documents(self, limit: int = 20, offset: int = 0) -> list[Document]:
+        raise VectorStoreUnavailableError("not initialized")
 
 
-def _routed_client() -> TestClient:
+def _store_client(store: FakeVectorStore) -> TestClient:
     app = FastAPI()
     app.include_router(documents.router)
+    app.dependency_overrides[get_vector_store] = lambda: store
     return TestClient(app)
 
 
 class TestListDocuments:
-    def test_lists_indexed_chunks(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(documents, "get_chromadb_adapter", lambda: _FakeAdapter())
-        resp = _routed_client().get("/api/v1/documents")
+    def test_lists_indexed_chunks(self) -> None:
+        store = FakeVectorStore()
+        store.stored.append(_CHUNK)
+        resp = _store_client(store).get("/api/v1/documents")
         assert resp.status_code == 200
-        body = resp.json()
-        assert body[0]["id"] == "chunk-1"
-        assert body[0]["source"] == "readme.md"
+        assert resp.json() == [
+            {
+                "id": "chunk-1",
+                "source": "readme.md",
+                "chunk_index": "0",
+                "page": None,
+                "section": None,
+                "content_preview": "This is the chunk content.",
+            }
+        ]
 
-    def test_uninitialized_store_returns_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            documents, "get_chromadb_adapter", lambda: _FakeAdapter(initialized=False)
-        )
-        resp = _routed_client().get("/api/v1/documents")
+    def test_preview_is_truncated(self) -> None:
+        store = FakeVectorStore()
+        store.stored.append(Document(id="long", content="x" * 500))
+        body = _store_client(store).get("/api/v1/documents").json()
+        assert len(body[0]["content_preview"]) == 120
+
+    def test_pagination_is_forwarded_to_the_store(self) -> None:
+        store = FakeVectorStore()
+        store.stored.extend(Document(id=f"c{i}", content="text") for i in range(5))
+        body = _store_client(store).get("/api/v1/documents?limit=2&offset=3").json()
+        assert [item["id"] for item in body] == ["c3", "c4"]
+
+    def test_uninitialized_store_returns_503(self) -> None:
+        resp = _store_client(_UninitializedStore()).get("/api/v1/documents")
         assert resp.status_code == 503
 
 
 class TestDeleteDocuments:
-    def test_delete_single(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        adapter = _FakeAdapter()
-        monkeypatch.setattr(documents, "get_chromadb_adapter", lambda: adapter)
-        resp = _routed_client().delete("/api/v1/documents/chunk-1")
+    def test_delete_single(self) -> None:
+        store = FakeVectorStore()
+        resp = _store_client(store).delete("/api/v1/documents/chunk-1")
         assert resp.status_code == 200
         assert resp.json() == {"deleted_ids": ["chunk-1"], "count": 1}
-        assert adapter.deleted == ["chunk-1"]
+        assert store.deleted_ids == ["chunk-1"]
 
-    def test_bulk_delete(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        adapter = _FakeAdapter()
-        monkeypatch.setattr(documents, "get_chromadb_adapter", lambda: adapter)
-        resp = _routed_client().request("DELETE", "/api/v1/documents", json=["a", "b", "c"])
+    def test_bulk_delete(self) -> None:
+        store = FakeVectorStore()
+        resp = _store_client(store).request("DELETE", "/api/v1/documents", json=["a", "b", "c"])
         assert resp.status_code == 200
         assert resp.json()["count"] == 3
+        assert store.deleted_ids == ["a", "b", "c"]
 
-    def test_bulk_delete_empty_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(documents, "get_chromadb_adapter", lambda: _FakeAdapter())
-        resp = _routed_client().request("DELETE", "/api/v1/documents", json=[])
+    def test_bulk_delete_empty_is_rejected(self) -> None:
+        resp = _store_client(FakeVectorStore()).request("DELETE", "/api/v1/documents", json=[])
         assert resp.status_code == 400
 
-    def test_bulk_delete_over_limit_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(documents, "get_chromadb_adapter", lambda: _FakeAdapter())
-        resp = _routed_client().request(
+    def test_bulk_delete_over_limit_is_rejected(self) -> None:
+        resp = _store_client(FakeVectorStore()).request(
             "DELETE", "/api/v1/documents", json=[str(i) for i in range(501)]
         )
         assert resp.status_code == 400

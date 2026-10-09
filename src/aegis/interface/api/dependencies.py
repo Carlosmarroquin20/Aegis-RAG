@@ -16,6 +16,7 @@ from functools import lru_cache
 from aegis.application.use_cases.ingest_documents import IngestDocumentsUseCase
 from aegis.application.use_cases.query_rag import QueryRAGUseCase
 from aegis.config import get_settings
+from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
@@ -101,10 +102,19 @@ def get_chromadb_adapter() -> ChromaDBAdapter:
     )
 
 
+def get_vector_store() -> VectorStorePort:
+    """
+    The vector store as the rest of the application sees it: through its port.
+    Routes and use cases depend on this, never on the concrete adapter, so
+    replacing ChromaDB means changing this one return statement.
+    """
+    return get_chromadb_adapter()
+
+
 def get_query_use_case() -> QueryRAGUseCase:
     """FastAPI dependency factory for the query pipeline."""
     return QueryRAGUseCase(
-        vector_store=get_chromadb_adapter(),
+        vector_store=get_vector_store(),
         llm_client=get_ollama_adapter(),
         security_gateway=get_security_gateway(),
         output_sanitizer=get_output_sanitizer(),
@@ -115,7 +125,7 @@ def get_ingest_use_case() -> IngestDocumentsUseCase:
     """FastAPI dependency factory for the ingestion pipeline."""
     cfg = get_settings()
     return IngestDocumentsUseCase(
-        vector_store=get_chromadb_adapter(),
+        vector_store=get_vector_store(),
         parser_registry=get_parser_registry(),
         default_collection=cfg.chroma_collection,
     )

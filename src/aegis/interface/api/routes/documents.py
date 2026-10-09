@@ -32,7 +32,8 @@ from aegis.application.use_cases.ingest_documents import (
     UnsupportedFileTypeError,
 )
 from aegis.domain.ports.document_parser import ParseError
-from aegis.interface.api.dependencies import get_chromadb_adapter, get_ingest_use_case
+from aegis.domain.ports.vector_store import VectorStorePort, VectorStoreUnavailableError
+from aegis.interface.api.dependencies import get_ingest_use_case, get_vector_store
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
@@ -103,6 +104,7 @@ async def ingest_document(
     summary="List indexed document chunks",
 )
 async def list_documents(
+    store: Annotated[VectorStorePort, Depends(get_vector_store)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[DocumentListItem]:
@@ -111,38 +113,25 @@ async def list_documents(
     Full content is never echoed; only a 120-character preview is returned
     to avoid inadvertently leaking sensitive document content via the API.
     """
-    adapter = get_chromadb_adapter()
-    if adapter._collection is None:  # noqa: SLF001
-        raise HTTPException(status_code=503, detail="Vector store not initialized.")
+    try:
+        chunks = await store.list_documents(limit=limit, offset=offset)
+    except VectorStoreUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Vector store not initialized.",
+        ) from exc
 
-    from typing import Any, cast
-
-    collection: Any = cast(Any, adapter._collection)  # noqa: SLF001
-    result = collection.get(
-        limit=limit,
-        offset=offset,
-        include=["documents", "metadatas"],
-    )
-
-    items: list[DocumentListItem] = []
-    for doc_id, content, meta in zip(
-        result.get("ids", []),
-        result.get("documents", []),
-        result.get("metadatas", []),
-        strict=False,
-    ):
-        meta = meta or {}
-        items.append(
-            DocumentListItem(
-                id=doc_id,
-                source=meta.get("source", "unknown"),
-                chunk_index=meta.get("chunk_index", "0"),
-                page=meta.get("page"),
-                section=meta.get("section"),
-                content_preview=(content or "")[:120],
-            )
+    return [
+        DocumentListItem(
+            id=chunk.id,
+            source=chunk.metadata.get("source", "unknown"),
+            chunk_index=chunk.metadata.get("chunk_index", "0"),
+            page=chunk.metadata.get("page"),
+            section=chunk.metadata.get("section"),
+            content_preview=chunk.content[:120],
         )
-    return items
+        for chunk in chunks
+    ]
 
 
 @router.delete(
@@ -150,9 +139,11 @@ async def list_documents(
     response_model=DeleteResponse,
     summary="Delete a single document chunk by ID",
 )
-async def delete_document(doc_id: str) -> DeleteResponse:
-    adapter = get_chromadb_adapter()
-    await adapter.delete_documents([doc_id])
+async def delete_document(
+    doc_id: str,
+    store: Annotated[VectorStorePort, Depends(get_vector_store)],
+) -> DeleteResponse:
+    await store.delete_documents([doc_id])
     return DeleteResponse(deleted_ids=[doc_id], count=1)
 
 
@@ -161,7 +152,10 @@ async def delete_document(doc_id: str) -> DeleteResponse:
     response_model=DeleteResponse,
     summary="Bulk delete document chunks by IDs",
 )
-async def bulk_delete_documents(ids: list[str]) -> DeleteResponse:
+async def bulk_delete_documents(
+    ids: list[str],
+    store: Annotated[VectorStorePort, Depends(get_vector_store)],
+) -> DeleteResponse:
     if not ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ids list is empty.")
     if len(ids) > 500:
@@ -169,6 +163,5 @@ async def bulk_delete_documents(ids: list[str]) -> DeleteResponse:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Bulk delete is limited to 500 IDs per request.",
         )
-    adapter = get_chromadb_adapter()
-    await adapter.delete_documents(ids)
+    await store.delete_documents(ids)
     return DeleteResponse(deleted_ids=ids, count=len(ids))

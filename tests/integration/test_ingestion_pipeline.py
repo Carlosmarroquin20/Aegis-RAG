@@ -16,32 +16,10 @@ from aegis.application.use_cases.ingest_documents import (
     IngestDocumentsUseCase,
     UnsupportedFileTypeError,
 )
-from aegis.domain.models.document import Document
-from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
+from tests.conftest import FakeVectorStore
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
-
-
-class FakeVectorStore(VectorStorePort):
-    """In-memory vector store stub that records upserted documents."""
-
-    def __init__(self) -> None:
-        self.stored: list[Document] = []
-
-    async def similarity_search(
-        self, query: str, k: int = 5, score_threshold: float = 0.0
-    ) -> list[Document]:
-        return []
-
-    async def add_documents(self, documents: list[Document]) -> None:
-        self.stored.extend(documents)
-
-    async def delete_documents(self, ids: list[str]) -> None:
-        self.stored = [d for d in self.stored if d.id not in ids]
-
-    async def health_check(self) -> bool:
-        return True
 
 
 @pytest.fixture()
@@ -179,7 +157,7 @@ class TestUnsupportedFileTypes:
 
 
 class TestDeduplication:
-    async def test_re_ingestion_does_not_crash(
+    async def test_re_ingesting_the_same_file_creates_no_new_chunks(
         self,
         use_case: IngestDocumentsUseCase,
         vector_store: FakeVectorStore,
@@ -188,13 +166,54 @@ class TestDeduplication:
         content = b"Stable document content for deduplication testing. " * 5
         uploaded = UploadedFile(filename="stable.txt", content=content)
 
-        result1 = await use_case.execute(uploaded, default_request)
-        # Re-ingest: the use case should complete without errors.
-        # (Full dedup requires ChromaDB; this test verifies graceful handling with FakeVectorStore.)
-        result2 = await use_case.execute(uploaded, default_request)
+        first = await use_case.execute(uploaded, default_request)
+        stored_after_first = len(vector_store.stored)
+        second = await use_case.execute(uploaded, default_request)
 
-        assert result1.chunks_created > 0
-        assert result2.chunks_created >= 0  # May be 0 if dedup is active, > 0 if not.
+        assert first.chunks_created > 0
+        assert first.duplicates_skipped == 0
+        assert second.chunks_created == 0
+        assert second.duplicates_skipped == first.chunks_created
+        assert len(vector_store.stored) == stored_after_first
+
+    async def test_same_content_under_another_filename_is_not_a_duplicate(
+        self,
+        use_case: IngestDocumentsUseCase,
+        default_request: IngestRequest,
+    ) -> None:
+        """Chunk IDs are derived from source + content, so provenance is preserved."""
+        content = b"Stable document content for deduplication testing. " * 5
+
+        await use_case.execute(UploadedFile(filename="a.txt", content=content), default_request)
+        other = await use_case.execute(
+            UploadedFile(filename="b.txt", content=content), default_request
+        )
+
+        assert other.chunks_created > 0
+        assert other.duplicates_skipped == 0
+
+    async def test_failed_lookup_falls_back_to_upserting_everything(
+        self,
+        registry: ParserRegistry,
+        default_request: IngestRequest,
+    ) -> None:
+        """Deduplication is an optimisation; losing it must not fail the ingest."""
+
+        class LookupFails(FakeVectorStore):
+            async def existing_ids(self, ids: list[str]) -> set[str]:
+                raise ConnectionError("store unreachable")
+
+        store = LookupFails()
+        use_case = IngestDocumentsUseCase(
+            vector_store=store, parser_registry=registry, default_collection="c"
+        )
+        content = b"Stable document content for deduplication testing. " * 5
+
+        result = await use_case.execute(
+            UploadedFile(filename="stable.txt", content=content), default_request
+        )
+
+        assert result.chunks_created == len(store.stored) > 0
 
 
 # ── Custom Collection ──────────────────────────────────────────────────────────
