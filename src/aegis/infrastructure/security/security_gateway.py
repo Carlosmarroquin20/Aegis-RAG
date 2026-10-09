@@ -25,13 +25,13 @@ import hashlib
 import math
 import re
 import unicodedata
-from dataclasses import dataclass, field
-from enum import IntEnum
 from typing import Final
 
 import structlog
 
 from aegis.domain.models.query import RawQuery, SanitizedQuery
+from aegis.domain.models.security import GatewayResult, ThreatAssessment, ThreatLevel
+from aegis.domain.ports.security import QueryGuardPort
 from aegis.infrastructure.security.markup import strip_html_tags
 
 logger = structlog.get_logger(__name__)
@@ -194,35 +194,7 @@ _BLOCK_SCORE_THRESHOLD: Final[int] = 80  # Hard block
 _SUSPICIOUS_SCORE_THRESHOLD: Final[int] = 60  # Block only in strict mode
 
 
-class ThreatLevel(IntEnum):
-    CLEAN = 0
-    SUSPICIOUS = 1
-    BLOCKED = 2
-
-
-@dataclass(frozen=True, slots=True)
-class ThreatAssessment:
-    level: ThreatLevel
-    score: int  # 0–100; highest matched rule score
-    triggered_rules: list[str] = field(default_factory=list)
-    # First 16 hex chars of SHA-256 are sufficient for log correlation without
-    # exposing the full query content in log aggregators.
-    query_hash: str = ""
-
-    @property
-    def is_blocked(self) -> bool:
-        return self.level == ThreatLevel.BLOCKED
-
-
-@dataclass(frozen=True, slots=True)
-class GatewayResult:
-    assessment: ThreatAssessment
-    sanitized_query: SanitizedQuery | None
-    blocked: bool
-    rejection_reason: str | None = None
-
-
-class SecurityGateway:
+class SecurityGateway(QueryGuardPort):
     """
     Stateless security enforcement pipeline.
 

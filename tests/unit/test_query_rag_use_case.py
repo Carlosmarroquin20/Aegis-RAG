@@ -20,6 +20,7 @@ from aegis.application.use_cases.query_rag import (
     SecurityViolationError,
 )
 from aegis.domain.models.document import Document
+from aegis.infrastructure.observability.metrics import PrometheusQueryMetrics
 from aegis.infrastructure.security.output_sanitizer import (
     OutputReflectionError,
     OutputSanitizer,
@@ -46,7 +47,8 @@ def _build_use_case(
         vector_store=vector_store,
         llm_client=llm_client,
         security_gateway=gateway,
-        output_sanitizer=sanitizer,
+        output_sanitizer=sanitizer or OutputSanitizer(),
+        metrics=PrometheusQueryMetrics(),
     )
 
 

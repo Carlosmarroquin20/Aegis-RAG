@@ -17,6 +17,9 @@ from __future__ import annotations
 
 from prometheus_client import CollectorRegistry, Counter, Histogram
 
+from aegis.domain.models.security import ThreatAssessment
+from aegis.domain.ports.telemetry import QueryMetricsPort
+
 # A dedicated registry keeps Aegis metrics isolated from the default global one,
 # which the prometheus_client library also uses for process/platform collectors.
 # Exposing our registry explicitly makes scrape output deterministic.
@@ -76,3 +79,20 @@ rag_queries_total = Counter(
     "Total RAG queries that reached the retrieval+generation stage.",
     registry=registry,
 )
+
+
+class PrometheusQueryMetrics(QueryMetricsPort):
+    """
+    Records query-pipeline outcomes on the counters above.
+
+    Stateless: the counters are module-level singletons bound to ``registry``,
+    so any number of instances report into the same series.
+    """
+
+    def query_blocked(self, assessment: ThreatAssessment) -> None:
+        security_violations_total.labels(threat_level=assessment.level.name).inc()
+        for rule in assessment.triggered_rules:
+            security_rule_triggers_total.labels(rule=rule).inc()
+
+    def query_reached_retrieval(self) -> None:
+        rag_queries_total.inc()

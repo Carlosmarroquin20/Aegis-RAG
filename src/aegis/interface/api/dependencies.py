@@ -18,6 +18,7 @@ from aegis.application.use_cases.query_rag import QueryRAGUseCase
 from aegis.config import get_settings
 from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
+from aegis.infrastructure.observability.metrics import PrometheusQueryMetrics
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
 from aegis.infrastructure.security.rate_limiter import (
@@ -118,6 +119,7 @@ def get_query_use_case() -> QueryRAGUseCase:
         llm_client=get_ollama_adapter(),
         security_gateway=get_security_gateway(),
         output_sanitizer=get_output_sanitizer(),
+        metrics=PrometheusQueryMetrics(),
     )
 
 

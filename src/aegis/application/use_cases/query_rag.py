@@ -7,27 +7,29 @@ Execution order is intentional:
   3. LLM generation (network I/O, slow)
   4. OutputSanitizer post-processing                    — LLM02
 
-The use case owns no state; all dependencies are injected at construction time.
+The use case owns no state; all dependencies are injected at construction time,
+and every one of them is a domain port. Nothing here imports from the
+infrastructure layer.
 """
 
 from __future__ import annotations
 
 import structlog
+from opentelemetry import trace
 
 from aegis.application.dtos.rag_dtos import QueryRequest, QueryResponse, SourceDocument
 from aegis.domain.models.query import RawQuery
 from aegis.domain.ports.llm_client import LLMClientPort
+from aegis.domain.ports.security import OutputGuardPort, QueryGuardPort
+from aegis.domain.ports.telemetry import QueryMetricsPort
 from aegis.domain.ports.vector_store import VectorStorePort
-from aegis.infrastructure.observability.metrics import (
-    rag_queries_total,
-    security_rule_triggers_total,
-    security_violations_total,
-)
-from aegis.infrastructure.observability.tracing import tracer
-from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
-from aegis.infrastructure.security.security_gateway import SecurityGateway
 
 logger = structlog.get_logger(__name__)
+
+# The OpenTelemetry API is a vendor-neutral facade (a no-op until an SDK is
+# installed by the infrastructure layer), in the same category as the logger
+# above. Using it here does not couple the use case to a tracing backend.
+tracer = trace.get_tracer("aegis")
 
 
 class SecurityViolationError(Exception):
@@ -44,13 +46,15 @@ class QueryRAGUseCase:
         self,
         vector_store: VectorStorePort,
         llm_client: LLMClientPort,
-        security_gateway: SecurityGateway,
-        output_sanitizer: OutputSanitizer | None = None,
+        security_gateway: QueryGuardPort,
+        output_sanitizer: OutputGuardPort,
+        metrics: QueryMetricsPort,
     ) -> None:
         self._vector_store = vector_store
         self._llm_client = llm_client
         self._gateway = security_gateway
-        self._output_sanitizer = output_sanitizer or OutputSanitizer()
+        self._output_sanitizer = output_sanitizer
+        self._metrics = metrics
 
     async def execute(self, request: QueryRequest) -> QueryResponse:
         log = logger.bind(top_k=request.top_k)
@@ -69,11 +73,7 @@ class QueryRAGUseCase:
                 query_hash=gateway_result.assessment.query_hash[:16],
                 score=gateway_result.assessment.score,
             )
-            security_violations_total.labels(
-                threat_level=gateway_result.assessment.level.name,
-            ).inc()
-            for rule in gateway_result.assessment.triggered_rules:
-                security_rule_triggers_total.labels(rule=rule).inc()
+            self._metrics.query_blocked(gateway_result.assessment)
             raise SecurityViolationError(
                 reason=gateway_result.rejection_reason or "Security policy violation.",
                 query_hash=gateway_result.assessment.query_hash,
@@ -87,7 +87,7 @@ class QueryRAGUseCase:
         log = log.bind(query_hash=query_hash[:16])
 
         # ── Retrieval ──────────────────────────────────────────────────────────
-        rag_queries_total.inc()
+        self._metrics.query_reached_retrieval()
         with tracer.start_as_current_span("rag.retrieve") as span:
             span.set_attribute("aegis.top_k", request.top_k)
             documents = await self._vector_store.similarity_search(sanitized_text, k=request.top_k)

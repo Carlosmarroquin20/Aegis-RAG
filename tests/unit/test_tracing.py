@@ -54,6 +54,7 @@ def span_exporter(monkeypatch: pytest.MonkeyPatch) -> InMemorySpanExporter:
 
 
 def _use_case(vector_store: FakeVectorStore, llm: FakeLLMClient) -> QueryRAGUseCase:
+    from aegis.infrastructure.observability.metrics import PrometheusQueryMetrics
     from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
     from aegis.infrastructure.security.security_gateway import SecurityGateway
 
@@ -62,6 +63,7 @@ def _use_case(vector_store: FakeVectorStore, llm: FakeLLMClient) -> QueryRAGUseC
         llm_client=llm,
         security_gateway=SecurityGateway(strict_mode=True),
         output_sanitizer=OutputSanitizer(),
+        metrics=PrometheusQueryMetrics(),
     )
 
 

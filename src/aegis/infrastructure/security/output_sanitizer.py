@@ -21,10 +21,11 @@ and logs what it does so security teams can tune the rules over time.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 
 import structlog
 
+from aegis.domain.models.security import SanitizedOutput
+from aegis.domain.ports.security import OutputGuardPort, OutputReflectionError
 from aegis.infrastructure.observability.metrics import output_reflections_total
 from aegis.infrastructure.security.markup import strip_html_tags
 
@@ -57,19 +58,7 @@ _PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 _MAX_OUTPUT_CHARS: int = 8192
 
 
-@dataclass(frozen=True, slots=True)
-class SanitizedOutput:
-    text: str
-    was_truncated: bool
-    reflection_detected: bool
-    pii_types_detected: list[str]
-
-    @property
-    def has_warnings(self) -> bool:
-        return self.reflection_detected or bool(self.pii_types_detected)
-
-
-class OutputSanitizer:
+class OutputSanitizer(OutputGuardPort):
     """
     Stateless post-processing layer applied to every LLM response
     before it is serialized into the API response body.
@@ -141,11 +130,3 @@ class OutputSanitizer:
             reflection_detected=reflection_detected,
             pii_types_detected=pii_found,
         )
-
-
-class OutputReflectionError(Exception):
-    """
-    Raised when the LLM output exhibits prompt injection reflection.
-    The API layer should return HTTP 500 (not 400) because this represents
-    a pipeline failure, not a user input error.
-    """
