@@ -78,6 +78,61 @@ class TestIngestDocument:
         )
         assert resp.status_code == 400
 
+    def test_oversized_upload_is_rejected_before_reaching_the_use_case(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(documents, "_MAX_UPLOAD_BYTES", 16)
+        # No canned response: the fake raises if the route calls it at all.
+        client = _client(_FakeIngestUseCase())
+        resp = client.post(
+            "/api/v1/documents",
+            files={"file": ("big.txt", b"x" * 17, "text/plain")},
+        )
+        assert resp.status_code == 413
+
+    def test_upload_exactly_at_the_limit_is_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(documents, "_MAX_UPLOAD_BYTES", 16)
+        response = IngestResponse(
+            source="ok.txt", chunks_created=1, duplicates_skipped=0, collection="c"
+        )
+        client = _client(_FakeIngestUseCase(response=response))
+        resp = client.post(
+            "/api/v1/documents",
+            files={"file": ("ok.txt", b"x" * 16, "text/plain")},
+        )
+        assert resp.status_code == 201
+
+    def test_read_is_bounded_when_the_part_size_is_unknown(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without a recorded size the route must still not buffer the whole part."""
+        from starlette.datastructures import UploadFile
+
+        requested: list[int] = []
+        original_init = UploadFile.__init__
+        original_read = UploadFile.read
+
+        def init_without_size(self: UploadFile, *args: Any, **kwargs: Any) -> None:
+            # UploadFile only tracks its size when it starts from a number.
+            kwargs["size"] = None
+            original_init(self, *args, **kwargs)
+
+        async def spy_read(self: UploadFile, size: int = -1) -> bytes:
+            requested.append(size)
+            return await original_read(self, size)
+
+        monkeypatch.setattr(documents, "_MAX_UPLOAD_BYTES", 16)
+        monkeypatch.setattr(UploadFile, "__init__", init_without_size)
+        monkeypatch.setattr(UploadFile, "read", spy_read)
+
+        client = _client(_FakeIngestUseCase())
+        resp = client.post(
+            "/api/v1/documents",
+            files={"file": ("big.txt", b"x" * 64, "text/plain")},
+        )
+        assert resp.status_code == 413
+        assert requested == [17]
+
     def test_file_too_large_from_use_case_returns_413(self) -> None:
         client = _client(_FakeIngestUseCase(exc=FileTooLargeError("too big")))
         resp = client.post(

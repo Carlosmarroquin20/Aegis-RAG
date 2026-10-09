@@ -6,9 +6,11 @@ GET    /api/v1/documents          — List indexed document chunks (paginated).
 DELETE /api/v1/documents          — Bulk delete by list of chunk IDs.
 DELETE /api/v1/documents/{doc_id} — Delete a single chunk.
 
-File uploads use multipart/form-data. The API validates file size at the
-framework level (before the use case) to reject oversized payloads early,
-reducing the attack surface for decompression bombs.
+File uploads use multipart/form-data. The route rejects an oversized part before
+reading it into memory, and the use case enforces the same ceiling again before
+parsing. Neither bounds what the multipart parser spools to disk while receiving
+the request: cap the request body at the reverse proxy as well (the bundled
+nginx config sets ``client_max_body_size`` to match).
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ from aegis.interface.api.dependencies import get_chromadb_adapter, get_ingest_us
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
-# FastAPI enforces this limit at the ASGI level, before the route handler runs.
+# Keep in sync with client_max_body_size in frontend/nginx.conf.
 _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
@@ -58,13 +60,21 @@ async def ingest_document(
     chunk_size: Annotated[int, Form(ge=128, le=4096)] = 512,
     overlap: Annotated[int, Form(ge=0, le=512)] = 64,
 ) -> IngestResponse:
-    content = await file.read()
+    too_large = HTTPException(
+        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        detail=f"File exceeds the {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit.",
+    )
+    # The multipart parser has already spooled the part to a temporary file and
+    # recorded its size, so an oversized upload is refused here without ever being
+    # copied into process memory.
+    if file.size is not None and file.size > _MAX_UPLOAD_BYTES:
+        raise too_large
 
+    # Bounded read as a second guard for the case where the size is unknown: at
+    # most one byte past the limit is buffered, which is enough to detect it.
+    content = await file.read(_MAX_UPLOAD_BYTES + 1)
     if len(content) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File exceeds the {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit.",
-        )
+        raise too_large
 
     uploaded = UploadedFile(
         filename=file.filename or "unknown",
