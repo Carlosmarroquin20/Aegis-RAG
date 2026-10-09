@@ -178,6 +178,11 @@ class RateLimiter:
         self._store = store or InMemoryRateLimitStore()
         self._max_requests = policy.requests_per_window + policy.burst_allowance
 
+    @property
+    def limit(self) -> int:
+        """Requests admitted per window, burst allowance included."""
+        return self._max_requests
+
     def check_and_record(self, api_key: str) -> RateLimitResult:
         """
         Records the request and returns whether it is permitted.

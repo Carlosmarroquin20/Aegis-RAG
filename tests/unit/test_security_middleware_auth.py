@@ -8,6 +8,8 @@ dispatch paths against a minimal app.
 
 from __future__ import annotations
 
+import time
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -25,10 +27,12 @@ def _settings() -> Settings:
     return Settings(valid_api_keys=_KEY, api_key_header="X-API-Key")
 
 
-def _app(*, with_rate_limit: bool = False, limit: int = 5) -> FastAPI:
+def _app(
+    *, with_rate_limit: bool = False, limit: int = 5, burst: int = 0, window: int = 3600
+) -> FastAPI:
     app = FastAPI()
     if with_rate_limit:
-        limiter = RateLimiter(RateLimitPolicy(limit, 3600, burst_allowance=0))
+        limiter = RateLimiter(RateLimitPolicy(limit, window, burst_allowance=burst))
         app.add_middleware(RateLimitMiddleware, rate_limiter=limiter)
     app.add_middleware(APIKeyMiddleware, settings=_settings())
 
@@ -85,6 +89,30 @@ class TestRateLimitMiddleware:
         blocked = client.get("/ping", headers=headers)
         assert blocked.status_code == 429
         assert "Retry-After" in blocked.headers
+
+    def test_limit_header_includes_burst_and_agrees_with_remaining(self) -> None:
+        """Limit must be the effective ceiling, or Remaining can exceed it."""
+        client = TestClient(_app(with_rate_limit=True, limit=5, burst=3))
+        response = client.get("/ping", headers={"X-API-Key": _KEY})
+        assert response.headers["X-RateLimit-Limit"] == "8"
+        assert response.headers["X-RateLimit-Remaining"] == "7"
+
+    def test_reset_header_is_a_unix_timestamp_one_window_ahead(self) -> None:
+        window = 120
+        client = TestClient(_app(with_rate_limit=True, window=window))
+        before = time.time()
+        response = client.get("/ping", headers={"X-API-Key": _KEY})
+        reset = int(response.headers["X-RateLimit-Reset"])
+        assert before + window - 1 <= reset <= time.time() + window + 1
+
+    def test_retry_after_is_never_zero(self) -> None:
+        """A sub-second remainder must round up, not truncate to an immediate retry."""
+        client = TestClient(_app(with_rate_limit=True, limit=1, window=1))
+        headers = {"X-API-Key": _KEY}
+        client.get("/ping", headers=headers)
+        blocked = client.get("/ping", headers=headers)
+        assert blocked.status_code == 429
+        assert int(blocked.headers["Retry-After"]) >= 1
 
     def test_public_path_is_not_rate_limited(self) -> None:
         client = TestClient(_app(with_rate_limit=True, limit=1))

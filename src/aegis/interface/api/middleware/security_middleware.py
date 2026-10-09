@@ -15,6 +15,7 @@ preventing information leakage about undiscovered endpoints.
 
 from __future__ import annotations
 
+import math
 import time
 import uuid
 
@@ -192,16 +193,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Always attach rate-limit headers, even on allowed requests.
         # This gives clients visibility into their quota without requiring an extra call.
+        # Limit is the effective ceiling (baseline + burst) so that it agrees with
+        # Remaining; reset_at is already a Unix wall-clock timestamp.
         headers = {
-            "X-RateLimit-Limit": str(
-                self._limiter._policy.requests_per_window  # noqa: SLF001
-            ),
+            "X-RateLimit-Limit": str(self._limiter.limit),
             "X-RateLimit-Remaining": str(result.remaining),
-            "X-RateLimit-Reset": str(int(result.reset_at + time.time() - time.monotonic())),
+            "X-RateLimit-Reset": str(math.ceil(result.reset_at)),
         }
 
         if not result.allowed:
-            headers["Retry-After"] = str(int(result.retry_after or 1))
+            # Round up: truncating a sub-second wait to "0" tells the client to
+            # retry immediately, straight into another 429.
+            headers["Retry-After"] = str(max(1, math.ceil(result.retry_after or 0)))
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Rate limit exceeded. Please slow down."},
