@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![OWASP LLM](https://img.shields.io/badge/OWASP_LLM_Top_10-mitigated-d6262c)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 [![CI](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-~85%25-brightgreen)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-~90%25-brightgreen)](#testing)
 
 Aegis-RAG is a Retrieval-Augmented Generation API designed for environments where you cannot afford to ship "best effort" security. Every query is evaluated by a domain-level **Security Gateway** before any retrieval or generation happens, every LLM response is post-processed by an **Output Sanitizer**, and the whole pipeline is wrapped in a defence-in-depth middleware stack with first-class observability.
 
@@ -25,11 +25,12 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 
 ## Engineering Highlights
 
-- **Defence in depth, by design.** The ASGI middleware chain (RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit) executes *before* any route handler, so 404s and 405s receive the same hardening as authenticated traffic. RequestID sits outermost, so every log line and span carries the same correlation ID.
+- **Defence in depth, by design.** The ASGI middleware chain (RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → ErrorBoundary) executes *before* any route handler, so 404s and 405s receive the same hardening as authenticated traffic. RequestID sits outermost, so every log line and span carries the same correlation ID; ErrorBoundary sits innermost, so even an unhandled 500 is logged, counted and returned with security headers instead of bypassing the stack.
 - **Bounded label cardinality.** Prometheus path labels collapse to the matched FastAPI route template (`/api/v1/documents/{doc_id}`), never the raw URL — a subtle but production-critical decision.
+- **Detection that does not become the attack surface.** The gateway inspects attacker-controlled text on the event loop, so every signature is kept linear on non-matching input and a regression suite feeds each rule its worst-case 8 KB payload. Obfuscation that leaves a payload readable — zero-width characters, fullwidth forms, bidi overrides, Cyrillic/Greek homoglyphs — is normalized or folded before matching.
 - **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
 - **Magic-byte file detection.** Document uploads are dispatched to parsers based on actual file content, not the attacker-controllable `Content-Type` header.
-- **Hexagonal for real.** The `LLMClientPort`, `VectorStorePort` and `RateLimitStore` interfaces mean swapping Ollama for OpenAI, ChromaDB for pgvector, or the in-memory rate limiter for the shared **Redis** backend is a one-file change — and there are fakes in the test suite that prove it.
+- **Hexagonal for real.** The `LLMClientPort`, `VectorStorePort` and `RateLimitStore` interfaces mean swapping Ollama for OpenAI, ChromaDB for pgvector, or the in-memory rate limiter for the shared **Redis** backend is a one-file change — and there are fakes in the test suite that prove it. Adapters translate vendor failures at the boundary, so a vector-store or LLM outage reaches the client as a retryable **503/504**, never as a leaked client-library exception.
 - **Three pillars of observability.** Structured JSON logs, Prometheus metrics, and opt-in **OpenTelemetry** traces (a span per pipeline stage) all correlate through a single `request_id` / `trace_id`.
 - **Air-gap compatible.** The full stack runs on local infrastructure (Ollama + ChromaDB). No data ever leaves the network.
 
@@ -121,12 +122,12 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 | Threat | Control | OWASP |
 |---|---|---|
-| Prompt injection | 11 regex signatures + Shannon entropy + Unicode NFC normalization | LLM01 |
+| Prompt injection | Regex signatures + staged-reasoning (CoT) check + Shannon entropy, matched after Unicode NFKC normalization, invisible-character stripping and homoglyph folding | LLM01 |
 | Insecure output handling | Length cap · HTML strip · reflection detection · PII flagging | LLM02 |
 | System-prompt disclosure | Signature rules block probing queries (*"show me your prompt"*) | LLM07 |
-| API abuse | Per-key sliding-window rate limiter with burst allowance | LLM06 |
-| Sensitive data exposure | API key auth at ASGI level · non-root container · `Cache-Control: no-store` | LLM06 |
-| File-upload attacks | Magic-byte MIME detection · 50 MB hard cap before parsing | General |
+| API abuse | Per-key sliding-window rate limiter with burst allowance · rejected requests never occupy the window · explicit fail-open/fail-closed policy if the store is down | LLM06 |
+| Sensitive data exposure | API key auth at ASGI level (constant-time digest comparison; the key never reaches logs or the rate-limit store) · non-root container · `Cache-Control: no-store` · OpenAPI schema and docs disabled outside debug | LLM06 |
+| File-upload attacks | Magic-byte MIME detection · 50 MB cap enforced before the upload is buffered · uncompressed-size budget for DOCX archives (decompression bombs) | General |
 | Browser-side attacks | HSTS · CSP `default-src 'none'` · X-Frame-Options DENY · nosniff | General |
 
 ---
@@ -143,12 +144,13 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 | `aegis_security_rule_triggers_total` | Counter | Which injection signatures are firing |
 | `aegis_output_reflections_total` | Counter | LLM responses blocked by reflection guard |
 | `aegis_rag_queries_total` | Counter | Queries that reached the retrieval stage |
+| `aegis_rate_limit_backend_errors_total` | Counter | Requests served or refused while the rate-limit store was unreachable |
 
 Logs are single-line JSON via `structlog` with an auto-bound `request_id` for end-to-end correlation between logs, metrics, traces, and the `X-Request-ID` response header.
 
 **Distributed tracing (OpenTelemetry)** is opt-in (`TRACING_ENABLED`). When on, the FastAPI server span and the HTTPX call to Ollama are auto-instrumented, the query use case emits a child span per pipeline stage (`security.evaluate` → `rag.retrieve` → `llm.generate` → `output.sanitize`), and every log line carries the active `trace_id`/`span_id` so logs pivot to their trace. Spans export over OTLP/HTTP to an **OpenTelemetry Collector**, which fans them out two ways: the raw traces to a Jaeger backend at `http://localhost:16686`, and — via the **spanmetrics connector** — trace-derived RED metrics to Prometheus. The SDK lives in the optional `otel` extra, so the base image stays lean when tracing is off.
 
-Two pre-provisioned Grafana dashboards ship with the stack. **Production Overview** surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security into full-resolution time series. **Trace Analytics** turns the pipeline spans into per-stage RED charts (call rate, errors, and p50/p95/p99 latency for `security.evaluate` / `rag.retrieve` / `llm.generate` / `output.sanitize`), plus a SecurityGateway breakdown by threat level — and each latency exemplar links straight to its trace in Jaeger. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, and any output-reflection event.
+Two pre-provisioned Grafana dashboards ship with the stack. **Production Overview** surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security into full-resolution time series. **Trace Analytics** turns the pipeline spans into per-stage RED charts (call rate, errors, and p50/p95/p99 latency for `security.evaluate` / `rag.retrieve` / `llm.generate` / `output.sanitize`), plus a SecurityGateway breakdown by threat level — and each latency exemplar links straight to its trace in Jaeger. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, any output-reflection event, and an unreachable rate-limit store.
 
 <p align="center">
   <img src="docs/grafana-traces-overview.png" alt="Grafana Trace Analytics — overview tiles and per-stage RED charts" width="760">
@@ -165,7 +167,7 @@ Two pre-provisioned Grafana dashboards ship with the stack. **Production Overvie
 - **API & runtime** — FastAPI 0.115+, Uvicorn, Pydantic v2 (strict), `uv` package manager
 - **RAG core** — ChromaDB · Ollama · `sentence-transformers/all-MiniLM-L6-v2` · pypdf · python-docx · markdown-it-py
 - **Rate limiting** — in-process sliding window, or a shared **Redis** backend (same port, one config flag)
-- **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy · ~85% test coverage
+- **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy · ~90% test coverage
 - **Observability** — `structlog` (JSON) · `prometheus-client` + Grafana dashboards · **OpenTelemetry** traces via an OTel Collector (spanmetrics → Prometheus) to Jaeger
 - **Frontend** — React 18 · Vite 5 · TypeScript (strict) · Tailwind CSS (demo console)
 - **Delivery & infra** — Multi-stage Docker (non-root, CPU-only Torch, ~1.8 GB) · GitHub Actions CI · docker-compose · **AWS Terraform** (opt-in)
@@ -234,7 +236,7 @@ The `X-API-Key` is entered in the UI and kept only in the browser's `localStorag
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET`  | `/health` | Liveness probe (no dependencies) |
-| `GET`  | `/ready`  | Readiness probe (checks ChromaDB + Ollama) |
+| `GET`  | `/ready`  | Readiness probe (checks ChromaDB + Ollama; 503 until both answer) |
 | `GET`  | `/metrics` | Prometheus scrape target |
 | `POST` | `/api/v1/query` | Submit a question to the RAG pipeline |
 | `POST` | `/api/v1/documents` | Upload and index a document (TXT, MD, PDF, DOCX) |
@@ -242,7 +244,9 @@ The `X-API-Key` is entered in the UI and kept only in the browser's `localStorag
 | `DELETE` | `/api/v1/documents/{id}` | Delete a single chunk |
 | `DELETE` | `/api/v1/documents` | Bulk delete by ID list (max 500) |
 
-Interactive Swagger docs are served at `http://localhost:8000/docs` when `DEBUG=true`.
+Interactive Swagger docs are served at `http://localhost:8000/docs` when `DEBUG=true`. Outside debug mode `/docs`, `/redoc` and `/openapi.json` are not served at all.
+
+Error semantics are part of the contract: a blocked query is a structured **400**, a throttled client gets **429** with an accurate `Retry-After`, an unavailable vector store or LLM is **503** (or **504** on an LLM timeout), and only a genuine defect is a **500**.
 
 ---
 
@@ -251,14 +255,16 @@ Interactive Swagger docs are served at `http://localhost:8000/docs` when `DEBUG=
 The suite is layered so each level catches what the others cannot.
 
 ```bash
-uv run pytest                       # unit + integration, 80% coverage gate (~85% actual)
+uv run pytest                       # unit + integration, 80% coverage gate (~90% actual)
 uv run pytest tests/unit/           # fast, no I/O
 uv run pytest tests/integration/    # in-memory adapters, ingestion pipeline
 uv run pytest -m e2e --no-cov       # full HTTP surface against docker-compose
 ```
 
-Over 200 tests span the security gateway, output sanitizer, rate limiter (both backends),
-tracing spans, middleware, use cases, adapters and routes.
+Over 350 tests span the security gateway, output sanitizer, rate limiter (both backends),
+tracing spans, middleware, use cases, adapters and routes. They include regression suites for
+the failure modes that matter most here: obfuscated injection payloads, worst-case regex
+inputs, retry storms against the rate limiter, and dependency outages.
 
 **End-to-end tests** issue real requests through the live middleware stack. They auto-skip with a clear message if `docker compose` is not up, so CI never fails on a forgotten container. Point them at any environment via env vars:
 
@@ -279,7 +285,7 @@ uv run mypy src/
 
 ```
 Ruff (lint + format) · Mypy strict     ┐
-Frontend build (tsc + Vite)            ├─→ all green required
+Frontend build (tsc + Vite) · nginx -t ├─→ all green required
 pip-audit (dependency CVEs)            │
 Unit + integration tests · 80% gate    │
 Docker build · Trivy image scan        ┘
