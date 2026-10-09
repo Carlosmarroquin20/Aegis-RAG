@@ -78,3 +78,16 @@ groups:
             The OutputSanitizer blocked at least one LLM response that
             echoed an injection payload. Investigate the indexed documents
             for indirect prompt injection.
+
+      - alert: AegisRateLimitBackendDown
+        expr: increase(aegis_rate_limit_backend_errors_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Rate-limit store unreachable"
+          description: >
+            The API cannot reach its rate-limit backend (Redis). With
+            RATE_LIMIT_FAIL_OPEN=true requests are being served WITHOUT
+            throttling; with false they are being refused with 503.
+            Restore Redis or switch RATE_LIMIT_BACKEND to memory.

@@ -26,6 +26,10 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
+# Upper bound for one round trip to Redis. The limiter sits on the request path
+# of every call, so this is also the most a degraded Redis can add to latency.
+_REDIS_TIMEOUT_SECONDS: float = 0.5
+
 
 @dataclass(frozen=True, slots=True)
 class RateLimitPolicy:
@@ -129,7 +133,15 @@ class RedisRateLimitStore(RateLimitStore):
                     "RedisRateLimitStore requires the 'redis' package. "
                     'Install it with: pip install "aegis-rag[redis]"'
                 ) from exc
-            self._client = redis.Redis.from_url(redis_url)
+            # Bounded socket timeouts: redis-py waits forever by default, so a
+            # Redis that accepts connections but stops answering would otherwise
+            # hang every request instead of failing fast into the caller's
+            # fail-open / fail-closed policy.
+            self._client = redis.Redis.from_url(
+                redis_url,
+                socket_connect_timeout=_REDIS_TIMEOUT_SECONDS,
+                socket_timeout=_REDIS_TIMEOUT_SECONDS,
+            )
         self._key_prefix = key_prefix
 
     def record_and_get(self, key: str, window_seconds: int) -> list[float]:

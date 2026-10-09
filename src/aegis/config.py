@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     # requires the optional dependency: pip install "aegis-rag[redis]".
     rate_limit_backend: str = "memory"  # "memory" | "redis"
     redis_url: str = "redis://localhost:6379/0"
+    # What to do when the rate-limit store cannot be reached. True (fail open)
+    # serves the request unthrottled; False (fail closed) answers 503. Either way
+    # the request has already been authenticated, and every occurrence is logged
+    # and counted in aegis_rate_limit_backend_errors_total.
+    #
+    # Open is the default because the limiter is an abuse control, not an
+    # authorization one: failing closed turns an outage of an auxiliary cache into
+    # a full outage of the API for legitimate, authenticated callers. Choose
+    # closed where unmetered access is the worse outcome (e.g. per-request cost).
+    rate_limit_fail_open: bool = True
 
     @field_validator("rate_limit_backend")
     @classmethod

@@ -173,3 +173,55 @@ class TestRateLimitMiddleware:
         # Many hits on a public path never trip the limiter.
         for _ in range(5):
             assert client.get("/health").status_code == 200
+
+
+class _UnreachableStore(InMemoryRateLimitStore):
+    def record_and_get(self, key: str, window_seconds: int) -> list[float]:
+        raise ConnectionError("redis:6379 refused")
+
+
+class TestRateLimitBackendFailure:
+    """The limiter's store (Redis) going away must not surface as a 500."""
+
+    @staticmethod
+    def _client(*, fail_open: bool) -> TestClient:
+        app = FastAPI()
+        app.add_middleware(
+            RateLimitMiddleware,
+            rate_limiter=RateLimiter(RateLimitPolicy(5, 60), _UnreachableStore()),
+            fail_open=fail_open,
+        )
+        app.add_middleware(APIKeyMiddleware, settings=_settings())
+
+        @app.get("/ping")
+        async def ping() -> dict[str, bool]:
+            return {"pong": True}
+
+        return TestClient(app)
+
+    def test_fail_open_serves_the_request_unthrottled(self) -> None:
+        response = self._client(fail_open=True).get("/ping", headers={"X-API-Key": _KEY})
+        assert response.status_code == 200
+        # No quota was computed, so none is advertised.
+        assert "X-RateLimit-Remaining" not in response.headers
+
+    def test_fail_open_still_requires_authentication(self) -> None:
+        response = self._client(fail_open=True).get("/ping", headers={"X-API-Key": "wrong"})
+        assert response.status_code == 403
+
+    def test_fail_closed_refuses_with_retryable_503(self) -> None:
+        response = self._client(fail_open=False).get("/ping", headers={"X-API-Key": _KEY})
+        assert response.status_code == 503
+        assert response.headers["Retry-After"] == "5"
+        assert "redis" not in response.text
+
+    @pytest.mark.parametrize("fail_open", [True, False])
+    def test_every_failure_is_counted(
+        self, fail_open: bool, reset_prometheus_registry: None
+    ) -> None:
+        from aegis.infrastructure.observability.metrics import rate_limit_backend_errors_total
+
+        client = self._client(fail_open=fail_open)
+        for _ in range(3):
+            client.get("/ping", headers={"X-API-Key": _KEY})
+        assert rate_limit_backend_errors_total._value.get() == 3

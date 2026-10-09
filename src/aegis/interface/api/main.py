@@ -161,7 +161,11 @@ def create_app() -> FastAPI:
     origins = ["*"] if cfg.debug else cfg.cors_allowed_origins
 
     app.add_middleware(ErrorBoundaryMiddleware)
-    app.add_middleware(RateLimitMiddleware, rate_limiter=get_rate_limiter())
+    app.add_middleware(
+        RateLimitMiddleware,
+        rate_limiter=get_rate_limiter(),
+        fail_open=cfg.rate_limit_fail_open,
+    )
     app.add_middleware(APIKeyMiddleware, settings=cfg)
     app.add_middleware(
         CORSMiddleware,

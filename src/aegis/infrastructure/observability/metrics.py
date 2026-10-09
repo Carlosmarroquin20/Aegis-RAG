@@ -63,6 +63,12 @@ output_reflections_total = Counter(
     registry=registry,
 )
 
+rate_limit_backend_errors_total = Counter(
+    "aegis_rate_limit_backend_errors_total",
+    "Requests for which the rate-limit store could not be consulted.",
+    registry=registry,
+)
+
 # ── RAG pipeline ──────────────────────────────────────────────────────────────
 
 rag_queries_total = Counter(

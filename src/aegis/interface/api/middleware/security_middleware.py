@@ -35,6 +35,7 @@ from aegis.config import Settings
 from aegis.infrastructure.observability.metrics import (
     http_request_duration_seconds,
     http_requests_total,
+    rate_limit_backend_errors_total,
 )
 from aegis.infrastructure.security.rate_limiter import RateLimiter
 
@@ -242,18 +243,39 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
     Sliding-window rate limiter enforced per validated API key.
     Must run AFTER APIKeyMiddleware so request.state.client_id is populated.
+
+    ``fail_open`` decides what happens when the limiter's store is unreachable
+    (see ``Settings.rate_limit_fail_open`` for the trade-off): serve the request
+    without throttling, or refuse it with a 503. An unhandled store error would
+    otherwise escape as a 500 on every request for as long as the store is down.
     """
 
-    def __init__(self, app: ASGIApp, rate_limiter: RateLimiter) -> None:
+    def __init__(self, app: ASGIApp, rate_limiter: RateLimiter, fail_open: bool = True) -> None:
         super().__init__(app)
         self._limiter = rate_limiter
+        self._fail_open = fail_open
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
         if request.url.path in _PUBLIC_PATHS:
             return await call_next(request)  # type: ignore[no-any-return,operator]
 
         client_id: str = getattr(request.state, "client_id", "anonymous")
-        result = self._limiter.check_and_record(client_id)
+        try:
+            result = self._limiter.check_and_record(client_id)
+        except Exception as exc:
+            rate_limit_backend_errors_total.inc()
+            logger.error(
+                "rate_limit.backend_unavailable",
+                fail_open=self._fail_open,
+                error=repr(exc),
+            )
+            if self._fail_open:
+                return await call_next(request)  # type: ignore[no-any-return,operator]
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Service temporarily unavailable. Retry shortly."},
+                headers={"Retry-After": "5"},
+            )
 
         # Always attach rate-limit headers, even on allowed requests.
         # This gives clients visibility into their quota without requiring an extra call.
