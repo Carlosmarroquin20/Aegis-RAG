@@ -48,6 +48,41 @@ class TestApiDocsExposure:
         assert client.get(path).status_code == 200
 
 
+class TestDocsContentSecurityPolicy:
+    """
+    The strict API policy blanks out Swagger UI, so the docs pages need their own.
+    That relaxation must not leak onto API responses or into production.
+    """
+
+    @pytest.mark.parametrize("path", ["/docs", "/redoc"])
+    def test_docs_pages_allow_their_cdn_bundle_in_debug(
+        self, monkeypatch: pytest.MonkeyPatch, path: str
+    ) -> None:
+        csp = _client(monkeypatch, debug=True).get(path).headers["Content-Security-Policy"]
+        assert "script-src 'unsafe-inline' https://cdn.jsdelivr.net" in csp
+        assert "connect-src 'self'" in csp
+        # Still locked down where it does not need to be open.
+        assert csp.startswith("default-src 'none'")
+        assert "frame-ancestors 'none'" in csp
+
+    @pytest.mark.parametrize("path", ["/openapi.json", "/health", "/metrics"])
+    def test_api_responses_keep_the_strict_policy_in_debug(
+        self, monkeypatch: pytest.MonkeyPatch, path: str
+    ) -> None:
+        response = _client(monkeypatch, debug=True).get(path, headers={"X-API-Key": _KEY})
+        assert response.headers["Content-Security-Policy"] == (
+            "default-src 'none'; frame-ancestors 'none'"
+        )
+
+    @pytest.mark.parametrize("path", ["/docs", "/redoc"])
+    def test_docs_paths_keep_the_strict_policy_in_production(
+        self, monkeypatch: pytest.MonkeyPatch, path: str
+    ) -> None:
+        response = _client(monkeypatch, debug=False).get(path)
+        assert response.status_code == 404
+        assert "unsafe-inline" not in response.headers["Content-Security-Policy"]
+
+
 class _ExplodingUseCase:
     async def execute(self, _request: object) -> None:
         raise RuntimeError("db password is hunter2")

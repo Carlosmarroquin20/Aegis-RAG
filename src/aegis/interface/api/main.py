@@ -173,7 +173,7 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type", cfg.api_key_header],
     )
-    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware, docs_enabled=cfg.debug)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(RequestIDMiddleware)
 

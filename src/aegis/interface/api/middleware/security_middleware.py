@@ -48,6 +48,28 @@ _PUBLIC_PATHS: frozenset[str] = frozenset(
     {"/health", "/ready", "/metrics", "/docs", "/openapi.json", "/redoc"}
 )
 
+_API_CSP = "default-src 'none'; frame-ancestors 'none'"
+
+# Paths that serve the interactive documentation pages (HTML, not JSON).
+_DOCS_PATHS: frozenset[str] = frozenset({"/docs", "/redoc"})
+
+# What FastAPI's bundled Swagger UI and ReDoc pages actually request: the bundle
+# and stylesheet from jsDelivr, an inline bootstrap script, Google Fonts (ReDoc),
+# a favicon, the schema from this origin, and a blob: worker (ReDoc search).
+# 'unsafe-inline' is confined to these two debug-only pages.
+_DOCS_CSP = "; ".join(
+    [
+        "default-src 'none'",
+        "script-src 'unsafe-inline' https://cdn.jsdelivr.net",
+        "style-src 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
+        "font-src https://fonts.gstatic.com",
+        "img-src data: https://fastapi.tiangolo.com https://cdn.redoc.ly",
+        "connect-src 'self'",
+        "worker-src blob:",
+        "frame-ancestors 'none'",
+    ]
+)
+
 INTERNAL_ERROR_DETAIL = "An internal error occurred. Check server logs."
 
 # Shape of a caller-supplied correlation ID we are willing to propagate. Covers
@@ -177,16 +199,28 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     These headers mitigate common browser-side attacks (XSS, clickjacking,
     MIME sniffing) and signal HTTPS enforcement to compliant user-agents.
+
+    Every response gets ``default-src 'none'``: this is a JSON API, so nothing it
+    returns should ever load a sub-resource. The one exception is the interactive
+    documentation, which is an HTML page that pulls its bundle from a CDN. When
+    ``docs_enabled`` is set (debug only) those two paths get a policy scoped to
+    exactly what Swagger UI and ReDoc load; under the strict policy they render
+    as a blank page.
     """
+
+    def __init__(self, app: ASGIApp, docs_enabled: bool = False) -> None:
+        super().__init__(app)
+        self._docs_enabled = docs_enabled
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
         response: Response = await call_next(request)  # type: ignore[operator]
+        relax_for_docs = self._docs_enabled and request.url.path in _DOCS_PATHS
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "0"  # Modern best practice: rely on CSP instead
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
         response.headers["Cache-Control"] = "no-store"
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        response.headers["Content-Security-Policy"] = _DOCS_CSP if relax_for_docs else _API_CSP
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
         return response
