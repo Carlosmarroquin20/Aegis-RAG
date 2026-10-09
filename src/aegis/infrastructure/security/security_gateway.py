@@ -39,6 +39,11 @@ logger = structlog.get_logger(__name__)
 # Scores are NOT additive — the maximum matched score is used to avoid
 # penalizing legitimate queries that happen to match low-confidence rules.
 # Patterns are ordered by severity (highest first) for early-exit potential.
+#
+# Every pattern here runs on attacker-controlled input of up to _MAX_QUERY_CHARS,
+# synchronously on the event loop, so each one must stay (near-)linear on a
+# non-matching input. Avoid unbounded quantifiers that the engine has to retry
+# from every start offset; TestSignatureCostIsBounded locks the worst cases down.
 
 _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
     # ── Persona / Identity Hijack (LLM01, severity: critical) ─────────────────
@@ -99,17 +104,6 @@ _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
         "roleplay_jailbreak",
         85,
     ),
-    # ── Chain-of-Thought Manipulation (LLM01, severity: high) ─────────────────
-    # Targets adversarial prompts that bury an override inside a reasoning scaffold.
-    (
-        re.compile(
-            r"(step\s+1|first,?)[\s\S]{0,300}(step\s+2|then,?)[\s\S]{0,300}"
-            r"(step\s+3|finally,?)[\s\S]{0,200}(ignore|bypass|override|disregard)",
-            re.IGNORECASE | re.DOTALL,
-        ),
-        "cot_manipulation",
-        85,
-    ),
     # ── HTML / Script Injection (LLM02, severity: medium-high) ────────────────
     (
         re.compile(r"<\s*(script|iframe|object|embed|svg|img|link|meta)[^>]*>", re.IGNORECASE),
@@ -117,8 +111,12 @@ _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
         78,
     ),
     # ── Template / SSTI Injection (severity: medium-high) ─────────────────────
+    # Anchored at \A with an atomic group around the opening delimiter: the engine
+    # commits to the FIRST "{{" and scans once for a closer. If none follows the
+    # first opener, none follows a later one either, so retrying from every "{{"
+    # (quadratic on "{{ {{ {{ ...") would be wasted work.
     (
-        re.compile(r"\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}", re.DOTALL),
+        re.compile(r"\A(?>[\s\S]*?\{\{)[\s\S]*?\}\}|\A(?>[\s\S]*?\{%)[\s\S]*?%\}"),
         "template_injection",
         75,
     ),
@@ -131,12 +129,31 @@ _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
     ),
     # ── Repetition Flood / Token Stuffing (severity: low-medium) ──────────────
     # Repeated sequences are used to exhaust context or force model state resets.
+    # The repeated unit is capped: an open-ended ``(.{5,})`` makes the engine try
+    # every unit length at every offset, which is quadratic on ordinary prose
+    # (about one second of CPU for a single 8 KB query). The trade-off is that a
+    # unit longer than the cap is only flagged when it is itself periodic.
     (
-        re.compile(r"(.{5,})\1{9,}"),
+        re.compile(r"(.{5,64})\1{9,}"),
         "repetition_flood",
         60,
     ),
 ]
+
+# ── Chain-of-Thought Manipulation (LLM01, severity: high) ─────────────────────
+# Adversarial prompts bury an override inside a reasoning scaffold:
+#   "First, ... Then, ... Finally, ignore the rules."
+# Each stage must start within its window (in characters) of the previous stage's
+# end. This is evaluated procedurally in _has_cot_override_scaffold() rather than
+# as one regex, because chaining windowed wildcards ("a.{0,300}b.{0,300}c...")
+# backtracks combinatorially when the markers are repeated.
+_COT_OPENING: Final[re.Pattern[str]] = re.compile(r"step\s+1|first,?", re.IGNORECASE)
+_COT_FOLLOW_UPS: Final[list[tuple[re.Pattern[str], int]]] = [
+    (re.compile(r"step\s+2|then,?", re.IGNORECASE), 300),
+    (re.compile(r"step\s+3|finally,?", re.IGNORECASE), 300),
+    (re.compile(r"ignore|bypass|override|disregard", re.IGNORECASE), 200),
+]
+_COT_SCORE: Final[int] = 85
 
 _MAX_QUERY_CHARS: Final[int] = 8192
 _BLOCK_SCORE_THRESHOLD: Final[int] = 80  # Hard block
@@ -262,6 +279,10 @@ class SecurityGateway:
                 if max_score >= 95:
                     break
 
+        if _has_cot_override_scaffold(text):
+            triggered.append("cot_manipulation")
+            max_score = max(max_score, _COT_SCORE)
+
         entropy_score = _entropy_score(text)
         if entropy_score > 0:
             triggered.append("high_entropy_payload")
@@ -315,6 +336,33 @@ def _sanitize(text: str) -> str:
     # Collapse pathological whitespace without destroying semantic structure.
     text = re.sub(r"[ \t]{4,}", "   ", text)
     return text.strip()
+
+
+def _has_cot_override_scaffold(text: str) -> bool:
+    """
+    Detects a staged reasoning scaffold that ends in an override verb.
+
+    Walks the stages left to right, keeping only the end offsets of matches that
+    are reachable from the previous stage. Both lists are position-ordered, so a
+    two-pointer sweep suffices and the whole check is linear in the input length.
+    """
+    reachable_ends = [m.end() for m in _COT_OPENING.finditer(text)]
+
+    for pattern, window in _COT_FOLLOW_UPS:
+        if not reachable_ends:
+            return False
+        next_ends: list[int] = []
+        cursor = 0
+        for match in pattern.finditer(text):
+            start = match.start()
+            # Advance to the closest preceding end; it yields the smallest gap.
+            while cursor + 1 < len(reachable_ends) and reachable_ends[cursor + 1] <= start:
+                cursor += 1
+            if 0 <= start - reachable_ends[cursor] <= window:
+                next_ends.append(match.end())
+        reachable_ends = next_ends
+
+    return bool(reachable_ends)
 
 
 def _entropy_score(text: str) -> int:
