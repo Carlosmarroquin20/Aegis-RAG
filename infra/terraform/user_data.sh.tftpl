@@ -44,4 +44,10 @@ services:
     entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull ${ollama_model} && wait"]
 OVERRIDE
 
+# The compose file binds every published port to loopback by default. On this
+# host the API (and Grafana, if its ingress rule is enabled) must be reachable
+# through the security group, which is the access control here. Written to .env
+# so the setting also applies to any later `docker compose` run on the box.
+echo "AEGIS_PUBLIC_BIND=0.0.0.0" >> .env
+
 docker compose up -d --build

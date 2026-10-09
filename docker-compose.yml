@@ -1,6 +1,19 @@
 ---
 # Development stack: Aegis-RAG API + ChromaDB + Ollama
 # For production, replace hardcoded keys with secrets management.
+#
+# Every published port is bound to 127.0.0.1. With the bare "HOST:CONTAINER" form
+# Docker listens on all interfaces, which on a laptop means anyone on the same
+# network can reach services that have no authentication of their own here:
+# ChromaDB and Ollama outright, Prometheus (including its lifecycle endpoint) and
+# Grafana with default admin credentials. Loopback keeps every URL in the README
+# working while matching the deployment assumption in SECURITY.md that ChromaDB
+# is never exposed to untrusted clients.
+#
+# The API and Grafana are the two services meant to be reachable on a server, so
+# their bind address is configurable: set AEGIS_PUBLIC_BIND=0.0.0.0 (the Terraform
+# bootstrap does) and let the host firewall / security group decide who gets in.
+# Everything else stays on loopback regardless.
 
 services:
   api:
@@ -8,7 +21,7 @@ services:
       context: .
       target: runtime
     ports:
-      - "8000:8000"
+      - "${AEGIS_PUBLIC_BIND:-127.0.0.1}:8000:8000"
     environment:
       - DEBUG=true
       - LOG_FORMAT=console
@@ -51,7 +64,7 @@ services:
     build:
       context: ./frontend
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     depends_on:
       - api
     networks:
@@ -63,7 +76,7 @@ services:
     # older server rejects the client's collection API with KeyError('_type').
     image: chromadb/chroma:1.5.9
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
     volumes:
       - chroma-data:/chroma/chroma
     networks:
@@ -86,7 +99,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama-models:/root/.ollama
     networks:
@@ -116,7 +129,7 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
-      - "16686:16686" # Jaeger UI
+      - "127.0.0.1:16686:16686" # Jaeger UI
       # OTLP receivers (4317 gRPC / 4318 HTTP) stay on the internal network.
     networks:
       - aegis-net
@@ -130,7 +143,7 @@ services:
     volumes:
       - ./infra/otel-collector/config.yaml:/etc/otel/collector.yaml:ro
     ports:
-      - "8889:8889" # span-derived metrics (scraped by Prometheus)
+      - "127.0.0.1:8889:8889" # span-derived metrics (scraped by Prometheus)
     depends_on:
       jaeger:
         condition: service_started
@@ -146,7 +159,7 @@ services:
   prometheus:
     image: prom/prometheus:v2.55.1
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -167,7 +180,7 @@ services:
   grafana:
     image: grafana/grafana:11.3.0
     ports:
-      - "3000:3000"
+      - "${AEGIS_PUBLIC_BIND:-127.0.0.1}:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
