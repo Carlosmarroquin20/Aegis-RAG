@@ -40,6 +40,11 @@ router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 # Keep in sync with client_max_body_size in frontend/nginx.conf.
 _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
+# Spelled as a literal: Starlette renamed its constant for 413 (RFC 9110 calls it
+# "Content Too Large"), deprecating the old name, and the new one is absent from
+# releases this project still supports.
+_HTTP_413_PAYLOAD_TOO_LARGE = 413
+
 
 @router.post(
     "",
@@ -58,7 +63,7 @@ async def ingest_document(
     overlap: Annotated[int, Form(ge=0, le=512)] = 64,
 ) -> IngestResponse:
     too_large = HTTPException(
-        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        status_code=_HTTP_413_PAYLOAD_TOO_LARGE,
         detail=f"File exceeds the {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit.",
     )
     # The multipart parser has already spooled the part to a temporary file and
@@ -83,9 +88,7 @@ async def ingest_document(
     try:
         return await use_case.execute(uploaded, request)
     except FileTooLargeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=_HTTP_413_PAYLOAD_TOO_LARGE, detail=str(exc)) from exc
     except UnsupportedFileTypeError as exc:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)
