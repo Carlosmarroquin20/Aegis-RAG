@@ -32,6 +32,7 @@ from typing import Final
 import structlog
 
 from aegis.domain.models.query import RawQuery, SanitizedQuery
+from aegis.infrastructure.security.markup import strip_html_tags
 
 logger = structlog.get_logger(__name__)
 
@@ -381,7 +382,7 @@ def _sanitize(text: str) -> str:
     This is a last-resort measure; primary detection happens in _score_threat().
     """
     # Remove HTML/XML tags — indirect injection often arrives embedded in documents.
-    text = re.sub(r"<[^>]{0,500}>", "", text)
+    text = strip_html_tags(text)
     # Redact template markers to prevent SSTI if the LLM output is later rendered.
     text = re.sub(r"\{\{[\s\S]{0,200}?\}\}|\{%[\s\S]{0,200}?%\}", "[REMOVED]", text)
     # Collapse pathological whitespace without destroying semantic structure.

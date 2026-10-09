@@ -26,6 +26,7 @@ from dataclasses import dataclass
 import structlog
 
 from aegis.infrastructure.observability.metrics import output_reflections_total
+from aegis.infrastructure.security.markup import strip_html_tags
 
 logger = structlog.get_logger(__name__)
 
@@ -48,7 +49,6 @@ _PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 ]
 
 _MAX_OUTPUT_CHARS: int = 8192
-_HTML_TAG_PATTERN = re.compile(r"<[^>]{0,500}>")
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +108,7 @@ class OutputSanitizer:
 
         # ── Step 2: HTML stripping ─────────────────────────────────────────────
         if self._strip_html:
-            text = _HTML_TAG_PATTERN.sub("", text)
+            text = strip_html_tags(text)
 
         # ── Step 3: Reflection detection ───────────────────────────────────────
         reflection_detected = any(p.search(text) for p in _REFLECTION_PATTERNS)
