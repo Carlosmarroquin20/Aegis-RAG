@@ -5,11 +5,19 @@ Uses ChromaDB's HTTP client to support both local (embedded) and
 remote (containerized) deployments without code changes.
 Embedding is handled externally via SentenceTransformers so the
 adapter stays decoupled from any specific embedding model.
+
+Concurrency: the ChromaDB client is synchronous, and a query or upsert also runs
+the embedding model in-process (CPU-bound, tens to hundreds of milliseconds).
+Every call is therefore dispatched to a worker thread. Calling the client
+directly from these coroutines would stall the event loop — and with it health
+probes, metrics scrapes and every other in-flight request — for the duration.
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
+from typing import Any
 
 import structlog
 
@@ -36,18 +44,14 @@ class ChromaDBAdapter(VectorStorePort):
         self._port = port
         self._collection_name = collection_name
         self._embedding_function = embedding_function
-        self._collection: object | None = None
+        # Vendor types stay untyped here: chromadb is imported lazily and must not
+        # leak above this module.
+        self._client: Any | None = None
+        self._collection: Any | None = None
 
     async def initialize(self) -> None:
         """Creates the ChromaDB HTTP client and ensures the collection exists."""
-        import chromadb  # Deferred import: chromadb is optional at module load.
-
-        client = chromadb.HttpClient(host=self._host, port=self._port)
-        self._collection = client.get_or_create_collection(
-            name=self._collection_name,
-            embedding_function=self._embedding_function,  # type: ignore[arg-type]
-            metadata={"hnsw:space": "cosine"},
-        )
+        self._client, self._collection = await asyncio.to_thread(self._connect)
         logger.info(
             "vector_store.initialized",
             collection=self._collection_name,
@@ -55,14 +59,26 @@ class ChromaDBAdapter(VectorStorePort):
             port=self._port,
         )
 
+    def _connect(self) -> tuple[Any, Any]:
+        import chromadb  # Deferred import: chromadb is optional at module load.
+
+        client = chromadb.HttpClient(host=self._host, port=self._port)
+        collection = client.get_or_create_collection(
+            name=self._collection_name,
+            embedding_function=self._embedding_function,  # type: ignore[arg-type]
+            metadata={"hnsw:space": "cosine"},
+        )
+        return client, collection
+
     async def similarity_search(
         self,
         query: str,
         k: int = 5,
         score_threshold: float = 0.0,
     ) -> list[Document]:
-        self._assert_initialized()
-        results = self._collection.query(  # type: ignore[union-attr]
+        collection = self._require_collection()
+        results = await asyncio.to_thread(
+            collection.query,
             query_texts=[query],
             n_results=k,
             include=["documents", "metadatas", "distances"],
@@ -94,8 +110,9 @@ class ChromaDBAdapter(VectorStorePort):
         return documents
 
     async def add_documents(self, documents: list[Document]) -> None:
-        self._assert_initialized()
-        self._collection.upsert(  # type: ignore[union-attr]
+        collection = self._require_collection()
+        await asyncio.to_thread(
+            collection.upsert,
             ids=[doc.id for doc in documents],
             documents=[doc.content for doc in documents],
             metadatas=[doc.metadata for doc in documents],
@@ -103,19 +120,20 @@ class ChromaDBAdapter(VectorStorePort):
         logger.info("vector_store.documents_added", count=len(documents))
 
     async def delete_documents(self, ids: list[str]) -> None:
-        self._assert_initialized()
-        self._collection.delete(ids=ids)  # type: ignore[union-attr]
+        collection = self._require_collection()
+        await asyncio.to_thread(collection.delete, ids=ids)
         logger.info("vector_store.documents_deleted", count=len(ids))
 
     async def existing_ids(self, ids: list[str]) -> set[str]:
-        self._assert_initialized()
+        collection = self._require_collection()
         # get() silently omits unknown ids; include=[] skips payload transfer.
-        result = self._collection.get(ids=ids, include=[])  # type: ignore[union-attr]
+        result = await asyncio.to_thread(collection.get, ids=ids, include=[])
         return set(result.get("ids") or [])
 
     async def list_documents(self, limit: int = 20, offset: int = 0) -> list[Document]:
-        self._assert_initialized()
-        result = self._collection.get(  # type: ignore[union-attr]
+        collection = self._require_collection()
+        result = await asyncio.to_thread(
+            collection.get,
             limit=limit,
             offset=offset,
             include=["documents", "metadatas"],
@@ -133,21 +151,24 @@ class ChromaDBAdapter(VectorStorePort):
         ]
 
     async def health_check(self) -> bool:
+        # Reuses the client built at startup. /ready is unauthenticated and polled
+        # by orchestrators; opening a new connection pool on every probe would let
+        # anyone who can reach it churn sockets on demand.
+        if self._client is None:
+            return False
         try:
-            import chromadb
-
-            client = chromadb.HttpClient(host=self._host, port=self._port)
-            client.heartbeat()
+            await asyncio.to_thread(self._client.heartbeat)
             return True
         except Exception:
             return False
 
-    def _assert_initialized(self) -> None:
+    def _require_collection(self) -> Any:
         if self._collection is None:
             raise VectorStoreUnavailableError(
                 "ChromaDBAdapter.initialize() must be called before use. "
                 "Wire this call into the application lifespan event."
             )
+        return self._collection
 
 
 def _as_str_metadata(metadata: Mapping[str, object] | None) -> dict[str, str]:

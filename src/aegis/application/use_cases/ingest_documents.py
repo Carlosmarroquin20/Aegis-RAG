@@ -22,6 +22,8 @@ Security considerations:
 
 from __future__ import annotations
 
+import asyncio
+
 import structlog
 
 from aegis.application.dtos.ingestion_dtos import IngestRequest, IngestResponse, UploadedFile
@@ -82,9 +84,13 @@ class IngestDocumentsUseCase:
         log.info("ingestion.started", mime_type=mime_type)
 
         # ── Stage 3: Parsing ───────────────────────────────────────────────────
+        # Parsers are synchronous and CPU-bound (a large PDF takes seconds), so the
+        # work is moved off the event loop to keep other requests responsive.
         warnings: list[str] = []
         try:
-            raw_documents = parser.parse(uploaded_file.content, uploaded_file.filename)
+            raw_documents = await asyncio.to_thread(
+                parser.parse, uploaded_file.content, uploaded_file.filename
+            )
         except ParseError as exc:
             log.error("ingestion.parse_failed", reason=exc.reason)
             raise
