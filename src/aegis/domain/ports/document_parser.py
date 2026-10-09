@@ -41,6 +41,25 @@ class DocumentParserPort(ABC):
         """
 
 
+class ParserResolverPort(ABC):
+    """
+    Hexagonal port for choosing the parser that handles an uploaded file.
+
+    Type detection belongs behind the port together with the lookup: how a file's
+    real type is established (magic bytes, extension fallback) is an adapter
+    concern, and callers must not be able to pick a parser from a type they
+    derived some other way.
+    """
+
+    @abstractmethod
+    def detect_mime_type(self, content: bytes, filename: str) -> str:
+        """Returns the MIME type established from the content itself."""
+
+    @abstractmethod
+    def get_parser(self, mime_type: str) -> DocumentParserPort | None:
+        """Returns the parser registered for ``mime_type``, or None if unsupported."""
+
+
 class ParseError(Exception):
     """Raised when a parser cannot extract content from a file."""
 

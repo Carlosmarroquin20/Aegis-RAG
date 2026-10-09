@@ -15,7 +15,7 @@ from __future__ import annotations
 import structlog
 
 from aegis.domain.models.ingestion import SupportedMimeType
-from aegis.domain.ports.document_parser import DocumentParserPort
+from aegis.domain.ports.document_parser import DocumentParserPort, ParserResolverPort
 from aegis.infrastructure.parsers.docx_parser import DocxParser
 from aegis.infrastructure.parsers.markdown_parser import MarkdownParser
 from aegis.infrastructure.parsers.pdf_parser import PdfParser
@@ -28,7 +28,7 @@ logger = structlog.get_logger(__name__)
 _MARKDOWN_EXTENSIONS: frozenset[str] = frozenset({".md", ".markdown", ".mdx"})
 
 
-class ParserRegistry:
+class ParserRegistry(ParserResolverPort):
     """
     Stateful registry; instantiate once and inject as a singleton.
     Thread-safe for reads (get_parser, detect_mime_type); register() is not thread-safe
@@ -50,8 +50,7 @@ class ParserRegistry:
     def get_parser(self, mime_type: str) -> DocumentParserPort | None:
         return self._parsers.get(mime_type)
 
-    @staticmethod
-    def detect_mime_type(content: bytes, filename: str) -> str:
+    def detect_mime_type(self, content: bytes, filename: str) -> str:
         """
         Detects MIME type from magic bytes using the `filetype` library.
         Falls back to extension-based inference for text files (which have no

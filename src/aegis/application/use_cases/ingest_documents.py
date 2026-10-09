@@ -26,7 +26,7 @@ import structlog
 
 from aegis.application.dtos.ingestion_dtos import IngestRequest, IngestResponse, UploadedFile
 from aegis.domain.models.ingestion import IngestionResult
-from aegis.domain.ports.document_parser import ParseError
+from aegis.domain.ports.document_parser import ParseError, ParserResolverPort
 from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.domain.services.chunking_service import ChunkingService
 
@@ -48,7 +48,7 @@ class IngestDocumentsUseCase:
     def __init__(
         self,
         vector_store: VectorStorePort,
-        parser_registry: object,  # ParserRegistry — typed as object to avoid circular import
+        parser_registry: ParserResolverPort,
         default_collection: str,
     ) -> None:
         self._vector_store = vector_store
@@ -70,13 +70,9 @@ class IngestDocumentsUseCase:
             )
 
         # ── Stage 2: MIME type detection from magic bytes ──────────────────────
-        # Importing here to keep the use case testable without the full infra stack.
-        from aegis.infrastructure.parsers.parser_registry import ParserRegistry
+        mime_type = self._registry.detect_mime_type(uploaded_file.content, uploaded_file.filename)
 
-        registry: ParserRegistry = self._registry  # type: ignore[assignment]
-        mime_type = registry.detect_mime_type(uploaded_file.content, uploaded_file.filename)
-
-        parser = registry.get_parser(mime_type)
+        parser = self._registry.get_parser(mime_type)
         if parser is None:
             raise UnsupportedFileTypeError(
                 f"No parser available for MIME type '{mime_type}' "
