@@ -55,10 +55,19 @@ class RateLimitStore(ABC):
     """
 
     @abstractmethod
-    def record_and_get(self, key: str, window_seconds: int) -> list[float]:
+    def record_and_get(
+        self, key: str, window_seconds: int, max_entries: int | None = None
+    ) -> list[float]:
         """
         Atomically records a new request timestamp and returns all timestamps
         within the active sliding window, including the one just recorded.
+
+        ``max_entries`` bounds what the store RETAINS, not what it returns: if the
+        new request takes the window past it, the request still appears in the
+        returned list (so the caller can see the limit was exceeded) but is not
+        kept. Without that bound a throttled client that keeps retrying would
+        grow the window with every rejected attempt — unbounded memory, a
+        full-window read on each request, and a window that never drains.
         """
 
     @abstractmethod
@@ -78,12 +87,17 @@ class InMemoryRateLimitStore(RateLimitStore):
         # defaultdict avoids the key-existence check on every request.
         self._buckets: dict[str, deque[float]] = defaultdict(deque)
 
-    def record_and_get(self, key: str, window_seconds: int) -> list[float]:
+    def record_and_get(
+        self, key: str, window_seconds: int, max_entries: int | None = None
+    ) -> list[float]:
         now = time.time()
         bucket = self._buckets[key]
         self._evict_expired(bucket, now - window_seconds)
         bucket.append(now)
-        return list(bucket)
+        window = list(bucket)
+        if max_entries is not None and len(window) > max_entries:
+            bucket.pop()
+        return window
 
     def peek(self, key: str, window_seconds: int) -> list[float]:
         now = time.time()
@@ -144,7 +158,9 @@ class RedisRateLimitStore(RateLimitStore):
             )
         self._key_prefix = key_prefix
 
-    def record_and_get(self, key: str, window_seconds: int) -> list[float]:
+    def record_and_get(
+        self, key: str, window_seconds: int, max_entries: int | None = None
+    ) -> list[float]:
         now = time.time()
         redis_key = self._key_prefix + key
         cutoff = now - window_seconds
@@ -159,7 +175,15 @@ class RedisRateLimitStore(RateLimitStore):
         results = pipe.execute()
 
         # results[-1] is the ZRANGE ... WITHSCORES payload: [(member, score), ...].
-        return [float(score) for _member, score in results[-1]]
+        window = [float(score) for _member, score in results[-1]]
+
+        if max_entries is not None and len(window) > max_entries:
+            # Outside the transaction on purpose. The member is unique to this
+            # request, so removing it late can only make a concurrent request see
+            # one extra entry in a window that is already over the limit — it
+            # would have been rejected anyway.
+            self._client.zrem(redis_key, member)
+        return window
 
     def peek(self, key: str, window_seconds: int) -> list[float]:
         now = time.time()
@@ -202,10 +226,16 @@ class RateLimiter:
         ``client_id`` names the bucket and is written to logs and to the store's
         keyspace, so pass an opaque identifier, never a credential.
 
-        The request is always recorded; callers must reject if result.allowed is False.
-        This "count then check" approach prevents under-counting under race conditions.
+        The request is counted before the decision is made ("count then check"),
+        which prevents under-counting when requests race. A request that turns out
+        to be over the limit is not retained by the store, so only admitted
+        requests occupy the window: the reported reset time is then accurate, and
+        a client that waits ``retry_after`` is admitted on its next attempt.
+        Callers must reject if ``result.allowed`` is False.
         """
-        timestamps = self._store.record_and_get(client_id, self._policy.window_seconds)
+        timestamps = self._store.record_and_get(
+            client_id, self._policy.window_seconds, max_entries=self._max_requests
+        )
         count = len(timestamps)
 
         reset_at = timestamps[0] + self._policy.window_seconds if timestamps else time.time()

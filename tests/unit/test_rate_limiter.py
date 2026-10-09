@@ -16,6 +16,7 @@ from aegis.infrastructure.security.rate_limiter import (
     InMemoryRateLimitStore,
     RateLimiter,
     RateLimitPolicy,
+    RateLimitStore,
     RedisRateLimitStore,
 )
 
@@ -244,3 +245,90 @@ class TestRateLimiterWithRedisBackend:
             limiter.check_and_record("alice")
         assert not limiter.check_and_record("alice").allowed
         assert limiter.check_and_record("bob").allowed
+
+
+# ── Rejected requests must not occupy the window ──────────────────────────────
+
+
+class _Clock:
+    """Controllable replacement for ``time.time`` inside the rate limiter module."""
+
+    def __init__(self, start: float = 1_000.0) -> None:
+        self.now = start
+
+    def __call__(self) -> float:
+        return self.now
+
+
+@pytest.fixture()
+def clock(monkeypatch: pytest.MonkeyPatch) -> _Clock:
+    from aegis.infrastructure.security import rate_limiter as module
+
+    fake = _Clock()
+    monkeypatch.setattr(module.time, "time", fake)
+    return fake
+
+
+@pytest.fixture(params=["memory", "redis"])
+def any_store(request: pytest.FixtureRequest) -> RateLimitStore:
+    """Both backends, so the behaviour is asserted against the port, not one adapter."""
+    if request.param == "redis":
+        return RedisRateLimitStore(client=fakeredis.FakeStrictRedis())
+    return InMemoryRateLimitStore()
+
+
+class TestRejectedRequestsAreNotRetained:
+    def test_store_keeps_at_most_max_entries(self, any_store: RateLimitStore) -> None:
+        for _ in range(50):
+            any_store.record_and_get("key", _WINDOW, max_entries=5)
+        assert len(any_store.peek("key", _WINDOW)) == 5
+
+    def test_over_limit_request_is_still_visible_to_the_caller(
+        self, any_store: RateLimitStore
+    ) -> None:
+        """The returned window includes the rejected request, or it would look admitted."""
+        for _ in range(5):
+            any_store.record_and_get("key", _WINDOW, max_entries=5)
+        assert len(any_store.record_and_get("key", _WINDOW, max_entries=5)) == 6
+
+    def test_window_does_not_grow_under_a_retry_storm(self, any_store: RateLimitStore) -> None:
+        limiter = RateLimiter(RateLimitPolicy(5, _WINDOW), store=any_store)
+        results = [limiter.check_and_record("user") for _ in range(2_000)]
+
+        assert sum(r.allowed for r in results) == 5
+        assert len(any_store.peek("user", _WINDOW)) == 5
+
+    def test_client_that_waits_retry_after_is_admitted(
+        self, any_store: RateLimitStore, clock: _Clock
+    ) -> None:
+        """
+        Regression: rejected attempts used to be stored, so a client polling while
+        throttled kept its own window full and Retry-After never came true.
+        """
+        limiter = RateLimiter(RateLimitPolicy(5, 60), store=any_store)
+        for _ in range(5):
+            assert limiter.check_and_record("user").allowed
+
+        rejected = None
+        for _ in range(50):  # keeps retrying once a second while throttled
+            clock.now += 1
+            rejected = limiter.check_and_record("user")
+        assert rejected is not None and not rejected.allowed
+        assert rejected.retry_after == pytest.approx(10.0)
+
+        clock.now += rejected.retry_after + 0.01
+        assert limiter.check_and_record("user").allowed
+
+    def test_reset_time_is_when_the_oldest_admitted_request_expires(
+        self, any_store: RateLimitStore, clock: _Clock
+    ) -> None:
+        limiter = RateLimiter(RateLimitPolicy(2, 60), store=any_store)
+        first_at = clock.now
+        limiter.check_and_record("user")
+        clock.now += 20
+        limiter.check_and_record("user")
+        clock.now += 20
+
+        rejected = limiter.check_and_record("user")
+        assert not rejected.allowed
+        assert rejected.reset_at == pytest.approx(first_at + 60)
