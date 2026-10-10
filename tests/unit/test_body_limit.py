@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile
 from fastapi.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
@@ -142,6 +142,81 @@ class TestStreamedBodyWithoutLength:
         # 64-byte limit, 16-byte chunks: the fifth chunk crosses it.
         assert receive_calls == 5
         assert sent[0]["status"] == 413
+
+
+class TestFrameworkParsedBodies:
+    """
+    Regression, found against the live stack: when FastAPI reads the body itself
+    (a form upload or a JSON model) it catches any error raised while doing so
+    and answers 400 "There was an error parsing the body". The limit was being
+    enforced, but reported with the wrong status. Routes here declare their
+    inputs the way the real ones do, so the framework's parser is in the path.
+    """
+
+    @staticmethod
+    def _client() -> tuple[TestClient, list[int]]:
+        handled: list[int] = []
+        app = FastAPI()
+        app.add_middleware(BodySizeLimitMiddleware, max_bytes=4096)
+
+        @app.post("/upload")
+        async def upload(file: UploadFile) -> dict[str, int]:
+            handled.append(file.size or 0)
+            return {"size": file.size or 0}
+
+        @app.post("/json")
+        async def json_body(payload: dict[str, str]) -> dict[str, int]:
+            handled.append(len(payload))
+            return {"keys": len(payload)}
+
+        return TestClient(app), handled
+
+    @staticmethod
+    def _multipart(body_bytes: int) -> Iterator[bytes]:
+        yield (
+            b'--X\r\nContent-Disposition: form-data; name="file"; filename="a.txt"\r\n'
+            b"Content-Type: text/plain\r\n\r\n"
+        )
+        for _ in range(body_bytes // 256):
+            yield b"a" * 256
+        yield b"\r\n--X--\r\n"
+
+    _FORM = {"Content-Type": "multipart/form-data; boundary=X"}
+
+    def test_streamed_form_upload_over_the_limit_is_413_not_400(self) -> None:
+        client, handled = self._client()
+        response = client.post("/upload", content=self._multipart(64_000), headers=self._FORM)
+        assert response.status_code == 413
+        assert handled == []
+
+    def test_streamed_form_upload_within_the_limit_is_processed(self) -> None:
+        client, handled = self._client()
+        response = client.post("/upload", content=self._multipart(1024), headers=self._FORM)
+        assert response.status_code == 200
+        assert handled == [1024]
+
+    def test_streamed_json_body_over_the_limit_is_413_not_400(self) -> None:
+        client, handled = self._client()
+
+        def body() -> Iterator[bytes]:
+            yield b'{"k": "'
+            for _ in range(64):
+                yield b"v" * 1024
+            yield b'"}'
+
+        response = client.post(
+            "/json", content=body(), headers={"Content-Type": "application/json"}
+        )
+        assert response.status_code == 413
+        assert handled == []
+
+    def test_malformed_body_within_the_limit_is_still_a_400(self) -> None:
+        """Only an overflow becomes 413; an ordinary parse failure keeps its status."""
+        client, _ = self._client()
+        response = client.post(
+            "/json", content=iter([b"{not json"]), headers={"Content-Type": "application/json"}
+        )
+        assert response.status_code in (400, 422)
 
 
 class TestEdgeCases:

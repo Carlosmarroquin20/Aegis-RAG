@@ -34,7 +34,7 @@ _HTTP_413_PAYLOAD_TOO_LARGE = 413
 
 
 class _BodyTooLargeError(Exception):
-    """Raised from the wrapped ``receive`` to unwind the application."""
+    """Raised from the wrapped ``receive`` to stop the application reading further."""
 
 
 class BodySizeLimitMiddleware:
@@ -52,29 +52,41 @@ class BodySizeLimitMiddleware:
             return
 
         received = 0
+        exceeded = False
         response_started = False
 
         async def counting_receive() -> Message:
-            nonlocal received
+            nonlocal received, exceeded
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
                 if received > self._max_bytes:
+                    exceeded = True
                     raise _BodyTooLargeError
             return message
 
-        async def tracking_send(message: Message) -> None:
+        async def guarded_send(message: Message) -> None:
             nonlocal response_started
+            if exceeded and not response_started:
+                # The framework caught the error raised above and is now sending
+                # its own response for it (FastAPI turns any failure while reading
+                # a body into a generic 400). Drop that; the 413 is sent below.
+                return
             if message["type"] == "http.response.start":
                 response_started = True
             await send(message)
 
         try:
-            await self._app(scope, counting_receive, tracking_send)
+            await self._app(scope, counting_receive, guarded_send)
         except _BodyTooLargeError:
             if response_started:
                 # Headers are already on the wire; a second response is impossible.
                 raise
+
+        # Not in the except branch on purpose: whether the error propagated to
+        # here or was swallowed by the framework on the way, the outcome for the
+        # client has to be the same status code.
+        if exceeded and not response_started:
             await self._reject(scope, receive, send)
 
     @staticmethod
