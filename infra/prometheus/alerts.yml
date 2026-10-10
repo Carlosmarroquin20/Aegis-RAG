@@ -91,3 +91,17 @@ groups:
             RATE_LIMIT_FAIL_OPEN=true requests are being served WITHOUT
             throttling; with false they are being refused with 503.
             Restore Redis or switch RATE_LIMIT_BACKEND to memory.
+
+      - alert: AegisAuthFailureSpike
+        expr: sum(rate(aegis_auth_failures_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained authentication failures"
+          description: >
+            More than one request per second has been refused at
+            authentication for 5 minutes. outcome="rejected" is a bad or
+            missing key; outcome="throttled" means a client address is
+            locked out and still trying. Check the auth.rejected /
+            auth.throttled log lines for the source address.

@@ -51,14 +51,39 @@ def get_rate_limiter() -> RateLimiter:
         window_seconds=cfg.rate_limit_window_seconds,
         burst_allowance=cfg.rate_limit_burst,
     )
-    # Swapping the persistence backend is a one-line change here; nothing in the
-    # RateLimiter, the middleware, or the routes is aware of which store is used.
-    store: RateLimitStore
+    return RateLimiter(policy=policy, store=get_rate_limit_store())
+
+
+@lru_cache(maxsize=1)
+def get_rate_limit_store() -> RateLimitStore:
+    """
+    The sliding-window store, shared by every limiter in the process.
+
+    Swapping the persistence backend is a one-line change here; nothing in the
+    RateLimiter, the middleware, or the routes is aware of which store is used.
+    """
+    cfg = get_settings()
     if cfg.rate_limit_backend == "redis":
-        store = RedisRateLimitStore(cfg.redis_url)
-    else:
-        store = InMemoryRateLimitStore()
-    return RateLimiter(policy=policy, store=store)
+        return RedisRateLimitStore(cfg.redis_url)
+    return InMemoryRateLimitStore()
+
+
+@lru_cache(maxsize=1)
+def get_auth_failure_limiter() -> RateLimiter | None:
+    """
+    Limiter for rejected API keys, bucketed by client address. None when disabled.
+
+    It uses the same store as the request limiter, so with the Redis backend a
+    lockout holds across workers and replicas instead of being per-process.
+    """
+    cfg = get_settings()
+    if cfg.auth_failure_limit <= 0:
+        return None
+    policy = RateLimitPolicy(
+        requests_per_window=cfg.auth_failure_limit,
+        window_seconds=cfg.auth_failure_window_seconds,
+    )
+    return RateLimiter(policy=policy, store=get_rate_limit_store())
 
 
 @lru_cache(maxsize=1)

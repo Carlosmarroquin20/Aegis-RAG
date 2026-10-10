@@ -25,7 +25,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from aegis.config import get_settings
+from aegis.config import MIN_RECOMMENDED_API_KEY_CHARS, get_settings
 from aegis.infrastructure.observability.tracing import (
     add_trace_context,
     configure_tracing,
@@ -33,6 +33,7 @@ from aegis.infrastructure.observability.tracing import (
     shutdown_tracing,
 )
 from aegis.interface.api.dependencies import (
+    get_auth_failure_limiter,
     get_chromadb_adapter,
     get_ollama_adapter,
     get_parser_registry,
@@ -101,6 +102,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("startup.begin", app=cfg.app_name, version=cfg.app_version)
 
+    if not cfg.api_keys_set:
+        logger.warning("startup.no_api_keys", detail="every authenticated route will return 403")
+    elif cfg.weak_api_key_count:
+        logger.warning(
+            "startup.weak_api_keys",
+            count=cfg.weak_api_key_count,
+            recommended_min_chars=MIN_RECOMMENDED_API_KEY_CHARS,
+        )
+
     # Warm up the security gateway (pre-compiles regex patterns).
     get_security_gateway()
 
@@ -166,7 +176,11 @@ def create_app() -> FastAPI:
         rate_limiter=get_rate_limiter(),
         fail_open=cfg.rate_limit_fail_open,
     )
-    app.add_middleware(APIKeyMiddleware, settings=cfg)
+    app.add_middleware(
+        APIKeyMiddleware,
+        settings=cfg,
+        failure_limiter=get_auth_failure_limiter(),
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,

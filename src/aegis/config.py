@@ -10,6 +10,11 @@ from functools import lru_cache
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# A key this long, drawn from a URL-safe alphabet, carries about 190 bits. The
+# failed-auth throttle slows guessing down; key length is what makes guessing
+# pointless, so short keys are reported at startup.
+MIN_RECOMMENDED_API_KEY_CHARS = 32
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -35,6 +40,28 @@ class Settings(BaseSettings):
     api_key_header: str = "X-API-Key"
     # Comma-separated list of valid API keys; in production, load from a secrets manager.
     valid_api_keys: str = Field(default="", description="Comma-separated API keys")
+
+    # ── Failed-authentication throttling ──────────────────────────────────────
+    # After this many rejected API keys from one client address inside the
+    # window, every request from that address is answered 429 until the oldest
+    # failure ages out. Valid keys are refused too during the lockout: letting
+    # them through would leave the attacker a working right/wrong oracle.
+    # 0 disables the throttle.
+    auth_failure_limit: int = Field(default=10, ge=0)
+    auth_failure_window_seconds: int = Field(default=60, ge=1)
+    # How many reverse proxies in front of the API are trusted to report the
+    # client address in X-Forwarded-For.
+    #
+    #   0  the API is reached directly: use the TCP peer address and ignore the
+    #      header entirely, since any client can send whatever it likes in it.
+    #   N  take the N-th address from the right, i.e. the one appended by the
+    #      outermost trusted proxy. Everything to its left is client-supplied.
+    #
+    # The default is 0 because the two ways of getting this wrong are not equal.
+    # Trusting the header with no proxy lets an attacker rotate a fake address
+    # and never be throttled — silently. Not trusting it behind a proxy puts all
+    # clients in one bucket, which is noisy, obvious and fixed by this setting.
+    trusted_proxy_hops: int = Field(default=0, ge=0)
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     # Comma-separated list of allowed origins for production (e.g., "https://app.example.com").
@@ -124,6 +151,11 @@ class Settings(BaseSettings):
         if lowered not in allowed:
             raise ValueError(f"otel_exporter must be one of {allowed}")
         return lowered
+
+    @property
+    def weak_api_key_count(self) -> int:
+        """Number of configured keys shorter than MIN_RECOMMENDED_API_KEY_CHARS."""
+        return sum(len(key) < MIN_RECOMMENDED_API_KEY_CHARS for key in self.api_keys_set)
 
     @property
     def api_keys_set(self) -> frozenset[str]:

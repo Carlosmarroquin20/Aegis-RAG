@@ -126,6 +126,7 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 | Insecure output handling | Length cap · HTML strip · reflection detection · PII flagging | LLM02 |
 | System-prompt disclosure | Signature rules block probing queries (*"show me your prompt"*) | LLM07 |
 | API abuse | Per-key sliding-window rate limiter with burst allowance · rejected requests never occupy the window · explicit fail-open/fail-closed policy if the store is down | LLM06 |
+| Credential guessing | Client address locked out (429) after repeated rejected keys — valid keys included, so the response is no oracle · address taken from `X-Forwarded-For` only at an explicitly trusted proxy depth (`TRUSTED_PROXY_HOPS`, default 0) · short keys reported at startup | General |
 | Sensitive data exposure | API key auth at ASGI level (constant-time digest comparison; the key never reaches logs or the rate-limit store) · non-root container · `Cache-Control: no-store` · OpenAPI schema and docs disabled outside debug | LLM06 |
 | File-upload attacks | Magic-byte MIME detection · 50 MB cap enforced before the upload is buffered · uncompressed-size budget for DOCX archives (decompression bombs) | General |
 | Browser-side attacks | HSTS · CSP `default-src 'none'` · X-Frame-Options DENY · nosniff | General |
@@ -144,13 +145,14 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 | `aegis_security_rule_triggers_total` | Counter | Which injection signatures are firing |
 | `aegis_output_reflections_total` | Counter | LLM responses blocked by reflection guard |
 | `aegis_rag_queries_total` | Counter | Queries that reached the retrieval stage |
+| `aegis_auth_failures_total` | Counter | Requests refused at authentication, by outcome (`rejected` / `throttled`) |
 | `aegis_rate_limit_backend_errors_total` | Counter | Requests served or refused while the rate-limit store was unreachable |
 
 Logs are single-line JSON via `structlog` with an auto-bound `request_id` for end-to-end correlation between logs, metrics, traces, and the `X-Request-ID` response header.
 
 **Distributed tracing (OpenTelemetry)** is opt-in (`TRACING_ENABLED`). When on, the FastAPI server span and the HTTPX call to Ollama are auto-instrumented, the query use case emits a child span per pipeline stage (`security.evaluate` → `rag.retrieve` → `llm.generate` → `output.sanitize`), and every log line carries the active `trace_id`/`span_id` so logs pivot to their trace. Spans export over OTLP/HTTP to an **OpenTelemetry Collector**, which fans them out two ways: the raw traces to a Jaeger backend at `http://localhost:16686`, and — via the **spanmetrics connector** — trace-derived RED metrics to Prometheus. The SDK lives in the optional `otel` extra, so the base image stays lean when tracing is off.
 
-Two pre-provisioned Grafana dashboards ship with the stack. **Production Overview** surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security into full-resolution time series. **Trace Analytics** turns the pipeline spans into per-stage RED charts (call rate, errors, and p50/p95/p99 latency for `security.evaluate` / `rag.retrieve` / `llm.generate` / `output.sanitize`), plus a SecurityGateway breakdown by threat level — and each latency exemplar links straight to its trace in Jaeger. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, any output-reflection event, and an unreachable rate-limit store.
+Two pre-provisioned Grafana dashboards ship with the stack. **Production Overview** surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security into full-resolution time series. **Trace Analytics** turns the pipeline spans into per-stage RED charts (call rate, errors, and p50/p95/p99 latency for `security.evaluate` / `rag.retrieve` / `llm.generate` / `output.sanitize`), plus a SecurityGateway breakdown by threat level — and each latency exemplar links straight to its trace in Jaeger. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, any output-reflection event, sustained authentication failures, and an unreachable rate-limit store.
 
 <p align="center">
   <img src="docs/grafana-traces-overview.png" alt="Grafana Trace Analytics — overview tiles and per-stage RED charts" width="760">
@@ -246,7 +248,7 @@ The `X-API-Key` is entered in the UI and kept only in the browser's `localStorag
 
 Interactive Swagger docs are served at `http://localhost:8000/docs` when `DEBUG=true`. Outside debug mode `/docs`, `/redoc` and `/openapi.json` are not served at all.
 
-Error semantics are part of the contract: a blocked query is a structured **400**, a throttled client gets **429** with an accurate `Retry-After`, an unavailable vector store or LLM is **503** (or **504** on an LLM timeout), and only a genuine defect is a **500**.
+Error semantics are part of the contract: a blocked query is a structured **400**, a throttled client gets **429** with an accurate `Retry-After` (as does an address locked out after repeated bad keys), an unavailable vector store or LLM is **503** (or **504** on an LLM timeout), and only a genuine defect is a **500**.
 
 ---
 

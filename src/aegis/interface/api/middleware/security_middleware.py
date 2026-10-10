@@ -33,6 +33,7 @@ from starlette.types import ASGIApp
 
 from aegis.config import Settings
 from aegis.infrastructure.observability.metrics import (
+    auth_failures_total,
     http_request_duration_seconds,
     http_requests_total,
     rate_limit_backend_errors_total,
@@ -84,6 +85,43 @@ _CLIENT_ID_HEX_CHARS = 16
 
 def _digest(api_key: str) -> bytes:
     return hashlib.sha256(api_key.encode()).digest()
+
+
+# Prefix for failed-authentication buckets, so they can never collide with the
+# per-client request buckets that share the same store.
+_AUTH_FAILURE_BUCKET = "authfail:"
+
+# Longest textual IPv6 address, with room for a zone id. Bounds what a proxy can
+# make us use as a bucket name and write to logs.
+_MAX_ADDRESS_CHARS = 64
+
+
+def _peer_address(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def resolve_client_ip(request: Request, trusted_proxy_hops: int) -> str:
+    """
+    Returns the address to attribute this request to.
+
+    With no trusted proxy the TCP peer is the only address the client cannot
+    choose, and X-Forwarded-For is ignored. Behind ``trusted_proxy_hops`` proxies,
+    each one appends the address it received the request from, so the entry
+    that many positions from the right was written by infrastructure we trust;
+    anything further left arrived from the client and proves nothing.
+
+    Falls back to the peer address when the header is missing or shorter than
+    the configured depth — that request did not come through the expected chain.
+    """
+    peer = _peer_address(request)
+    if trusted_proxy_hops <= 0:
+        return peer
+
+    forwarded = [part.strip() for part in request.headers.get("x-forwarded-for", "").split(",")]
+    forwarded = [part for part in forwarded if part]
+    if len(forwarded) < trusted_proxy_hops:
+        return peer
+    return forwarded[-trusted_proxy_hops][:_MAX_ADDRESS_CHARS]
 
 
 class ErrorBoundaryMiddleware(BaseHTTPMiddleware):
@@ -188,7 +226,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             path=request.url.path,
             status=response.status_code,
             duration_ms=duration_ms,
-            client_ip=request.client.host if request.client else "unknown",
+            client_ip=getattr(request.state, "client_ip", None) or _peer_address(request),
         )
         return response
 
@@ -238,19 +276,47 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
       length, which compare_digest would otherwise leak.
     - Returns 403 (not 401) for missing keys to avoid revealing that
       authentication via API key is expected on this endpoint.
+    - Repeated failures from one client address trigger a temporary lockout
+      (429) when a ``failure_limiter`` is supplied. Valid requests never count
+      against it, and the limiter sits behind the rejection path only, so a
+      healthy client costs it nothing.
     - Downstream layers receive ``request.state.client_id``, a truncated digest
       of the key, never the key itself. It is a stable per-key identifier that
       is safe to use as a rate-limit bucket name and to write to logs.
     """
 
-    def __init__(self, app: ASGIApp, settings: Settings) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        settings: Settings,
+        failure_limiter: RateLimiter | None = None,
+    ) -> None:
         super().__init__(app)
         self._header_name = settings.api_key_header
         self._valid_key_digests = tuple(_digest(key) for key in settings.api_keys_set)
+        self._trusted_proxy_hops = settings.trusted_proxy_hops
+        self._failure_limiter = failure_limiter
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
+        client_ip = resolve_client_ip(request, self._trusted_proxy_hops)
+        # Shared with the access log, so both report the same address.
+        request.state.client_ip = client_ip
+
         if request.url.path in _PUBLIC_PATHS:
             return await call_next(request)  # type: ignore[no-any-return,operator]
+
+        # Checked BEFORE the key is examined. During a lockout nothing about the
+        # presented key may influence the response, or the 429/200 split would
+        # still tell a guesser which attempt was right.
+        retry_after = self._lockout_seconds(client_ip)
+        if retry_after is not None:
+            auth_failures_total.labels(outcome="throttled").inc()
+            logger.warning("auth.throttled", path=request.url.path, ip=client_ip)
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many failed authentication attempts."},
+                headers={"Retry-After": str(retry_after)},
+            )
 
         candidate = _digest(request.headers.get(self._header_name, ""))
         authenticated = False
@@ -259,11 +325,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             authenticated |= hmac.compare_digest(candidate, valid)
 
         if not authenticated:
-            logger.warning(
-                "auth.rejected",
-                path=request.url.path,
-                ip=request.client.host if request.client else "unknown",
-            )
+            self._record_failure(client_ip)
+            auth_failures_total.labels(outcome="rejected").inc()
+            logger.warning("auth.rejected", path=request.url.path, ip=client_ip)
             return JSONResponse(
                 status_code=403,
                 content={"detail": "Forbidden: valid API key required."},
@@ -271,6 +335,31 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         request.state.client_id = candidate.hex()[:_CLIENT_ID_HEX_CHARS]
         return await call_next(request)  # type: ignore[no-any-return,operator]
+
+    def _lockout_seconds(self, client_ip: str) -> int | None:
+        """Seconds until ``client_ip`` may authenticate again, or None if it may now."""
+        if self._failure_limiter is None:
+            return None
+        try:
+            state = self._failure_limiter.peek(_AUTH_FAILURE_BUCKET + client_ip)
+        except Exception as exc:
+            # Same reasoning as the request limiter: an unreachable store must not
+            # take authentication down with it. Counted and logged, never silent.
+            rate_limit_backend_errors_total.inc()
+            logger.error("auth.throttle_backend_unavailable", error=repr(exc))
+            return None
+        if state.allowed:
+            return None
+        return max(1, math.ceil(state.reset_at - time.time()))
+
+    def _record_failure(self, client_ip: str) -> None:
+        if self._failure_limiter is None:
+            return
+        try:
+            self._failure_limiter.check_and_record(_AUTH_FAILURE_BUCKET + client_ip)
+        except Exception as exc:
+            rate_limit_backend_errors_total.inc()
+            logger.error("auth.throttle_backend_unavailable", error=repr(exc))
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

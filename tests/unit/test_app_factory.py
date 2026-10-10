@@ -28,6 +28,9 @@ _KEY = "unit-test-key"
 def _client(monkeypatch: pytest.MonkeyPatch, *, debug: bool) -> TestClient:
     settings = Settings(debug=debug, valid_api_keys=_KEY, log_level="CRITICAL")
     monkeypatch.setattr(main, "get_settings", lambda: settings)
+    # The real factory is a process-wide singleton; sharing it would let failed
+    # requests in one test count towards a lockout in another.
+    monkeypatch.setattr(main, "get_auth_failure_limiter", lambda: None)
     return TestClient(main.create_app(), raise_server_exceptions=False)
 
 

@@ -66,6 +66,14 @@ output_reflections_total = Counter(
     registry=registry,
 )
 
+auth_failures_total = Counter(
+    "aegis_auth_failures_total",
+    "Requests refused at authentication: 'rejected' (bad or missing key, 403) or "
+    "'throttled' (client address locked out after repeated failures, 429).",
+    labelnames=("outcome",),
+    registry=registry,
+)
+
 rate_limit_backend_errors_total = Counter(
     "aegis_rate_limit_backend_errors_total",
     "Requests for which the rate-limit store could not be consulted.",
