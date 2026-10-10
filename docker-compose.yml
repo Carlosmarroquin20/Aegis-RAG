@@ -99,7 +99,11 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "127.0.0.1:11434:11434"
+      # Published only for convenience (e.g. `ollama list` from the host); the API
+      # reaches Ollama over the compose network. The host port is configurable
+      # because a natively installed Ollama already listens on 127.0.0.1:11434,
+      # and the two cannot share it: set OLLAMA_HOST_PORT=11435 in that case.
+      - "127.0.0.1:${OLLAMA_HOST_PORT:-11434}:11434"
     volumes:
       - ollama-models:/root/.ollama
     networks:
