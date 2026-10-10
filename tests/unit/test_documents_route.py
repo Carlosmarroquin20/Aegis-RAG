@@ -85,7 +85,7 @@ class TestIngestDocument:
     def test_oversized_upload_is_rejected_before_reaching_the_use_case(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(documents, "_MAX_UPLOAD_BYTES", 16)
+        monkeypatch.setattr(documents, "MAX_UPLOAD_BYTES", 16)
         # No canned response: the fake raises if the route calls it at all.
         client = _client(_FakeIngestUseCase())
         resp = client.post(
@@ -95,7 +95,7 @@ class TestIngestDocument:
         assert resp.status_code == 413
 
     def test_upload_exactly_at_the_limit_is_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(documents, "_MAX_UPLOAD_BYTES", 16)
+        monkeypatch.setattr(documents, "MAX_UPLOAD_BYTES", 16)
         response = IngestResponse(
             source="ok.txt", chunks_created=1, duplicates_skipped=0, collection="c"
         )
@@ -125,7 +125,7 @@ class TestIngestDocument:
             requested.append(size)
             return await original_read(self, size)
 
-        monkeypatch.setattr(documents, "_MAX_UPLOAD_BYTES", 16)
+        monkeypatch.setattr(documents, "MAX_UPLOAD_BYTES", 16)
         monkeypatch.setattr(UploadFile, "__init__", init_without_size)
         monkeypatch.setattr(UploadFile, "read", spy_read)
 

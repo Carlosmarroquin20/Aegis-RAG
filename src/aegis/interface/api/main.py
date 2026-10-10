@@ -7,7 +7,7 @@ Wiring order matters:
      first. Adapters are therefore registered inner-to-outer so the effective
      request order is:
        RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit
-         → ErrorBoundary → Routes
+         → ErrorBoundary → BodyLimit → Routes
      This guarantees the request_id context var is bound before any other
      middleware logs, that CORS preflight is answered before authentication, and
      that a 500 from a route is still logged, counted and given security headers.
@@ -41,6 +41,7 @@ from aegis.interface.api.dependencies import (
     get_security_gateway,
 )
 from aegis.interface.api.error_handlers import register_dependency_error_handlers
+from aegis.interface.api.middleware.body_limit import BodySizeLimitMiddleware
 from aegis.interface.api.middleware.security_middleware import (
     INTERNAL_ERROR_DETAIL,
     AccessLogMiddleware,
@@ -51,6 +52,12 @@ from aegis.interface.api.middleware.security_middleware import (
     SecurityHeadersMiddleware,
 )
 from aegis.interface.api.routes import documents, health, query
+
+# Ceiling for any request body. The upload limit applies to the file itself; the
+# multipart envelope around it (boundaries, part headers, the other form fields)
+# adds a little on top, so the transport limit sits slightly above it. Requests
+# that carry JSON are far smaller and are unaffected.
+MAX_REQUEST_BODY_BYTES = documents.MAX_UPLOAD_BYTES + 1024 * 1024
 
 
 def _configure_logging(settings_obj: object) -> None:
@@ -157,7 +164,7 @@ def create_app() -> FastAPI:
     # Starlette executes the LAST-added middleware FIRST (outermost). Adapters are
     # therefore registered inner-to-outer so the effective request order is:
     #   RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit
-    #     → ErrorBoundary → Routes
+    #     → ErrorBoundary → BodyLimit → Routes
     #
     # Ordering rationale:
     #   - RequestID is outermost so the request_id context var is bound before any
@@ -166,10 +173,14 @@ def create_app() -> FastAPI:
     #     authentication, instead of being rejected with a 403.
     #   - RateLimit is innermost of the security pair so it runs AFTER APIKey and can
     #     read the validated key from request.state.
-    #   - ErrorBoundary is innermost of all, so the 500 it builds for an unhandled
-    #     route error flows back out through every layer above it.
+    #   - ErrorBoundary wraps everything that can raise, so the 500 it builds for
+    #     an unhandled error flows back out through every layer above it.
+    #   - BodyLimit is innermost: authentication has already run, so only an
+    #     authenticated caller can make the server read a body at all, and the
+    #     413 it returns is still logged, counted and given security headers.
     origins = ["*"] if cfg.debug else cfg.cors_allowed_origins
 
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_REQUEST_BODY_BYTES)
     app.add_middleware(ErrorBoundaryMiddleware)
     app.add_middleware(
         RateLimitMiddleware,

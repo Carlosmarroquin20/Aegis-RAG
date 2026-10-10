@@ -86,6 +86,34 @@ class TestDocsContentSecurityPolicy:
         assert "unsafe-inline" not in response.headers["Content-Security-Policy"]
 
 
+class TestRequestBodyLimit:
+    """How the body limit composes with the rest of the stack on the real app."""
+
+    def test_oversized_request_gets_a_413_that_went_through_the_stack(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(main, "MAX_REQUEST_BODY_BYTES", 32)
+        response = _client(monkeypatch, debug=False).post(
+            "/api/v1/query", content=b"x" * 64, headers={"X-API-Key": _KEY}
+        )
+        assert response.status_code == 413
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+        assert "X-Request-ID" in response.headers
+
+    def test_unauthenticated_oversized_request_is_rejected_by_auth_first(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without a valid key the caller should learn nothing about body limits."""
+        monkeypatch.setattr(main, "MAX_REQUEST_BODY_BYTES", 32)
+        response = _client(monkeypatch, debug=False).post("/api/v1/query", content=b"x" * 64)
+        assert response.status_code == 403
+
+    def test_limit_leaves_room_for_a_file_of_the_maximum_size(self) -> None:
+        from aegis.interface.api.routes import documents
+
+        assert main.MAX_REQUEST_BODY_BYTES > documents.MAX_UPLOAD_BYTES
+
+
 class _ExplodingUseCase:
     async def execute(self, _request: object) -> None:
         raise RuntimeError("db password is hunter2")

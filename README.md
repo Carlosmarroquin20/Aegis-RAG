@@ -25,7 +25,7 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 
 ## Engineering Highlights
 
-- **Defence in depth, by design.** The ASGI middleware chain (RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → ErrorBoundary) executes *before* any route handler, so 404s and 405s receive the same hardening as authenticated traffic. RequestID sits outermost, so every log line and span carries the same correlation ID; ErrorBoundary sits innermost, so even an unhandled 500 is logged, counted and returned with security headers instead of bypassing the stack.
+- **Defence in depth, by design.** The ASGI middleware chain (RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → ErrorBoundary → BodyLimit) executes *before* any route handler, so 404s and 405s receive the same hardening as authenticated traffic. RequestID sits outermost, so every log line and span carries the same correlation ID; ErrorBoundary sits innermost, so even an unhandled 500 is logged, counted and returned with security headers instead of bypassing the stack.
 - **Bounded label cardinality.** Prometheus path labels collapse to the matched FastAPI route template (`/api/v1/documents/{doc_id}`), never the raw URL — a subtle but production-critical decision.
 - **Detection that does not become the attack surface.** The gateway inspects attacker-controlled text on the event loop, so every signature is kept linear on non-matching input and a regression suite feeds each rule its worst-case 8 KB payload. Obfuscation that leaves a payload readable — zero-width characters, fullwidth forms, bidi overrides, Cyrillic/Greek homoglyphs — is normalized or folded before matching.
 - **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
@@ -42,7 +42,8 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Interface     FastAPI routes + middleware stack                     │
 │                RequestID → AccessLog → SecurityHeaders → CORS →      │
-│                APIKey → RateLimit → ErrorBoundary → Routes           │
+│                APIKey → RateLimit → ErrorBoundary → BodyLimit →      │
+│                Routes                                                │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Application   Use cases (QueryRAG, IngestDocuments) · DTOs          │
 ├──────────────────────────────────────────────────────────────────────┤
@@ -128,7 +129,7 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 | API abuse | Per-key sliding-window rate limiter with burst allowance · rejected requests never occupy the window · explicit fail-open/fail-closed policy if the store is down | LLM06 |
 | Credential guessing | Client address locked out (429) after repeated rejected keys — valid keys included, so the response is no oracle · address taken from `X-Forwarded-For` only at an explicitly trusted proxy depth (`TRUSTED_PROXY_HOPS`, default 0) · short keys reported at startup | General |
 | Sensitive data exposure | API key auth at ASGI level (constant-time digest comparison; the key never reaches logs or the rate-limit store) · non-root container · `Cache-Control: no-store` · OpenAPI schema and docs disabled outside debug | LLM06 |
-| File-upload attacks | Magic-byte MIME detection · 50 MB cap enforced before the upload is buffered · uncompressed-size budget for DOCX archives (decompression bombs) | General |
+| File-upload attacks | Magic-byte MIME detection · request body capped at the ASGI layer as it streams in (no reliance on a proxy; chunked uploads included) · 50 MB file cap enforced before the upload is buffered · uncompressed-size budget for DOCX archives (decompression bombs) | General |
 | Browser-side attacks | HSTS · CSP `default-src 'none'` · X-Frame-Options DENY · nosniff | General |
 
 ---
