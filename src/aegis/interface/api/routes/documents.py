@@ -15,6 +15,7 @@ nginx config sets ``client_max_body_size`` to match).
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -44,6 +45,30 @@ _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 # "Content Too Large"), deprecating the old name, and the new one is absent from
 # releases this project still supports.
 _HTTP_413_PAYLOAD_TOO_LARGE = 413
+
+_MAX_FILENAME_CHARS = 255
+_FALLBACK_FILENAME = "unnamed"
+
+
+def _safe_filename(raw: str | None) -> str:
+    """
+    Reduces a client-supplied filename to a plain, single-line display name.
+
+    The name is never used to touch the filesystem, but it does travel: it is
+    stored as each chunk's ``source``, returned by the listing endpoint, written
+    to logs, and placed on the attribution line of the prompt sent to the LLM.
+    Left as-is it lets an uploader pick what those consumers display — a path
+    such as ``../../etc/passwd``, or a right-to-left override that makes
+    ``invoice<RLO>fdp.exe`` render as ``invoiceexe.pdf``.
+
+    Only the final path component is kept, control and format characters are
+    dropped, whitespace runs collapse to one space, and the result is capped.
+    """
+    name = (raw or "").replace("\\", "/").rsplit("/", 1)[-1]
+    name = "".join(ch for ch in name if unicodedata.category(ch) not in ("Cc", "Cf"))
+    name = " ".join(name.split())[:_MAX_FILENAME_CHARS].strip()
+    # "." and ".." are path references, not names.
+    return name if name.strip(".") else _FALLBACK_FILENAME
 
 
 @router.post(
@@ -79,7 +104,7 @@ async def ingest_document(
         raise too_large
 
     uploaded = UploadedFile(
-        filename=file.filename or "unknown",
+        filename=_safe_filename(file.filename),
         content=content,
         declared_mime_type=file.content_type,
     )

@@ -146,6 +146,65 @@ class TestIngestDocument:
         assert resp.status_code == 413
 
 
+class TestUploadedFilename:
+    """The filename is client-controlled and ends up in logs, listings and the LLM prompt."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("report.pdf", "report.pdf"),
+            ("Q3 financial report (final).docx", "Q3 financial report (final).docx"),
+            ("../../etc/passwd", "passwd"),
+            ("C:\\Users\\me\\notes.txt", "notes.txt"),
+            ("dir/sub/policy.md", "policy.md"),
+            ("invoice\u202efdp.exe", "invoicefdp.exe"),
+            ("zero\u200bwidth.txt", "zerowidth.txt"),
+            ("tab\tand\x07bell.txt", "tabandbell.txt"),
+            ("  spaced   out  .txt ", "spaced out .txt"),
+            ("résumé – 日本語.pdf", "résumé – 日本語.pdf"),
+        ],
+        ids=[
+            "plain",
+            "spaces-and-parens",
+            "posix-traversal",
+            "windows-path",
+            "nested-path",
+            "bidi-override",
+            "zero-width",
+            "control-chars",
+            "whitespace-runs",
+            "unicode-preserved",
+        ],
+    )
+    def test_filename_is_reduced_to_a_display_name(self, raw: str, expected: str) -> None:
+        assert documents._safe_filename(raw) == expected
+
+    @pytest.mark.parametrize("raw", [None, "", "   ", ".", "..", "/", "dir/", "\u200b"])
+    def test_unusable_names_fall_back(self, raw: str | None) -> None:
+        assert documents._safe_filename(raw) == "unnamed"
+
+    def test_long_names_are_capped(self) -> None:
+        assert len(documents._safe_filename("a" * 1000 + ".txt")) == 255
+
+    def test_use_case_receives_the_sanitized_name(self) -> None:
+        received: list[str] = []
+
+        class Recording(_FakeIngestUseCase):
+            async def execute(self, uploaded: Any, request: Any) -> IngestResponse:
+                received.append(uploaded.filename)
+                return IngestResponse(
+                    source=uploaded.filename, chunks_created=1, duplicates_skipped=0, collection="c"
+                )
+
+        resp = _client(Recording()).post(
+            "/api/v1/documents",
+            files={"file": ("../../secret/plan.txt", b"hello world", "text/plain")},
+        )
+        assert resp.status_code == 201
+        assert received == ["plan.txt"]
+        assert resp.json()["source"] == "plan.txt"
+
+
 # ── GET / DELETE /api/v1/documents ───────────────────────────────────────────
 
 
