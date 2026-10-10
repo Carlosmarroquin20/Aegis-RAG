@@ -276,9 +276,9 @@ AEGIS_E2E_API_KEY=<key> uv run pytest -m e2e --no-cov
 **Lint, format, type-check:**
 
 ```bash
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
-uv run mypy src/
+uv run ruff check src/ tests/ scripts/
+uv run ruff format src/ tests/ scripts/
+uv run mypy src/ scripts/
 ```
 
 **CI pipeline** (GitHub Actions, every push — five parallel jobs):
