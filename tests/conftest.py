@@ -36,6 +36,13 @@ from aegis.infrastructure.security.security_gateway import SecurityGateway
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
+# The suite must behave the same on every machine. Settings normally reads the
+# developer's .env, which legitimately differs per person (a hosted LLM provider,
+# real API keys, a different rate-limit backend) and would silently change what
+# the tests exercise. Disable that source here; a test that wants a dotenv file
+# passes one explicitly via ``_env_file``.
+Settings.model_config["env_file"] = None
+
 TEST_API_KEY = "test-api-key-unit-suite"
 """API key used by the test TestClient and middleware fixtures."""
 
