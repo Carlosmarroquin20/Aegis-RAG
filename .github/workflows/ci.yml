@@ -73,15 +73,114 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      - name: Build frontend image
+        # The steps above build the SPA with the runner's Node, which says nothing
+        # about frontend/Dockerfile: its Node and nginx base images are only
+        # exercised by actually building it. Without this, a base-image bump
+        # would pass CI untested.
+        run: docker build -t aegis-frontend:ci frontend
+
       - name: Validate nginx config
-        # The SPA build above never touches nginx.conf, so a syntax error there
-        # would only surface when the container fails to start. Parse it with the
-        # same nginx the image ships. `api` is the compose-network upstream; give
-        # it a dummy address because nginx resolves proxy_pass hosts at load time.
+        # Run nginx's own parser from the image just built, so the config is
+        # checked against the exact nginx version that will serve it. `api` is
+        # the compose-network upstream; give it a dummy address because nginx
+        # resolves proxy_pass hosts at load time.
+        run: docker run --rm --add-host api:127.0.0.1 aegis-frontend:ci nginx -t
+
+  terraform:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.8.0"
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Validate
+        # No backend and no credentials: this downloads the providers pinned in
+        # .terraform.lock.hcl and type-checks the configuration against them. It
+        # never contacts AWS, and it is what makes a provider upgrade reviewable.
         run: |
-          docker run --rm --add-host api:127.0.0.1 \
-            -v "$PWD/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
-            nginx:1.27-alpine nginx -t
+          terraform init -backend=false -input=false
+          terraform validate
+
+  stack-smoke:
+    name: Compose Stack Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Start backing services
+        # Everything in the compose file except the API and Ollama, which need an
+        # image build and a multi-gigabyte model. --no-deps stops compose from
+        # pulling those in through depends_on. This is the only place the pinned
+        # image versions and the provisioning under infra/ are actually run.
+        run: >
+          docker compose up -d --no-deps --wait --wait-timeout 180
+          redis chromadb jaeger otel-collector prometheus grafana
+
+      - name: Check the services answer
+        run: |
+          set -euo pipefail
+          retry() { for _ in $(seq 1 30); do "$@" && return 0; sleep 2; done; "$@"; }
+
+          docker compose exec -T redis redis-cli ping | grep -q PONG
+          retry curl -fsS http://127.0.0.1:8001/api/v2/heartbeat > /dev/null
+          retry curl -fsS http://127.0.0.1:9090/-/ready > /dev/null
+          retry curl -fsS http://127.0.0.1:16686/ > /dev/null
+          retry curl -fsS http://127.0.0.1:8889/metrics > /dev/null
+          retry curl -fsS http://127.0.0.1:3000/api/health | grep -q '"database": *"ok"'
+
+      - name: Check Prometheus loaded every alert rule
+        # A rule file that fails to parse is dropped silently at runtime; the
+        # alerts would simply never fire.
+        run: |
+          set -euo pipefail
+          rules=$(curl -fsS http://127.0.0.1:9090/api/v1/rules)
+          expected=$(grep -c '^ *- alert:' infra/prometheus/alerts.yml)
+          loaded=$(echo "$rules" | grep -o '"type":"alerting"' | wc -l)
+          echo "alert rules: expected $expected, loaded $loaded"
+          test "$loaded" -eq "$expected"
+          ! echo "$rules" | grep -q '"health":"err"'
+
+      - name: Check Grafana provisioned its datasources and dashboards
+        run: |
+          set -euo pipefail
+          datasources=$(curl -fsS -u admin:admin http://127.0.0.1:3000/api/datasources)
+          echo "$datasources" | grep -q '"uid":"jaeger"'
+          echo "$datasources" | grep -q '"type":"prometheus"'
+          dashboards=$(curl -fsS -u admin:admin 'http://127.0.0.1:3000/api/search?type=dash-db')
+          expected=$(ls infra/grafana/dashboards/*.json | wc -l)
+          found=$(echo "$dashboards" | grep -o '"uid"' | wc -l)
+          echo "dashboards: expected $expected, found $found"
+          test "$found" -eq "$expected"
+
+      - name: Run the rate-limit store tests against the real Redis
+        # The unit suite uses fakeredis. This runs the same behaviour against the
+        # Redis image pinned in docker-compose.yml.
+        run: |
+          set -euo pipefail
+          redis_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q redis)")
+          uv sync --dev
+          AEGIS_TEST_REDIS_URL="redis://${redis_ip}:6379/0" \
+            uv run pytest tests/integration/test_redis_store_live.py --no-cov -q -rs
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 80
 
   security-scan:
     name: Dependency Vulnerability Scan

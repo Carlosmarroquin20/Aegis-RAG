@@ -315,15 +315,21 @@ uv run ruff format src/ tests/ scripts/
 uv run mypy src/ scripts/
 ```
 
-**CI pipeline** (GitHub Actions, every push — five parallel jobs):
+**CI pipeline** (GitHub Actions, every push and pull request — seven jobs):
 
 ```
-Ruff (lint + format) · Mypy strict     ┐
-Frontend build (tsc + Vite) · nginx -t ├─→ all green required
-pip-audit (dependency CVEs)            │
-Unit + integration tests · 80% gate    │
-Docker build · Trivy image scan        ┘
+Ruff (lint + format) · Mypy strict              ┐
+Unit + integration tests · 80% coverage gate    │
+pip-audit (dependency CVEs)                     │
+Docker build · Trivy image scan                 ├─→ all green required
+Frontend build · image build · nginx -t         │
+Terraform fmt + validate                        │
+Compose stack smoke test · tests on real Redis  ┘
 ```
+
+The last three exist so that dependency updates are verified rather than assumed: a base-image,
+provider or stack-image bump is built, validated or started before it can merge. Dependabot opens
+those updates weekly.
 
 ---
 
