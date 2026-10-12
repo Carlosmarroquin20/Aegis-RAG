@@ -1,0 +1,21 @@
+# gitleaks configuration: the default rule set, plus the short list of strings in
+# this repository that look like credentials and are not.
+#
+# Each entry is a documented development placeholder. Keep the list this short:
+# an allowlist is where a real leak hides if it grows by habit. A new finding
+# should be fixed (move the value to the environment) before it is allowlisted.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented development placeholders, not secrets"
+regexTarget = "line"
+regexes = [
+    # The example API key used throughout the README and the compose file. It is
+    # published on purpose, and the application warns at startup that it is weak.
+    '''dev-key-change-in-production''',
+    # Grafana's stock credentials for the local, loopback-only compose stack,
+    # used by the CI smoke test to read back provisioned datasources.
+    '''-u admin:admin .?http://127\.0\.0\.1:3000''',
+]

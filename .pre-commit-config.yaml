@@ -1,0 +1,81 @@
+# Local quality gate, run by git before each commit.
+#
+#   uv run pre-commit install        # once per clone
+#   uv run pre-commit run --all-files
+#
+# The hooks mirror what CI enforces, so a commit that passes here will not come
+# back red for formatting, lint, typing or a stale lockfile. CI remains the
+# authority; this just moves the feedback from minutes to seconds.
+
+default_install_hook_types: [pre-commit]
+minimum_pre_commit_version: "3.2.0"
+
+repos:
+  # ── Project tooling ─────────────────────────────────────────────────────────
+  # Run through uv rather than from pinned hook repositories: the linter, the
+  # formatter and the type checker then come from uv.lock, the same versions CI
+  # installs. Pinning them a second time here is how a hook and the pipeline end
+  # up disagreeing about what "formatted" means.
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff (lint)
+        entry: uv run ruff check --fix --exit-non-zero-on-fix
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff (format)
+        entry: uv run ruff format
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: mypy
+        name: mypy (strict)
+        # Whole-program analysis: checking only the staged files would miss
+        # errors a change causes in modules that import it.
+        entry: uv run mypy src/ scripts/
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: uv-lock
+        name: uv.lock is in sync with pyproject.toml
+        entry: uv lock --check
+        language: system
+        files: ^(pyproject\.toml|uv\.lock)$
+        pass_filenames: false
+
+  # ── Repository hygiene ──────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+        # Grafana provisioning and compose files are plain YAML; nothing here
+        # uses custom tags that would need --unsafe.
+      - id: check-toml
+      - id: check-json
+        # Both formats allow comments, which strict JSON does not.
+        exclude: ^(frontend/tsconfig.*\.json|\.devcontainer/devcontainer\.json)$
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+        # Screenshots and the demo GIF in docs/ are intentional.
+        exclude: ^docs/.*\.(png|gif)$
+      - id: detect-private-key
+      - id: end-of-file-fixer
+        exclude: ^(uv\.lock|frontend/package-lock\.json|.*\.svg)$
+      - id: trailing-whitespace
+        # Two trailing spaces are a hard line break in Markdown.
+        args: ["--markdown-linebreak-ext=md"]
+
+  # ── Secret scanning ─────────────────────────────────────────────────────────
+  # The application takes API keys from the environment and this repository is
+  # public. A key pasted into a tracked file should be stopped before it becomes
+  # part of the history, which is the only point at which stopping it is cheap.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

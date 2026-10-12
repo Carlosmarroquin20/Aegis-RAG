@@ -315,7 +315,18 @@ uv run ruff format src/ tests/ scripts/
 uv run mypy src/ scripts/
 ```
 
-**CI pipeline** (GitHub Actions, every push and pull request — seven jobs):
+**Before committing**, the same checks run locally through [pre-commit](https://pre-commit.com/)
+(ruff, mypy, lockfile consistency, file hygiene and `gitleaks` secret scanning):
+
+```bash
+uv run pre-commit install             # once per clone
+uv run pre-commit run --all-files     # on demand
+```
+
+The linter, formatter and type checker in the hooks come from `uv.lock`, so a hook and the
+pipeline cannot disagree about what "clean" means.
+
+**CI pipeline** (GitHub Actions, every push and pull request — eight jobs):
 
 ```
 Ruff (lint + format) · Mypy strict              ┐
@@ -324,7 +335,8 @@ pip-audit (dependency CVEs)                     │
 Docker build · Trivy image scan                 ├─→ all green required
 Frontend build · image build · nginx -t         │
 Terraform fmt + validate                        │
-Compose stack smoke test · tests on real Redis  ┘
+Compose stack smoke test · tests on real Redis  │
+Secret scan of the full git history (gitleaks)  ┘
 ```
 
 The last three exist so that dependency updates are verified rather than assumed: a base-image,
