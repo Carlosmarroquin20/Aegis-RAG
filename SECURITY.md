@@ -6,6 +6,11 @@ If you discover a security issue in Aegis-RAG, please report it privately via
 GitHub's **Security → Report a vulnerability** advisory flow rather than opening a
 public issue. You can expect an initial acknowledgement within a few days.
 
+## Threat Model
+
+What the system defends against, where each control is enforced and tested, and its known
+limits are documented in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+
 ## Dependency Vulnerability Management
 
 Every push runs `pip-audit` against the fully resolved dependency set as part of

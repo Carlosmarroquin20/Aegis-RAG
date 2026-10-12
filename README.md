@@ -121,6 +121,8 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 ## Security Controls — OWASP LLM Top 10
 
+> The full **[threat model](docs/THREAT_MODEL.md)** lists 23 threats across the query, transport, ingestion and supply-chain surfaces — each with the module that enforces the control and the test that verifies it — and states the residual risks plainly, including what the input gateway does *not* catch.
+
 | Threat | Control | OWASP |
 |---|---|---|
 | Prompt injection | Regex signatures + staged-reasoning (CoT) check + Shannon entropy, matched after Unicode NFKC normalization, invisible-character stripping and homoglyph folding | LLM01 |
