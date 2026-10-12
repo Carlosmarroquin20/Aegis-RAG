@@ -120,7 +120,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     # Not published to the host — only the API needs it, over the internal network.
     volumes:
       - redis-data:/data
