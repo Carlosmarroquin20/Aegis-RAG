@@ -5,7 +5,7 @@ description = "Hardened RAG system for corporate environments — security-first
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Aegis Team" }]
+authors = [{ name = "Emanuel Marroquin" }]
 
 dependencies = [
     # API layer

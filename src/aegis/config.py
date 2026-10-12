@@ -6,9 +6,27 @@ All security-relevant defaults are conservative (strict mode on, low rate limits
 from __future__ import annotations
 
 from functools import lru_cache
+from importlib import metadata
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _installed_version() -> str:
+    """
+    The version declared in pyproject.toml, read from the installed package.
+
+    pyproject.toml is the single place the version is written. Reading it back
+    from the distribution metadata means /health, the OpenAPI document and the
+    tracing resource can never report a number that differs from what was
+    actually built and shipped.
+    """
+    try:
+        return metadata.version("aegis-rag")
+    except metadata.PackageNotFoundError:
+        # Source tree used without installing the project (PYTHONPATH=src).
+        return "0.0.0+unknown"
+
 
 # A key this long, drawn from a URL-safe alphabet, carries about 190 bits. The
 # failed-auth throttle slows guessing down; key length is what makes guessing
@@ -30,7 +48,7 @@ class Settings(BaseSettings):
 
     # ── Application ────────────────────────────────────────────────────────────
     app_name: str = "Aegis-RAG"
-    app_version: str = "0.1.0"
+    app_version: str = Field(default_factory=_installed_version)
     debug: bool = False
 
     # ── Security ───────────────────────────────────────────────────────────────

@@ -65,3 +65,17 @@ class TestSecureDefaults:
     def test_cors_origins_are_split_and_trimmed(self) -> None:
         settings = Settings(CORS_ALLOWED_ORIGINS=" https://a.example ,https://b.example ")
         assert settings.cors_allowed_origins == ["https://a.example", "https://b.example"]
+
+
+class TestVersion:
+    def test_reported_version_is_the_one_declared_in_pyproject(self) -> None:
+        """/health, the OpenAPI document and traces must all report what was built."""
+        import tomllib
+
+        pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+        declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+
+        assert Settings(_env_file=None).app_version == declared  # type: ignore[call-arg]
+
+    def test_version_can_still_be_overridden_explicitly(self) -> None:
+        assert Settings(app_version="9.9.9").app_version == "9.9.9"
