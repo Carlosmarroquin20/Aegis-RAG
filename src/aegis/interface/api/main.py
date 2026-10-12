@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 import structlog
 from fastapi import FastAPI, Request
@@ -35,7 +36,7 @@ from aegis.infrastructure.observability.tracing import (
 from aegis.interface.api.dependencies import (
     get_auth_failure_limiter,
     get_chromadb_adapter,
-    get_ollama_adapter,
+    get_llm_client,
     get_parser_registry,
     get_rate_limiter,
     get_security_gateway,
@@ -109,6 +110,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("startup.begin", app=cfg.app_name, version=cfg.app_version)
 
+    if cfg.llm_provider == "openai_compatible":
+        # Logged at warning level on purpose: this is the one configuration in
+        # which document content leaves the host, and it should be impossible to
+        # run that way without the log saying so.
+        logger.warning(
+            "startup.hosted_llm_enabled",
+            provider_host=urlsplit(cfg.llm_base_url).hostname,
+            model=cfg.llm_model,
+            detail="queries and retrieved excerpts are sent to this provider",
+        )
+
     if not cfg.api_keys_set:
         logger.warning("startup.no_api_keys", detail="every authenticated route will return 403")
     elif cfg.weak_api_key_count:
@@ -133,8 +145,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Graceful shutdown: release the LLM HTTP client connection pool.
     logger.info("shutdown.begin")
-    llm = get_ollama_adapter()
-    await llm.aclose()
+    await get_llm_client().aclose()
     if cfg.tracing_enabled:
         shutdown_tracing()  # flush any batched spans before exit
     logger.info("shutdown.complete")

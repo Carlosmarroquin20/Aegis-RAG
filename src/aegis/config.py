@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # A key this long, drawn from a URL-safe alphabet, carries about 190 bits. The
@@ -111,10 +111,60 @@ class Settings(BaseSettings):
     chroma_port: int = 8001
     chroma_collection: str = "aegis_documents"
 
-    # ── LLM Backend (Ollama) ───────────────────────────────────────────────────
+    # ── LLM Backend ────────────────────────────────────────────────────────────
+    # "ollama" runs the model locally and keeps the deployment air-gapped.
+    # "openai_compatible" calls a hosted provider (Groq, OpenRouter, Mistral, a
+    # vLLM/LiteLLM gateway, ...). Choosing it means the query and the retrieved
+    # document excerpts are sent to that provider; nothing else changes.
+    llm_provider: str = "ollama"  # "ollama" | "openai_compatible"
+
+    # Ollama
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2"
     ollama_timeout_seconds: int = 120
+
+    # OpenAI-compatible provider. All three are required when it is selected.
+    # e.g. https://api.groq.com/openai/v1 — the adapter appends /chat/completions.
+    llm_base_url: str = ""
+    llm_model: str = ""
+    # SecretStr keeps the value out of repr(), logs and validation error dumps.
+    llm_api_key: SecretStr = SecretStr("")
+    llm_timeout_seconds: int = Field(default=60, ge=1)
+
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v: str) -> str:
+        allowed = {"ollama", "openai_compatible"}
+        lowered = v.lower()
+        if lowered not in allowed:
+            raise ValueError(f"llm_provider must be one of {allowed}")
+        return lowered
+
+    @model_validator(mode="after")
+    def require_hosted_llm_settings(self) -> Settings:
+        """
+        Fails at startup, not on the first query, when the hosted provider is
+        selected without the settings it cannot work without.
+        """
+        if self.llm_provider != "openai_compatible":
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("LLM_BASE_URL", self.llm_base_url),
+                ("LLM_MODEL", self.llm_model),
+                ("LLM_API_KEY", self.llm_api_key.get_secret_value()),
+            )
+            if not value.strip()
+        ]
+        if missing:
+            raise ValueError(
+                f"LLM_PROVIDER=openai_compatible requires {', '.join(missing)} to be set"
+            )
+        if not self.llm_base_url.lower().startswith("https://") and not self.debug:
+            # The API key travels in a header on every request.
+            raise ValueError("LLM_BASE_URL must use https:// outside debug mode")
+        return self
 
     # ── Embeddings ─────────────────────────────────────────────────────────────
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"

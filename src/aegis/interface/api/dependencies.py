@@ -16,8 +16,10 @@ from functools import lru_cache
 from aegis.application.use_cases.ingest_documents import IngestDocumentsUseCase
 from aegis.application.use_cases.query_rag import QueryRAGUseCase
 from aegis.config import get_settings
+from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
+from aegis.infrastructure.llm.openai_compatible_adapter import OpenAICompatibleAdapter
 from aegis.infrastructure.observability.metrics import PrometheusQueryMetrics
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
@@ -97,8 +99,21 @@ def get_parser_registry() -> ParserRegistry:
 
 
 @lru_cache(maxsize=1)
-def get_ollama_adapter() -> OllamaAdapter:
+def get_llm_client() -> LLMClientPort:
+    """
+    The LLM backend, selected by LLM_PROVIDER.
+
+    This is the only place that knows which adapter is in use. The use case, the
+    readiness probe and the shutdown hook all work through the port.
+    """
     cfg = get_settings()
+    if cfg.llm_provider == "openai_compatible":
+        return OpenAICompatibleAdapter(
+            base_url=cfg.llm_base_url,
+            api_key=cfg.llm_api_key.get_secret_value(),
+            model=cfg.llm_model,
+            timeout_seconds=cfg.llm_timeout_seconds,
+        )
     return OllamaAdapter(
         base_url=cfg.ollama_base_url,
         model=cfg.ollama_model,
@@ -141,7 +156,7 @@ def get_query_use_case() -> QueryRAGUseCase:
     """FastAPI dependency factory for the query pipeline."""
     return QueryRAGUseCase(
         vector_store=get_vector_store(),
-        llm_client=get_ollama_adapter(),
+        llm_client=get_llm_client(),
         security_gateway=get_security_gateway(),
         output_sanitizer=get_output_sanitizer(),
         metrics=PrometheusQueryMetrics(),

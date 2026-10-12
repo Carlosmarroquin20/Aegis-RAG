@@ -2,7 +2,8 @@
 LLM client port (abstract interface).
 
 Decouples the application layer from any specific LLM backend.
-Concrete adapters: OllamaAdapter (local), OpenAIAdapter, AnthropicAdapter.
+Concrete adapters: OllamaAdapter (local, the default) and
+OpenAICompatibleAdapter (any hosted provider speaking the OpenAI wire format).
 """
 
 from __future__ import annotations
@@ -47,3 +48,10 @@ class LLMClientPort(ABC):
     @abstractmethod
     async def health_check(self) -> bool:
         """Returns True if the LLM backend is reachable and the model is loaded."""
+
+    async def aclose(self) -> None:  # noqa: B027 - optional hook, deliberately not abstract
+        """
+        Releases any resources held by the client (connection pools, sessions).
+        Called once at shutdown. The default does nothing, so implementations
+        with nothing to release need not override it.
+        """

@@ -15,7 +15,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel
 
 from aegis.infrastructure.observability.metrics import registry
-from aegis.interface.api.dependencies import get_chromadb_adapter, get_ollama_adapter
+from aegis.interface.api.dependencies import get_llm_client, get_vector_store
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(tags=["ops"])
@@ -46,8 +46,8 @@ async def ready() -> JSONResponse:
     Returns HTTP 503 if any component is unavailable so that orchestrators
     (Kubernetes, ECS) hold traffic until the service is fully operational.
     """
-    vector_store_ok = await get_chromadb_adapter().health_check()
-    llm_ok = await get_ollama_adapter().health_check()
+    vector_store_ok = await get_vector_store().health_check()
+    llm_ok = await get_llm_client().health_check()
 
     components = {"vector_store": vector_store_ok, "llm": llm_ok}
     all_ok = all(components.values())

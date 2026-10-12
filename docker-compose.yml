@@ -32,6 +32,13 @@ services:
       - CHROMA_PORT=8000
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.2
+      # LLM backend. Defaults to the local Ollama service above. To use a hosted,
+      # OpenAI-compatible provider instead, set these four in .env (git-ignored);
+      # compose interpolates them here. See .env.example.
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
       # Share the rate-limit window across workers via Redis (swappable backend).
       - RATE_LIMIT_BACKEND=redis
       - REDIS_URL=redis://redis:6379/0

@@ -32,7 +32,7 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 - **Magic-byte file detection.** Document uploads are dispatched to parsers based on actual file content, not the attacker-controllable `Content-Type` header.
 - **Hexagonal for real.** The `LLMClientPort`, `VectorStorePort` and `RateLimitStore` interfaces mean swapping Ollama for OpenAI, ChromaDB for pgvector, or the in-memory rate limiter for the shared **Redis** backend is a one-file change — and there are fakes in the test suite that prove it. The dependency rule itself (`interface → application → domain ← infrastructure`) is enforced by a test that parses every module's imports. Adapters translate vendor failures at the boundary, so a vector-store or LLM outage reaches the client as a retryable **503/504**, never as a leaked client-library exception.
 - **Three pillars of observability.** Structured JSON logs, Prometheus metrics, and opt-in **OpenTelemetry** traces (a span per pipeline stage) all correlate through a single `request_id` / `trace_id`.
-- **Air-gap compatible.** The full stack runs on local infrastructure (Ollama + ChromaDB). No data ever leaves the network.
+- **Air-gap by default, hosted by choice.** Out of the box the full stack runs on local infrastructure (Ollama + ChromaDB) and no data leaves the network. The same `LLMClientPort` also has an adapter for any OpenAI-compatible hosted provider (Groq, OpenRouter, Mistral, a vLLM gateway), selected with one setting — an explicit opt-in that is logged at startup, because it is the one configuration in which document content leaves the host.
 
 ---
 
@@ -168,7 +168,7 @@ Two pre-provisioned Grafana dashboards ship with the stack. **Production Overvie
 ## Tech Stack
 
 - **API & runtime** — FastAPI 0.115+, Uvicorn, Pydantic v2 (strict), `uv` package manager
-- **RAG core** — ChromaDB · Ollama · `sentence-transformers/all-MiniLM-L6-v2` · pypdf · python-docx · markdown-it-py
+- **RAG core** — ChromaDB · Ollama (local) or any OpenAI-compatible hosted LLM · `sentence-transformers/all-MiniLM-L6-v2` · pypdf · python-docx · markdown-it-py
 - **Rate limiting** — in-process sliding window, or a shared **Redis** backend (same port, one config flag)
 - **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy · ~90% test coverage
 - **Observability** — `structlog` (JSON) · `prometheus-client` + Grafana dashboards · **OpenTelemetry** traces via an OTel Collector (spanmetrics → Prometheus) to Jaeger
@@ -215,6 +215,33 @@ curl -X POST http://localhost:8000/api/v1/query \
 ```
 
 Or run the same flow as a single test: `uv run pytest -m e2e --no-cov`.
+
+---
+
+## Choosing the LLM backend
+
+The model sits behind `LLMClientPort`, and the backend is a configuration choice:
+
+| `LLM_PROVIDER` | Backend | Data leaves the host? | Typical latency |
+|---|---|---|---|
+| `ollama` *(default)* | Local Ollama | No — air-gapped | Tens of seconds on CPU |
+| `openai_compatible` | Any provider implementing `POST /chat/completions` | **Yes** — the query and the retrieved excerpts | Around a second |
+
+To use a hosted provider, put these in `.env` (git-ignored) and restart:
+
+```bash
+LLM_PROVIDER=openai_compatible
+LLM_BASE_URL=https://api.groq.com/openai/v1     # or OpenRouter, Mistral, your own gateway
+LLM_MODEL=openai/gpt-oss-120b
+LLM_API_KEY=<your key>
+```
+
+Nothing else changes. The SecurityGateway still runs before retrieval, the same hardened system
+prompt is sent, and the OutputSanitizer still post-processes the answer; a provider outage, a
+rejected key or a rate limit surfaces as a **503**, and a timeout as a **504**. The key is held as a
+`SecretStr`, sent only in the `Authorization` header, and never written to logs or error messages.
+The app refuses to start if the hosted provider is selected without its settings, or with a
+non-HTTPS URL outside debug mode.
 
 ---
 
