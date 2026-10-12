@@ -122,6 +122,8 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 ## Security Controls — OWASP LLM Top 10
 
 > The full **[threat model](docs/THREAT_MODEL.md)** lists 23 threats across the query, transport, ingestion and supply-chain surfaces — each with the module that enforces the control and the test that verifies it — and states the residual risks plainly, including what the input gateway does *not* catch.
+>
+> The reasoning behind the non-obvious choices — why the rate limiter fails open, why an auth lockout also refuses valid keys, why `X-Forwarded-For` is ignored by default — is recorded as **[architecture decision records](docs/adr/README.md)**, each with the alternatives that were rejected.
 
 | Threat | Control | OWASP |
 |---|---|---|

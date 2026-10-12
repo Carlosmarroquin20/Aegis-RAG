@@ -3,7 +3,8 @@
 This document states what Aegis-RAG defends against, where each defence lives, how it is
 verified, and — just as important — what it does **not** defend against. It complements
 [`SECURITY.md`](../SECURITY.md), which covers vulnerability reporting and the dependency
-risk register.
+risk register. The reasoning behind the main design choices is in the
+[architecture decision records](adr/README.md).
 
 Every control listed here names the module that enforces it and the test that pins it down,
 so a claim can be checked instead of trusted.
