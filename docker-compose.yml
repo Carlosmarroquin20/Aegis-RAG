@@ -136,7 +136,7 @@ services:
   # ── Tracing backend ─────────────────────────────────────────────────────────
   # Jaeger all-in-one receives OTLP spans from the API and serves the trace UI.
   jaeger:
-    image: jaegertracing/all-in-one:1.62.0
+    image: jaegertracing/all-in-one:1.76.0
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
@@ -149,7 +149,7 @@ services:
   # OTLP hub: receives spans from the API, forwards traces to Jaeger, and derives
   # span metrics (RED per pipeline stage) that Prometheus scrapes at :8889.
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.115.1
+    image: otel/opentelemetry-collector-contrib:0.162.0
     command: ["--config=/etc/otel/collector.yaml"]
     volumes:
       - ./infra/otel-collector/config.yaml:/etc/otel/collector.yaml:ro
@@ -168,7 +168,7 @@ services:
   # yields a fully working monitoring view at http://localhost:3000.
 
   prometheus:
-    image: prom/prometheus:v2.55.1
+    image: prom/prometheus:v3.15.0
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
@@ -189,7 +189,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:11.3.0
+    image: grafana/grafana:13.2.3
     ports:
       - "${AEGIS_PUBLIC_BIND:-127.0.0.1}:3000:3000"
     environment:
