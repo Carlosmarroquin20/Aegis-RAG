@@ -1,6 +1,6 @@
 {
   "name": "aegis-rag-frontend",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Demo web client for the Aegis-RAG security-first RAG API.",
