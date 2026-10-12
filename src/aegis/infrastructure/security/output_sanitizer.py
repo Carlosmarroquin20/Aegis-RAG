@@ -9,6 +9,8 @@ Sanitization pipeline:
   1. Length enforcement     — truncates responses that exceed a safe token budget.
   2. HTML/script stripping  — prevents XSS if the output is rendered in a browser
                               or consumed by a web application downstream.
+     Markdown flattening    — keeps the answer plain text and makes every link
+                              target visible instead of hidden behind its label.
   3. Reflection detection   — checks whether the output appears to echo back
                               injection payloads (adversarial prompt reflection).
   4. PII pattern detection  — flags potential PII leakage without blocking (logged
@@ -27,7 +29,7 @@ import structlog
 from aegis.domain.models.security import SanitizedOutput
 from aegis.domain.ports.security import OutputGuardPort, OutputReflectionError
 from aegis.infrastructure.observability.metrics import output_reflections_total
-from aegis.infrastructure.security.markup import strip_html_tags
+from aegis.infrastructure.security.markup import flatten_markdown, strip_html_tags
 
 logger = structlog.get_logger(__name__)
 
@@ -68,6 +70,9 @@ class OutputSanitizer(OutputGuardPort):
         strip_html:       Strip HTML/script tags from the output (default: True).
         block_reflection: Raise OutputReflectionError when injection reflection
                           is detected. Set False to log-only in permissive environments.
+        flatten_markdown: Remove Markdown emphasis/heading markers and rewrite
+                          links as "text (target)" (default: True). Disable only
+                          for a client that renders Markdown and sanitizes it itself.
     """
 
     def __init__(
@@ -75,9 +80,11 @@ class OutputSanitizer(OutputGuardPort):
         max_chars: int = _MAX_OUTPUT_CHARS,
         strip_html: bool = True,
         block_reflection: bool = True,
+        flatten_markdown: bool = True,
     ) -> None:
         self._max_chars = max_chars
         self._strip_html = strip_html
+        self._flatten_markdown = flatten_markdown
         self._block_reflection = block_reflection
 
     def sanitize(self, raw_output: str, query_hash: str = "") -> SanitizedOutput:
@@ -104,6 +111,12 @@ class OutputSanitizer(OutputGuardPort):
         # ── Step 2: HTML stripping ─────────────────────────────────────────────
         if self._strip_html:
             text = strip_html_tags(text)
+
+        # ── Step 2b: Markdown flattening ───────────────────────────────────────
+        # Before reflection detection on purpose: emphasis markers inside a phrase
+        # ("ignore **all previous** instructions") must not hide it from the scan.
+        if self._flatten_markdown:
+            text = flatten_markdown(text)
 
         # ── Step 3: Reflection detection ───────────────────────────────────────
         reflection_detected = any(p.search(text) for p in _REFLECTION_PATTERNS)
