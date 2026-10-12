@@ -1,0 +1,109 @@
+# Dependabot keeps dependencies current across every ecosystem in the repository.
+#
+# The CI already fails on a published advisory (pip-audit, Trivy), but only when
+# something else triggers a run — so a new advisory used to surface as a red build
+# on an unrelated push. Scheduled update PRs turn that into routine, reviewable
+# changes, each one validated by the full pipeline before it can merge.
+#
+# Conventions used below:
+#   - Weekly, on Monday, so updates arrive as one batch at the start of the week.
+#   - Minor and patch bumps are grouped per ecosystem: one PR to review, not ten.
+#     Major versions stay separate because they are the ones that need reading.
+#   - Security updates are not affected by the grouping or the PR limit; GitHub
+#     opens those immediately.
+#   - Commit messages follow the repository's convention: chore(deps): ...
+
+version: 2
+
+updates:
+  # ── Python (uv.lock / pyproject.toml) ───────────────────────────────────────
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python-minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # torch is resolved from the CPU-only PyTorch index (see [tool.uv.sources]);
+      # its "+cpu" builds are not on PyPI, so an automated bump would switch the
+      # image to the multi-gigabyte CUDA wheels. Upgrade it by hand.
+      - dependency-name: "torch"
+
+  # ── Frontend (npm) ──────────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      frontend-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # ── GitHub Actions ──────────────────────────────────────────────────────────
+  # Also maintains the SHA pins: Dependabot updates the commit and the version
+  # comment together, which is what makes pinning by SHA sustainable.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # ── Container base images ───────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "build(deps)"
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "build(deps)"
+
+  # ── Compose stack images ────────────────────────────────────────────────────
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      observability-stack:
+        patterns:
+          - "prom/prometheus"
+          - "grafana/grafana"
+          - "jaegertracing/*"
+          - "otel/*"
+    ignore:
+      # The ChromaDB server must match the chromadb client resolved in uv.lock;
+      # an older or newer server rejects the client's collection API. Bump the
+      # image together with the Python package, not on its own.
+      - dependency-name: "chromadb/chroma"
+
+  # ── Terraform providers ─────────────────────────────────────────────────────
+  - package-ecosystem: "terraform"
+    directory: "/infra/terraform"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore(deps)"

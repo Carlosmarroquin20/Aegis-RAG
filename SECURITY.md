@@ -17,6 +17,11 @@ Every push runs `pip-audit` against the fully resolved dependency set as part of
 CI (see `.github/workflows/ci.yml`). The build fails on any advisory that has a
 fixed release available, so patchable vulnerabilities cannot merge.
 
+Dependabot (`.github/dependabot.yml`) opens weekly update pull requests for the Python
+lockfile, the frontend, GitHub Actions, container images and Terraform providers, and opens
+security updates as soon as an advisory is published. Each one runs the full pipeline before
+it can merge, so staying current is routine rather than a reaction to a red build.
+
 Advisories with **no fixed upstream release** are triaged individually. Where the
 described vector is not reachable in this system's deployment model, the advisory
 is formally risk-accepted, recorded below (VEX-style), and suppressed in CI with
