@@ -7,6 +7,23 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
+## [Unreleased]
+
+### Added
+
+- **Gateway evaluation.** A labelled corpus of 242 queries (`evals/gateway/dataset.jsonl`)
+  and `scripts/evaluate_gateway.py`, which reports detection and false-positive rates per
+  category with confidence intervals. The generated report is
+  [`docs/GATEWAY_EVALUATION.md`](docs/GATEWAY_EVALUATION.md).
+- Pre-commit hooks mirroring the CI gates, and a secret scan of the full history in CI.
+
+### Fixed
+
+- **Long Japanese and Chinese questions were rejected in strict mode** as encoded payloads.
+  The entropy check now measures ASCII characters only.
+- **"You are now an …" persona hijacks were not detected**; the signature accepted only the
+  article "a".
+
 ## [1.0.0] — 2026-10-12
 
 First stable release. The API contract, the error semantics and the security model are now

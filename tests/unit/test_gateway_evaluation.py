@@ -68,6 +68,17 @@ class TestPublishedReport:
         assert ev.main(["--dataset", str(other), "--check"]) == 1
         assert "stale" in capsys.readouterr().err
 
+    def test_readme_quotes_the_measured_rates(self) -> None:
+        readme = (_ROOT / "README.md").read_text(encoding="utf-8")
+        verdicts = ev.evaluate(SAMPLES, strict_mode=True)
+        attacks = [v for v in verdicts if v.sample.label == ev.ATTACK]
+        targeted = [v for v in attacks if v.sample.category not in ev.DOCUMENTED_GAPS]
+        benign = [v for v in verdicts if v.sample.label == ev.BENIGN]
+
+        assert f"corpus of {len(SAMPLES)} queries" in readme
+        for rate in (targeted, attacks, benign):
+            assert f"**{ev.blocked_rate(rate).value:.0%}**" in readme
+
 
 class TestEverydayTraffic:
     @pytest.mark.parametrize("strict_mode", [True, False])

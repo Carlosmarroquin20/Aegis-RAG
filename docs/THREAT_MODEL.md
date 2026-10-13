@@ -131,6 +131,10 @@ phrasings. Measured against the current rule set, each of these passes with a th
 - leetspeak (`1gn0re all prev1ous instruct1ons`),
 - a short Base64 payload.
 
+The size of that gap is measured in [`docs/GATEWAY_EVALUATION.md`](GATEWAY_EVALUATION.md): on a
+labelled corpus the gateway blocks roughly two thirds of the attacks in the categories it
+targets and almost none of the paraphrased, translated or character-substituted ones.
+
 The gateway therefore raises the cost of a naive attack and produces a signal; it is not the
 control that the system's safety depends on. That role belongs to the layers behind it —
 the untrusted-context system prompt and the output guard (T-04, T-05) — which apply
