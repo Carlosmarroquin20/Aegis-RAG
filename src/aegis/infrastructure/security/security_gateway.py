@@ -52,7 +52,7 @@ _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
     # ── Persona / Identity Hijack (LLM01, severity: critical) ─────────────────
     (
         re.compile(
-            r"you\s+are\s+now\s+(a\s+)?(different|new|evil|uncensored|unfiltered|DAN|jailbroken)",
+            r"you\s+are\s+now\s+(an?\s+)?(different|new|evil|uncensored|unfiltered|DAN|jailbroken)",
             re.IGNORECASE,
         ),
         "persona_hijack",
