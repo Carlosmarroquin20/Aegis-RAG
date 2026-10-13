@@ -56,6 +56,14 @@ DOCUMENTED_GAPS: frozenset[str] = frozenset({"paraphrase", "non_english", "chara
 
 _PREVIEW_CHARS = 90
 
+# Results from the first run that were bugs rather than limits of the approach.
+# Kept in the report so the corrected figures are not mistaken for the baseline.
+_FIXED_DEFECTS: tuple[str, ...] = (
+    "**Long Japanese and Chinese questions were blocked as encoded payloads.** The entropy "
+    "check measured every character, and prose in a large alphabet exceeds the base64 "
+    "threshold on its own. It now measures ASCII only (false positives 13 → 11).",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Sample:
@@ -324,6 +332,14 @@ def render_report(samples: Sequence[Sample]) -> str:
 
     out += [
         "",
+        "## Defects this evaluation found",
+        "",
+        "Most of what is listed above is the expected limit of matching signatures. A few",
+        "results were not: they were plain defects in the detector, and they were fixed. The",
+        "baseline figures are in the history of this file.",
+        "",
+        *(f"- {finding}" for finding in _FIXED_DEFECTS),
+        "",
         "## Method and limits",
         "",
         "- Each query is passed to `SecurityGateway.evaluate()` exactly as the query route",
@@ -335,9 +351,9 @@ def render_report(samples: Sequence[Sample]) -> str:
         "  injection strings with original ones, and it was fixed before the first run, but it",
         "  is not an independent benchmark and should not be read as one. Use `--dataset` to",
         "  run the same measurement over a third-party corpus.",
-        "- The gateway is not tuned against this file. A miss listed above is a finding to",
-        "  weigh, not a test to make pass: adding a signature per missed string would raise",
-        "  the number here without making the system harder to attack.",
+        "- The gateway is not tuned against this file. Apart from the defects above, a miss",
+        "  is a finding to weigh, not a test to make pass: adding a signature per missed",
+        "  string would raise the number here without making the system harder to attack.",
         "- This measures the input gateway alone. A query that passes it still meets the",
         "  hardened system prompt, retrieval scoped to the indexed corpus and the output",
         "  sanitizer's reflection check; none of those are credited here.",

@@ -240,6 +240,29 @@ class TestEntropyScoring:
         score = _entropy_score(b64 * 3)  # ensure > 80 chars
         assert score > 0
 
+    @pytest.mark.parametrize(
+        "question",
+        [
+            # Japanese and Chinese prose: large alphabets, so per-character
+            # entropy is far above the base64 range without anything being encoded.
+            "出張経費の精算手続きについて教えてください。申請の締め切り、必要な領収書、承認者、そして海外出張の場合の"
+            "日当の上限額も知りたいです。また、申請が却下された場合の再申請の方法もお願いします。",
+            "请详细说明公司的远程办公政策，包括申请流程、审批人、每周允许在家办公的天数、设备和网络安全要求，"
+            "以及跨境远程工作时需要注意的税务与合规事项，并列出相关负责部门的联系方式。",
+        ],
+    )
+    def test_long_cjk_question_is_not_scored_as_encoded(
+        self, question: str, gateway_strict: SecurityGateway
+    ) -> None:
+        assert len(question) >= 80
+        assert _entropy_score(question) == 0
+        assert not gateway_strict.evaluate(RawQuery(text=question)).blocked
+
+    def test_non_ascii_padding_does_not_hide_an_encoded_payload(self) -> None:
+        b64 = "aGVsbG8gd29ybGQgdGhpcyBpcyBhIHRlc3QgcGF5bG9hZCB0byBjaGVjayBlbnRyb3B5IHNjb3Jp"
+        padded = "これは普通の質問です。" * 10 + b64 * 3
+        assert _entropy_score(padded) == _entropy_score(b64 * 3) > 0
+
 
 # ── Strict vs Permissive Mode ──────────────────────────────────────────────────
 

@@ -391,19 +391,27 @@ def _has_cot_override_scaffold(text: str) -> bool:
 
 def _entropy_score(text: str) -> int:
     """
-    Returns a threat score based on Shannon entropy of the input characters.
+    Returns a threat score based on Shannon entropy of the input's ASCII characters.
     Payloads with entropy > 4.5 bits/char are characteristic of base64 or hex
     encoded content commonly used to bypass signature-based filters.
     Returns 0 for short inputs where entropy is not a reliable signal.
+
+    Only ASCII is measured. Character entropy depends on the size of the alphabet:
+    ordinary Japanese or Chinese prose sits well above 5.2 bits/char, so measuring
+    every character blocked any long question in those languages as an "encoded
+    payload". The encodings this check exists for are ASCII by definition, and
+    because other characters are skipped rather than exempting the query, padding
+    a payload with them does not hide it.
     """
-    if len(text) < 80:
+    ascii_chars = [ch for ch in text if ch.isascii()]
+    length = len(ascii_chars)
+    if length < 80:
         return 0
 
     freq: dict[str, int] = {}
-    for ch in text:
+    for ch in ascii_chars:
         freq[ch] = freq.get(ch, 0) + 1
 
-    length = len(text)
     entropy = -sum((count / length) * math.log2(count / length) for count in freq.values())
 
     if entropy > 5.2:
