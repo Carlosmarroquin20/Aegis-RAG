@@ -7,7 +7,11 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
-## [Unreleased]
+## [1.0.1] — 2026-10-13
+
+Maintenance release: no change to the API contract. It adds a measurement of the input
+gateway, fixes the two detector defects that measurement found, and brings every runtime
+dependency up to date.
 
 ### Added
 
@@ -16,6 +20,9 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
   category with confidence intervals. The generated report is
   [`docs/GATEWAY_EVALUATION.md`](docs/GATEWAY_EVALUATION.md).
 - Pre-commit hooks mirroring the CI gates, and a secret scan of the full history in CI.
+- Dependabot for every ecosystem in the repository, and CI jobs that build the frontend
+  image, validate the Terraform configuration and smoke-test the compose stack, so a
+  dependency update is exercised before it is merged.
 
 ### Changed
 
@@ -23,6 +30,9 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
   Collector 0.115 → 0.162, Jaeger 1.62 → 1.76. Dashboards, alert rules, span metrics and
   exemplar links were verified against the running stack. The collector configuration uses
   the current component names (`span_metrics`, `otlp_grpc`); metric names are unchanged.
+- Base images and providers updated: Redis 7 → 8, nginx 1.27 → 1.31, Node 20 → 26 for the
+  frontend build, TypeScript 5.9 → 7.0, the AWS Terraform provider, and the Python
+  dependency set.
 
 ### Fixed
 
@@ -137,5 +147,6 @@ rate limiting, structured logging, Prometheus metrics, OpenTelemetry tracing wit
 dashboards, a React demo console, a multi-stage Docker image, docker-compose stack, GitHub
 Actions CI and an AWS Terraform skeleton.
 
+[1.0.1]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.0.0
 [0.1.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/tree/f653d4e
