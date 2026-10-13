@@ -17,6 +17,13 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
   [`docs/GATEWAY_EVALUATION.md`](docs/GATEWAY_EVALUATION.md).
 - Pre-commit hooks mirroring the CI gates, and a secret scan of the full history in CI.
 
+### Changed
+
+- Observability stack upgraded: Prometheus 2.55 → 3.15, Grafana 11.3 → 13.2, OpenTelemetry
+  Collector 0.115 → 0.162, Jaeger 1.62 → 1.76. Dashboards, alert rules, span metrics and
+  exemplar links were verified against the running stack. The collector configuration uses
+  the current component names (`span_metrics`, `otlp_grpc`); metric names are unchanged.
+
 ### Fixed
 
 - **Long Japanese and Chinese questions were rejected in strict mode** as encoded payloads.

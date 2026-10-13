@@ -2,7 +2,7 @@
 #
 # The API exports OTLP/HTTP spans here. The collector fans them out two ways:
 #   1. forwards the raw traces to Jaeger for storage and trace-level drill-down;
-#   2. feeds the spanmetrics connector, which derives RED metrics (request rate,
+#   2. feeds the span_metrics connector, which derives RED metrics (request rate,
 #      errors, latency histogram) per span — turning the app's own pipeline spans
 #      (security.evaluate, rag.retrieve, llm.generate, output.sanitize) into
 #      Prometheus series that Grafana charts. This is the canonical OpenTelemetry
@@ -30,7 +30,7 @@ connectors:
   # promote the app's own span attributes to metric labels so the dashboard can
   # break generation/security down by outcome. Exemplars carry a trace_id, letting
   # Grafana jump from a latency spike straight to the offending trace in Jaeger.
-  spanmetrics:
+  span_metrics:
     histogram:
       unit: ms
       # Buckets span sub-ms (SecurityGateway, sanitizer) to tens of seconds: LLM
@@ -48,7 +48,7 @@ connectors:
 
 exporters:
   # Traces land in Jaeger (OTLP gRPC receiver, TLS disabled on the internal net).
-  otlp/jaeger:
+  otlp_grpc/jaeger:
     endpoint: jaeger:4317
     tls:
       insecure: true
@@ -63,8 +63,8 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [otlp/jaeger, spanmetrics]
+      exporters: [otlp_grpc/jaeger, span_metrics]
     metrics/spanmetrics:
-      receivers: [spanmetrics]
+      receivers: [span_metrics]
       processors: [memory_limiter, batch]
       exporters: [prometheus]
