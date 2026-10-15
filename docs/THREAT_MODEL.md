@@ -123,17 +123,18 @@ the OWASP Top 10 for LLM Applications.
 These are known, deliberate limits. They are listed because a threat model that claims full
 coverage is not credible.
 
-**The input gateway is a heuristic, and it is English-only.** Its signatures match known
-phrasings. Measured against the current rule set, each of these passes with a threat score of 0:
+**The input gateway is a heuristic, and it covers two languages.** Its signatures match known
+phrasings in English and Spanish. Measured against the current rule set, each of these passes
+with a threat score of 0:
 
-- the same instruction written in another language (`Ignora todas las instrucciones anteriores…`),
-- a paraphrase that avoids the trigger words,
+- the same instruction written in a third language (`Ignoriere alle vorherigen Anweisungen…`),
+- a paraphrase that avoids the trigger words, in either language,
 - leetspeak (`1gn0re all prev1ous instruct1ons`),
 - a short Base64 payload.
 
 The size of that gap is measured in [`docs/GATEWAY_EVALUATION.md`](GATEWAY_EVALUATION.md): on a
-labelled corpus the gateway blocks roughly two thirds of the attacks in the categories it
-targets and almost none of the paraphrased, translated or character-substituted ones.
+labelled corpus the gateway blocks roughly three quarters of the attacks in the categories it
+targets and none of the paraphrased, translated or character-substituted ones.
 
 The gateway therefore raises the cost of a naive attack and produces a signal; it is not the
 control that the system's safety depends on. That role belongs to the layers behind it —

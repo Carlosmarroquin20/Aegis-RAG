@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
+## [Unreleased]
+
+### Added
+
+- **Spanish prompt-injection signatures**: instruction override, prompt disclosure, persona
+  hijack, roleplay and staged-reasoning attacks written in Spanish, voseo included, are now
+  blocked. Signatures are matched with accents removed, so unaccented spellings are covered.
+- The gateway corpus gains a Spanish set (34 attacks, 49 legitimate queries) that was committed
+  before the Spanish rules. Measured on it: 33 of 34 attacks blocked, no legitimate query
+  blocked.
+
+### Fixed
+
+- A combining mark placed inside an English keyword (`i̇gnore`) hid it from the
+  signatures.
+
 ## [1.0.1] — 2026-10-13
 
 Maintenance release: no change to the API contract. It adds a measurement of the input

@@ -130,7 +130,7 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 | Threat | Control | OWASP |
 |---|---|---|
-| Prompt injection | Regex signatures + staged-reasoning (CoT) check + Shannon entropy, matched after Unicode NFKC normalization, invisible-character stripping and homoglyph folding | LLM01 |
+| Prompt injection | Regex signatures in English and Spanish (voseo included) + staged-reasoning (CoT) check + Shannon entropy, matched after Unicode NFKC normalization, invisible-character stripping, accent removal and homoglyph folding | LLM01 |
 | Insecure output handling | Length cap · HTML strip · reflection detection · PII flagging | LLM02 |
 | System-prompt disclosure | Signature rules block probing queries (*"show me your prompt"*) | LLM07 |
 | API abuse | Per-key sliding-window rate limiter with burst allowance · rejected requests never occupy the window · explicit fail-open/fail-closed policy if the store is down | LLM06 |
