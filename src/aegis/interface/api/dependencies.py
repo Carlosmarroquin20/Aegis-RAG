@@ -140,6 +140,7 @@ def get_chromadb_adapter() -> ChromaDBAdapter:
         port=cfg.chroma_port,
         collection_name=cfg.chroma_collection,
         embedding_function=embedding_fn,
+        embedding_model=cfg.embedding_model,
     )
 
 

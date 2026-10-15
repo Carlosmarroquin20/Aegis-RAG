@@ -17,7 +17,11 @@ import pytest
 
 from aegis.domain.models.document import Document
 from aegis.domain.ports.vector_store import VectorStoreUnavailableError
-from aegis.infrastructure.vector_stores.chromadb_adapter import ChromaDBAdapter
+from aegis.infrastructure.vector_stores.chromadb_adapter import (
+    EMBEDDING_MODEL_KEY,
+    ChromaDBAdapter,
+    EmbeddingModelMismatchError,
+)
 
 
 class _FakeCollection:
@@ -69,7 +73,11 @@ def _adapter(
     collection: _FakeCollection | None = None, client: _FakeClient | None = None
 ) -> ChromaDBAdapter:
     adapter = ChromaDBAdapter(
-        host="chroma", port=8000, collection_name="docs", embedding_function=object()
+        host="chroma",
+        port=8000,
+        collection_name="docs",
+        embedding_function=object(),
+        embedding_model="model-a",
     )
     adapter._collection = collection
     adapter._client = client
@@ -236,3 +244,45 @@ class TestClientFailuresAreTranslated:
         # asyncio re-creates TimeoutError when relaying it from the worker thread,
         # so compare by type rather than identity.
         assert type(excinfo.value.__cause__) is type(error)
+
+
+class TestEmbeddingModelGuard:
+    """A collection must only be served with the model that produced its vectors."""
+
+    def test_matching_model_is_accepted(self) -> None:
+        _adapter()._check_embedding_model({"hnsw:space": "cosine", EMBEDDING_MODEL_KEY: "model-a"})
+
+    def test_different_model_is_refused_with_a_way_out(self) -> None:
+        with pytest.raises(EmbeddingModelMismatchError) as caught:
+            _adapter()._check_embedding_model({EMBEDDING_MODEL_KEY: "model-b"})
+        message = str(caught.value)
+        assert "model-b" in message and "model-a" in message
+        assert "EMBEDDING_MODEL" in message and "re-ingest" in message
+
+    def test_collection_from_before_the_check_is_served(self) -> None:
+        """Upgrading must not take down a deployment whose collection predates the key."""
+        _adapter()._check_embedding_model({"hnsw:space": "cosine"})
+
+    def test_new_collections_record_the_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        created: dict[str, Any] = {}
+
+        class _Collection:
+            metadata: dict[str, Any] = {}
+
+        class _Client:
+            def __init__(self, **_: Any) -> None:
+                pass
+
+            def get_or_create_collection(self, **kwargs: Any) -> _Collection:
+                created.update(kwargs)
+                collection = _Collection()
+                collection.metadata = kwargs["metadata"]
+                return collection
+
+        import chromadb
+
+        monkeypatch.setattr(chromadb, "HttpClient", _Client)
+        _adapter()._connect()
+
+        assert created["metadata"][EMBEDDING_MODEL_KEY] == "model-a"
+        assert created["metadata"]["hnsw:space"] == "cosine"

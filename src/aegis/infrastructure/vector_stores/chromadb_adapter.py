@@ -26,6 +26,18 @@ from aegis.domain.ports.vector_store import VectorStorePort, VectorStoreUnavaila
 
 logger = structlog.get_logger(__name__)
 
+# Collection metadata key recording which embedding model produced the stored
+# vectors. ChromaDB persists the embedding function's *type* and rejects a
+# different type, but not a different model of the same type: switching from one
+# SentenceTransformers model to another of the same dimension is accepted, and
+# every query is then compared against vectors from an incompatible space. The
+# results come back ranked, plausible and wrong, with no error anywhere.
+EMBEDDING_MODEL_KEY = "aegis:embedding_model"
+
+
+class EmbeddingModelMismatchError(RuntimeError):
+    """The collection was built with a different embedding model than the one configured."""
+
 
 class ChromaDBAdapter(VectorStorePort):
     """
@@ -39,11 +51,14 @@ class ChromaDBAdapter(VectorStorePort):
         port: int,
         collection_name: str,
         embedding_function: object,  # chromadb.EmbeddingFunction protocol
+        *,
+        embedding_model: str,
     ) -> None:
         self._host = host
         self._port = port
         self._collection_name = collection_name
         self._embedding_function = embedding_function
+        self._embedding_model = embedding_model
         # Vendor types stay untyped here: chromadb is imported lazily and must not
         # leak above this module.
         self._client: Any | None = None
@@ -66,9 +81,37 @@ class ChromaDBAdapter(VectorStorePort):
         collection = client.get_or_create_collection(
             name=self._collection_name,
             embedding_function=self._embedding_function,  # type: ignore[arg-type]
-            metadata={"hnsw:space": "cosine"},
+            # Applied only when the collection is created; an existing one keeps
+            # the metadata it was created with, which is what is checked below.
+            metadata={"hnsw:space": "cosine", EMBEDDING_MODEL_KEY: self._embedding_model},
         )
+        self._check_embedding_model(collection.metadata or {})
         return client, collection
+
+    def _check_embedding_model(self, metadata: Mapping[str, Any]) -> None:
+        """
+        Refuses to serve a collection embedded with another model.
+
+        Failing at startup is the point: the alternative is an API that answers
+        every question from the wrong documents. A collection created before the
+        model was recorded cannot be checked; that is logged rather than refused,
+        so upgrading does not take a working deployment down.
+        """
+        recorded = metadata.get(EMBEDDING_MODEL_KEY)
+        if recorded is None:
+            logger.warning(
+                "vector_store.embedding_model_unrecorded",
+                collection=self._collection_name,
+                configured=self._embedding_model,
+                hint="re-ingest the documents if the embedding model has changed",
+            )
+            return
+        if recorded != self._embedding_model:
+            raise EmbeddingModelMismatchError(
+                f"Collection {self._collection_name!r} was embedded with {recorded!r}, but "
+                f"EMBEDDING_MODEL is {self._embedding_model!r}. Set EMBEDDING_MODEL back, or "
+                f"re-ingest the documents into a new collection (CHROMA_COLLECTION)."
+            )
 
     async def similarity_search(
         self,
