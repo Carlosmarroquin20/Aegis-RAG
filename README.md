@@ -398,7 +398,7 @@ frontend/             # React + Vite + TS demo console (query · upload · secur
 
 ## Changelog
 
-Release notes are in [`CHANGELOG.md`](CHANGELOG.md). The current release is **1.0.1**.
+Release notes are in [`CHANGELOG.md`](CHANGELOG.md). The current release is **1.1.0**.
 
 ---
 

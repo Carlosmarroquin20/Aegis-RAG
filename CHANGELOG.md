@@ -7,7 +7,14 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
-## [Unreleased]
+## [1.1.0] — 2026-10-15
+
+Spanish support across the pipeline. The input gateway detects Spanish injection attempts,
+retrieval uses a multilingual embedding model, and answers come back in the language of the
+question. Each change was measured on a question set committed before the change it judges.
+
+**Upgrading from 1.0.x: re-ingest your documents.** The embedding model changed, and the API
+now refuses to start on a collection built with a different model (see *Changed*).
 
 ### Added
 
@@ -20,6 +27,11 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 - **Example corpus** `examples/atencion-cliente`: Spanish customer-service documents for a
   fictional retailer, ready to seed, with questions to try. A test keeps it loadable and keeps
   its advertised questions passing the gateway.
+- **Retrieval evaluation**: `scripts/evaluate_retrieval.py` and 38 questions with the document
+  that answers each (`evals/retrieval/`) report hit@1/3/5 and MRR per language for one or more
+  embedding models, using the same ingestion pipeline as the API.
+- The web console's security demo includes a Spanish attack, which is blocked, and a Spanish
+  product question with the same vocabulary, which is not.
 
 ### Changed
 
@@ -180,6 +192,7 @@ rate limiting, structured logging, Prometheus metrics, OpenTelemetry tracing wit
 dashboards, a React demo console, a multi-stage Docker image, docker-compose stack, GitHub
 Actions CI and an AWS Terraform skeleton.
 
+[1.1.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.1.0
 [1.0.1]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.0.0
 [0.1.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/tree/f653d4e
