@@ -13,7 +13,7 @@ This keeps it fast (<1 ms for typical queries) and easily testable.
 
 OWASP LLM coverage:
   LLM01 — Prompt Injection           → _INJECTION_SIGNATURES, _normalize_unicode,
-                                       _fold_confusables
+                                       _detection_view
   LLM02 — Insecure Output Handling   → enforced at the LLM adapter layer (see llm_client.py)
   LLM06 — Sensitive Information      → rate limiter + API key enforcement (middleware)
   LLM07 — System Prompt Disclosure   → _INJECTION_SIGNATURES (prompt_leakage category)
@@ -238,10 +238,11 @@ class SecurityGateway(QueryGuardPort):
         normalized = _normalize_unicode(raw_query.text)
 
         # ── Stage 3: Heuristic threat scoring ─────────────────────────────────
-        # Signatures are matched against a homoglyph-folded view. The fold is
-        # lossy for genuine Cyrillic/Greek text, so it is used for detection only;
-        # the query forwarded to retrieval keeps its original letters.
-        assessment = self._score_threat(_fold_confusables(normalized), full_hash)
+        # Signatures are matched against a view with diacritics removed and
+        # homoglyphs folded. Both steps are lossy for genuine non-English text, so
+        # the view is used for detection only; the query forwarded to retrieval
+        # keeps its original letters.
+        assessment = self._score_threat(_detection_view(normalized), full_hash)
         log.info(
             "security.query_assessed",
             threat_level=assessment.level.name,
@@ -346,6 +347,25 @@ def _normalize_unicode(text: str) -> str:
 def _fold_confusables(text: str) -> str:
     """Maps Cyrillic/Greek lookalikes onto Latin letters. For signature matching only."""
     return text.translate(_CONFUSABLES)
+
+
+def _strip_marks(text: str) -> str:
+    """
+    Removes combining marks (accents, tildes, diaeresis). For signature matching only.
+
+    Spanish is written both with and without accents ("muéstrame" / "muestrame"),
+    and signatures would otherwise have to spell every variant. Removing the
+    marks also closes an obfuscation channel: a combining character attached to
+    a letter of an English keyword ("i̇gnore") survives NFKC, because there
+    is no precomposed form to fold it into.
+    """
+    decomposed = unicodedata.normalize("NFD", text)
+    return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+
+
+def _detection_view(text: str) -> str:
+    """The text the signatures see: unaccented, with Cyrillic/Greek lookalikes folded."""
+    return _fold_confusables(_strip_marks(text))
 
 
 def _sanitize(text: str) -> str:
