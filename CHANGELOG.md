@@ -17,6 +17,9 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 - The gateway corpus gains a Spanish set (34 attacks, 49 legitimate queries) that was committed
   before the Spanish rules. Measured on it: 33 of 34 attacks blocked, no legitimate query
   blocked.
+- **Example corpus** `examples/atencion-cliente`: Spanish customer-service documents for a
+  fictional retailer, ready to seed, with questions to try. A test keeps it loadable and keeps
+  its advertised questions passing the gateway.
 
 ### Fixed
 

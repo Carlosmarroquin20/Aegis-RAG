@@ -223,6 +223,16 @@ curl -X POST http://localhost:8000/api/v1/query \
 
 Or run the same flow as a single test: `uv run pytest -m e2e --no-cov`.
 
+**Try it on a realistic domain.** [`examples/atencion-cliente`](examples/README.md) is a Spanish
+customer-service corpus for a fictional retailer — returns, warranties, shipping, invoicing,
+loyalty programme. Seed it and ask in Spanish; the guide lists questions it answers and attacks
+the gateway refuses. Nothing in the code is specific to it: a different domain is a different
+directory.
+
+```bash
+uv run python scripts/seed_documents.py --source-dir examples/atencion-cliente
+```
+
 ---
 
 ## Choosing the LLM backend
@@ -378,6 +388,7 @@ tests/
 └── e2e/              # Full stack roundtrip (opt-in via -m e2e)
 
 evals/gateway/        # Labelled attack / legitimate-query corpus for the gateway
+examples/             # Ready-to-seed demo corpora (Spanish customer service)
 scripts/              # Corpus seeding · gateway evaluation
 
 frontend/             # React + Vite + TS demo console (query · upload · security demo)
