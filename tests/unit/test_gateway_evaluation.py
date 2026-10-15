@@ -83,8 +83,12 @@ class TestPublishedReport:
 class TestEverydayTraffic:
     @pytest.mark.parametrize("strict_mode", [True, False])
     def test_ordinary_questions_are_never_blocked(self, strict_mode: bool) -> None:
-        ordinary = [s for s in SAMPLES if s.category in ("knowledge_base", "long_form")]
-        assert len(ordinary) >= 40
+        ordinary = [
+            s
+            for s in SAMPLES
+            if s.label == ev.BENIGN and s.category in ("knowledge_base", "long_form", "spanish")
+        ]
+        assert len(ordinary) >= 70
 
         blocked = [v for v in ev.evaluate(ordinary, strict_mode=strict_mode) if v.blocked]
 

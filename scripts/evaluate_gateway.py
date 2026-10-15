@@ -243,7 +243,9 @@ def _summary_rows(verdicts: Sequence[Verdict]) -> list[tuple[str, Rate]]:
 
 def _category_table(verdicts: Sequence[Verdict], header: str) -> list[str]:
     lines = [f"| Category | Samples | {header} |", "|---|---:|---|"]
-    for category, items in _by_category(verdicts).items():
+    # Documented gaps go last so the targeted categories read as one block.
+    grouped = sorted(_by_category(verdicts).items(), key=lambda item: item[0] in DOCUMENTED_GAPS)
+    for category, items in grouped:
         gap = " †" if category in DOCUMENTED_GAPS and items[0].sample.label == ATTACK else ""
         lines.append(f"| {_label(category)}{gap} | {len(items)} | {blocked_rate(items)} |")
     return lines
