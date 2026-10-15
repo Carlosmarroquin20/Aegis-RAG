@@ -3,7 +3,9 @@ Measures how well an embedding model retrieves the right document for a question
 
 Usage:
     uv run python scripts/evaluate_retrieval.py
-    uv run python scripts/evaluate_retrieval.py --model sentence-transformers/all-MiniLM-L6-v2
+    uv run python scripts/evaluate_retrieval.py \\
+        --model sentence-transformers/all-MiniLM-L6-v2 \\
+        --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
     uv run python scripts/evaluate_retrieval.py --corpus examples/atencion-cliente \\
         --questions evals/retrieval/atencion-cliente.jsonl
 

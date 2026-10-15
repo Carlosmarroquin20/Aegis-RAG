@@ -185,7 +185,11 @@ class Settings(BaseSettings):
         return self
 
     # ── Embeddings ─────────────────────────────────────────────────────────────
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # Multilingual: the English-only all-MiniLM-L6-v2 ranked Spanish documents
+    # barely better than chance (scripts/evaluate_retrieval.py). Same 384
+    # dimensions, but vectors from different models are not comparable: changing
+    # this requires re-ingesting, and the adapter refuses a mismatched collection.
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_device: str = "cpu"  # "cuda" for GPU inference
 
     # ── Observability ──────────────────────────────────────────────────────────

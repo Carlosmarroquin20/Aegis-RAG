@@ -262,7 +262,7 @@
       "items": [
         "Ports & adapters — swap ChromaDB or Ollama in one wiring file",
         "Query path: security -> retrieve -> generate -> sanitize",
-        "Embeddings baked into the image (all-MiniLM-L6-v2) — boots fully offline"
+        "Embeddings baked into the image (multilingual MiniLM) — boots fully offline"
       ]
     },
     {

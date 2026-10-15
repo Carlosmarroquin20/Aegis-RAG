@@ -20,6 +20,10 @@ services:
     build:
       context: .
       target: runtime
+      # The model is baked into the image and loaded offline, so the build and
+      # the container must name the same one.
+      args:
+        EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
     ports:
       - "${AEGIS_PUBLIC_BIND:-127.0.0.1}:8000:8000"
     environment:
@@ -30,6 +34,7 @@ services:
       - SECURITY_STRICT_MODE=true
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.2
       # LLM backend. Defaults to the local Ollama service above. To use a hosted,

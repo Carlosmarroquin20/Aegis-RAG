@@ -21,6 +21,27 @@ The set exists to exercise the two things an English-only demo never shows: retr
 answers in Spanish, and the gateway's Spanish rules against questions that use the same
 vocabulary as an attack ("muéstrame las instrucciones…") without being one.
 
+### Retrieval quality
+
+[`evals/retrieval/atencion-cliente.jsonl`](../evals/retrieval/atencion-cliente.jsonl) holds 38
+questions (34 Spanish, 4 English) with the document that answers each, written before the
+models were compared. `hit@k` is the share of questions whose document is among the first
+`k` chunks retrieved; the API retrieves 5 by default.
+
+| Embedding model | Spanish hit@1 | Spanish hit@5 | English hit@5 | MRR |
+|---|---:|---:|---:|---:|
+| `all-MiniLM-L6-v2` (previous default, English-only) | 61.8% | 88.2% | 50.0% | 0.708 |
+| `paraphrase-multilingual-MiniLM-L12-v2` (default) | 79.4% | 97.1% | 100.0% | 0.863 |
+
+The multilingual model costs about 40 ms more per query on CPU (60 ms against 21 ms) and
+about 390 MB more in the image. Reproduce with:
+
+```bash
+uv run python scripts/evaluate_retrieval.py --show-misses \
+  --model sentence-transformers/all-MiniLM-L6-v2 \
+  --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+```
+
 ### Questions to try
 
 These are answered by the documents and are let through by the gateway. A test keeps both

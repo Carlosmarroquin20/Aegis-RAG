@@ -21,6 +21,20 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
   fictional retailer, ready to seed, with questions to try. A test keeps it loadable and keeps
   its advertised questions passing the gateway.
 
+### Changed
+
+- **The default embedding model is now multilingual**
+  (`paraphrase-multilingual-MiniLM-L12-v2`, was the English-only `all-MiniLM-L6-v2`). On the
+  Spanish example corpus the right document is retrieved first for 79% of questions instead of
+  62%, and within the top five for 97% instead of 88%. It adds about 40 ms per query on CPU
+  and about 390 MB to the image. **Upgrading: re-ingest your documents**, or set
+  `EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2` to keep the old model.
+- New collections record the embedding model that built them, and the API refuses to start
+  on a collection built with a different one. ChromaDB does not detect this itself: a
+  same-dimension model change used to return wrong results with no error.
+- When the documents do not contain the answer, the reply is in the language of the
+  question; it used to be a fixed English sentence.
+
 ### Fixed
 
 - A combining mark placed inside an English keyword (`i̇gnore`) hid it from the

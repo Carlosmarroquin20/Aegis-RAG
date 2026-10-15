@@ -76,7 +76,7 @@ RUN uv sync --frozen --no-dev --extra redis --extra otel
 # backend, which is prone to stalling — is unreachable. Materialize it into the
 # image now, via the exact code path used at runtime, so the container boots
 # fully offline. HF_HUB_DISABLE_XET forces plain HTTPS and sidesteps the stall.
-ARG EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+ARG EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 ENV HF_HOME=/app/hf-cache \
     HF_HUB_DISABLE_XET=1
 RUN /app/.venv/bin/python -c "from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction as F; F(model_name='${EMBEDDING_MODEL}', device='cpu')"

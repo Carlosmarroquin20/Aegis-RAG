@@ -175,7 +175,7 @@ Two pre-provisioned Grafana dashboards ship with the stack. **Production Overvie
 ## Tech Stack
 
 - **API & runtime** — FastAPI 0.115+, Uvicorn, Pydantic v2 (strict), `uv` package manager
-- **RAG core** — ChromaDB · Ollama (local) or any OpenAI-compatible hosted LLM · `sentence-transformers/all-MiniLM-L6-v2` · pypdf · python-docx · markdown-it-py
+- **RAG core** — ChromaDB · Ollama (local) or any OpenAI-compatible hosted LLM · `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (multilingual) · pypdf · python-docx · markdown-it-py
 - **Rate limiting** — in-process sliding window, or a shared **Redis** backend (same port, one config flag)
 - **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy · ~90% test coverage
 - **Observability** — `structlog` (JSON) · `prometheus-client` + Grafana dashboards · **OpenTelemetry** traces via an OTel Collector (spanmetrics → Prometheus) to Jaeger
