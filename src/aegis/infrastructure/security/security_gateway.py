@@ -1,6 +1,8 @@
 """
 Security Gateway — OWASP LLM Top 10 enforcement layer.
 
+Signatures cover English and Spanish. Other languages are a documented gap.
+
 Every query passes through this pipeline before touching the RAG engine:
   1. Structural validation (length, null bytes)
   2. Unicode normalization (compatibility forms, invisible characters) plus a
@@ -47,6 +49,33 @@ logger = structlog.get_logger(__name__)
 # synchronously on the event loop, so each one must stay (near-)linear on a
 # non-matching input. Avoid unbounded quantifiers that the engine has to retry
 # from every start offset; TestSignatureCostIsBounded locks the worst cases down.
+
+# ── Spanish vocabulary ────────────────────────────────────────────────────────
+# Shared by the Spanish signatures below. They are matched on the detection view,
+# which has no accents, so "muéstrame" and "muestrame" are the same word here.
+# Voseo forms (ignorá, mostrame, sos) are listed because they are how a large
+# share of Spanish speakers, Central America included, address a chatbot.
+_ES_OVERRIDE_VERB = (
+    r"(?:ignor(?:a|e|en|ar)|olvid(?:a|e|en|ar)|olvidate\s+de|descart(?:a|e|ar)|omit(?:e|a|ir)"
+    r"|desobedec(?:e|er)|desobedezca|desatiend(?:e|a)|saltate|saltarte|anul(?:a|ar))"
+)
+_ES_RULES = (
+    r"(?:instrucciones|indicaciones|reglas|normas|ordenes|directrices|restricciones|pautas"
+    r"|limitaciones)"
+)
+_ES_PRIOR = (
+    r"(?:anteriores|previas|de\s+arriba|iniciales|originales|del\s+sistema"
+    r"|que\s+te\s+(?:dieron|di|dio|han\s+dado))"
+)
+_ES_AGENT = r"(?:un|una)\s+(?:nuev[oa]\s+)?(?:ia|ai|asistente|modelo|bot|chatbot)"
+_ES_UNBOUND = (
+    r"(?:sin\s+(?:restricciones|filtros|censura|limites|reglas)|malvad[oa]|rebelde|diferente"
+    r"|liberad[oa]|desbloquead[oa])"
+)
+_ES_PROMPT_OBJECT = r"(?:prompt|instrucciones|mensaje|configuracion|indicaciones)"
+_ES_PROMPT_QUALIFIER = (
+    r"(?:del?\s+sistema|inicial(?:es)?|ocult[oa]s?|original(?:es)?|secret[oa]s?|intern[oa]s?)"
+)
 
 _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
     # ── Persona / Identity Hijack (LLM01, severity: critical) ─────────────────
@@ -116,6 +145,65 @@ _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
         "roleplay_jailbreak",
         85,
     ),
+    # ── Spanish equivalents of the rules above (LLM01, LLM07) ──────────────────
+    # Same structure and the same false-positive guard as the English rules: an
+    # override needs the model's own rules ("tus reglas") or prior ones ("las
+    # reglas anteriores"), and a disclosure needs the model's own prompt or a
+    # system/hidden one, so "muéstrame las instrucciones para armar el escritorio"
+    # is a product question, not a probe.
+    (
+        re.compile(
+            rf"\b{_ES_OVERRIDE_VERB}\s+(?:"
+            rf"(?:todas\s+)?(?:tus|sus)\s+{_ES_RULES}"
+            rf"|tu\s+(?:prompt|configuracion|programacion)\b"
+            rf"|(?:todas\s+)?(?:las\s+|los\s+)?{_ES_RULES}\s+{_ES_PRIOR}"
+            rf"|(?:todo\s+)?lo\s+(?:anterior|que\s+te\s+(?:dijeron|dije|dieron))"
+            r")",
+            re.IGNORECASE,
+        ),
+        "instruction_override",
+        92,
+    ),
+    (
+        re.compile(
+            r"\b(?:muestra(?:me)?|mostrame|mostrar|ensena(?:me)?|revela(?:me)?|revelar|imprime"
+            r"|imprimir|dime|decime|repite|repetir|escribe|filtra|dame|copia|transcribe)\s+"
+            r"(?:cual(?:es)?\s+(?:es|son)\s+)?"
+            rf"(?:tus?\s+{_ES_PROMPT_OBJECT}"
+            rf"|(?:el|la|las|los)\s+{_ES_PROMPT_OBJECT}\s+{_ES_PROMPT_QUALIFIER})",
+            re.IGNORECASE,
+        ),
+        "prompt_leakage",
+        88,
+    ),
+    (
+        re.compile(rf"\b(?:eres|sos|seras)\s+{_ES_AGENT}\s+{_ES_UNBOUND}", re.IGNORECASE),
+        "persona_hijack",
+        95,
+    ),
+    # "Developer mode" alone is a real setting on phones and routers, so it only
+    # counts when the same clause asks for unfiltered answers. The window is
+    # bounded, which keeps the scan linear.
+    (
+        re.compile(
+            r"\bmodo\s+(?:dan|jailbreak|sin\s+(?:restricciones|filtros|censura))\b"
+            r"|\bmodo\s+desarrollador\b[^.?!\n]{0,40}?"
+            r"\b(?:sin\s+(?:filtros|restricciones|censura|limites)|y\s+(?:responde|contesta|ignora))",
+            re.IGNORECASE,
+        ),
+        "persona_hijack",
+        95,
+    ),
+    (
+        re.compile(
+            r"\b(?:finge|finja|fingir|imagina|imaginate|imagine|supon|suponga|actua|actue|simula"
+            r"|simule|interpreta|haz\s+de\s+cuenta)\s+(?:que\s+)?(?:eres|sos|seas|fueras|como|ser)"
+            rf"\s+{_ES_AGENT}\s+{_ES_UNBOUND}",
+            re.IGNORECASE,
+        ),
+        "roleplay_jailbreak",
+        85,
+    ),
     # ── HTML / Script Injection (LLM02, severity: medium-high) ────────────────
     (
         re.compile(r"<\s*(script|iframe|object|embed|svg|img|link|meta)[^>]*>", re.IGNORECASE),
@@ -159,11 +247,23 @@ _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
 # end. This is evaluated procedurally in _has_cot_override_scaffold() rather than
 # as one regex, because chaining windowed wildcards ("a.{0,300}b.{0,300}c...")
 # backtracks combinatorially when the markers are repeated.
-_COT_OPENING: Final[re.Pattern[str]] = re.compile(r"step\s+1|first,?", re.IGNORECASE)
+# Spanish markers sit beside the English ones. The Spanish verbs translate the
+# English four (ignorar, saltarse, anular, desobedecer); "omitir" is left out on
+# purpose, since "the manager can omit the limit" is an ordinary sentence.
+_COT_OPENING: Final[re.Pattern[str]] = re.compile(
+    r"step\s+1|first,?|paso\s+1|primero,?", re.IGNORECASE
+)
 _COT_FOLLOW_UPS: Final[list[tuple[re.Pattern[str], int]]] = [
-    (re.compile(r"step\s+2|then,?", re.IGNORECASE), 300),
-    (re.compile(r"step\s+3|finally,?", re.IGNORECASE), 300),
-    (re.compile(r"ignore|bypass|override|disregard", re.IGNORECASE), 200),
+    (re.compile(r"step\s+2|then,?|paso\s+2|luego,?|despues,?", re.IGNORECASE), 300),
+    (re.compile(r"step\s+3|finally,?|paso\s+3|finalmente,?|por\s+ultimo,?", re.IGNORECASE), 300),
+    (
+        re.compile(
+            r"ignore|bypass|override|disregard|ignor[ae]\w*|saltate\w*|saltarte\w*|anula\w*"
+            r"|desobedec\w*",
+            re.IGNORECASE,
+        ),
+        200,
+    ),
 ]
 _COT_SCORE: Final[int] = 85
 
