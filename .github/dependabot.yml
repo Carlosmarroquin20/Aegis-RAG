@@ -98,6 +98,12 @@ updates:
       # an older or newer server rejects the client's collection API. Bump the
       # image together with the Python package, not on its own.
       - dependency-name: "chromadb/chroma"
+      # Jaeger 2.21 removed the HTTP endpoints Grafana's Jaeger datasource uses
+      # for search and its health check (jaegertracing/jaeger#9260). Lift this
+      # once the datasource queries api_v3 by default; the smoke test's
+      # datasource health check is what will show it is safe.
+      - dependency-name: "jaegertracing/jaeger"
+        versions: [">= 2.21.0"]
 
   # ── Terraform providers ─────────────────────────────────────────────────────
   - package-ecosystem: "terraform"

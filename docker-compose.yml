@@ -144,8 +144,12 @@ services:
   # The image's default configuration is the all-in-one one: OTLP on 4317/4318,
   # in-memory storage (100k traces), UI and query API on 16686, all listening on
   # 0.0.0.0 inside the container (JAEGER_LISTEN_HOST is set by the image).
+  # Held at 2.20: 2.21 removed GET /api/services and trace search from the HTTP
+  # JSON API, and Grafana's Jaeger datasource still uses both unless an
+  # experimental feature toggle is on. Traces would arrive, but Explore search
+  # and the datasource health check would fail. See .github/dependabot.yml.
   jaeger:
-    image: jaegertracing/jaeger:2.21.0
+    image: jaegertracing/jaeger:2.20.0
     ports:
       - "127.0.0.1:16686:16686" # Jaeger UI
       # OTLP receivers (4317 gRPC / 4318 HTTP) stay on the internal network.
