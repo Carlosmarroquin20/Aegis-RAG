@@ -57,3 +57,9 @@ def test_threat_identifiers_are_unique_and_sequential() -> None:
     """Identifiers are referenced from commits and issues, so they must stay stable."""
     identifiers = re.findall(r"^\| (T-\d{2}) \|", _DOC, flags=re.MULTILINE)
     assert identifiers == [f"T-{n:02d}" for n in range(1, len(identifiers) + 1)]
+
+
+def test_readme_states_the_current_number_of_threats() -> None:
+    readme = (_ROOT / "README.md").read_text(encoding="utf-8")
+    count = len(re.findall(r"^\| T-\d{2} \|", _DOC, flags=re.MULTILINE))
+    assert f"lists {count} threats" in readme

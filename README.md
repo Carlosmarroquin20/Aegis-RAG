@@ -122,7 +122,7 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 ## Security Controls — OWASP LLM Top 10
 
-> The full **[threat model](docs/THREAT_MODEL.md)** lists 23 threats across the query, transport, ingestion and supply-chain surfaces — each with the module that enforces the control and the test that verifies it — and states the residual risks plainly, including what the input gateway does *not* catch.
+> The full **[threat model](docs/THREAT_MODEL.md)** lists 24 threats across the query, transport, ingestion and supply-chain surfaces — each with the module that enforces the control and the test that verifies it — and states the residual risks plainly, including what the input gateway does *not* catch.
 >
 > How much the input gateway actually catches is **[measured](docs/GATEWAY_EVALUATION.md)**, per attack category, with the individual misses and false positives listed.
 >
