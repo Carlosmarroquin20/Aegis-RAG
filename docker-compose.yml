@@ -200,7 +200,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:13.2.3
+    image: grafana/grafana:13.2.4
     ports:
       - "${AEGIS_PUBLIC_BIND:-127.0.0.1}:3000:3000"
     environment:
