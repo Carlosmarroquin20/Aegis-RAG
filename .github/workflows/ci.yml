@@ -201,6 +201,11 @@ jobs:
           datasources=$(curl -fsS -u admin:admin http://127.0.0.1:3000/api/datasources)
           echo "$datasources" | grep -q '"uid":"jaeger"'
           echo "$datasources" | grep -q '"type":"prometheus"'
+          # Provisioned is not the same as reachable: ask Grafana to query each one,
+          # which is what fails if a backend changes its API.
+          for uid in Prometheus jaeger; do
+            curl -fsS -u admin:admin "http://127.0.0.1:3000/api/datasources/uid/$uid/health" | grep -q '"status":"OK"'
+          done
           dashboards=$(curl -fsS -u admin:admin 'http://127.0.0.1:3000/api/search?type=dash-db')
           expected=$(ls infra/grafana/dashboards/*.json | wc -l)
           found=$(echo "$dashboards" | grep -o '"uid"' | wc -l)
