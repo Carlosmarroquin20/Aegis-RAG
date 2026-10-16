@@ -139,11 +139,13 @@ services:
     restart: unless-stopped
 
   # ── Tracing backend ─────────────────────────────────────────────────────────
-  # Jaeger all-in-one receives OTLP spans from the API and serves the trace UI.
+  # Jaeger receives OTLP spans from the collector and serves the trace UI. This is
+  # Jaeger v2, built on the OpenTelemetry Collector; v1 (all-in-one) is end of life.
+  # The image's default configuration is the all-in-one one: OTLP on 4317/4318,
+  # in-memory storage (100k traces), UI and query API on 16686, all listening on
+  # 0.0.0.0 inside the container (JAEGER_LISTEN_HOST is set by the image).
   jaeger:
-    image: jaegertracing/all-in-one:1.76.0
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
+    image: jaegertracing/jaeger:2.21.0
     ports:
       - "127.0.0.1:16686:16686" # Jaeger UI
       # OTLP receivers (4317 gRPC / 4318 HTTP) stay on the internal network.
