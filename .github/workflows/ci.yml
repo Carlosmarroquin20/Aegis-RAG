@@ -163,6 +163,26 @@ jobs:
           retry curl -fsS http://127.0.0.1:8889/metrics > /dev/null
           retry curl -fsS http://127.0.0.1:3000/api/health | grep -q '"database": *"ok"'
 
+      - name: Check a span travels from the collector to Jaeger
+        # The checks above prove each service is up, not that they are wired
+        # together. Send one OTLP span to the collector from inside its network
+        # namespace (its receivers are not published to the host) and require it
+        # to come out of Jaeger's query API and the span-metrics endpoint.
+        run: |
+          set -euo pipefail
+          trace_id=$(openssl rand -hex 16)
+          now=$(date +%s%N)
+          payload=$(printf '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"ci-smoke"}}]},"scopeSpans":[{"spans":[{"traceId":"%s","spanId":"%s","name":"ci-smoke-span","kind":1,"startTimeUnixNano":"%s","endTimeUnixNano":"%s"}]}]}]}' \
+            "$trace_id" "$(openssl rand -hex 8)" "$now" "$((now + 1000000))")
+          docker run --rm --network "container:$(docker compose ps -q otel-collector)" \
+            curlimages/curl:8.22.0 -fsS -X POST http://127.0.0.1:4318/v1/traces \
+            -H 'Content-Type: application/json' -d "$payload"
+
+          found() { curl -fsS "$1" | grep -Eq "$2"; }
+          wait_for() { for _ in $(seq 1 30); do found "$@" && return 0; sleep 2; done; found "$@"; }
+          wait_for "http://127.0.0.1:16686/api/traces/$trace_id" '"serviceName": *"ci-smoke"'
+          wait_for http://127.0.0.1:8889/metrics 'service_name="ci-smoke"'
+
       - name: Check Prometheus loaded every alert rule
         # A rule file that fails to parse is dropped silently at runtime; the
         # alerts would simply never fire.
