@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
+## [Unreleased]
+
+### Changed
+
+- **Tracing moved to Jaeger v2** (`jaegertracing/jaeger:2.20.0`); Jaeger v1 is end of life.
+  It is held below 2.21, which removed the HTTP endpoints Grafana's Jaeger datasource uses for
+  search and its health check. Dependabot is told not to propose 2.21 or later until that changes.
+
+### Added
+
+- The compose smoke test in CI now checks the observability stack is connected, not only
+  running: a span sent to the collector must appear in Jaeger and in the span metrics, and
+  Grafana's Prometheus and Jaeger datasources must pass their own health checks. The second
+  check is what caught the Jaeger 2.21 incompatibility.
+- Threat model entry T-24: silently wrong retrieval after an embedding-model change.
+
 ## [1.1.0] — 2026-10-15
 
 Spanish support across the pipeline. The input gateway detects Spanish injection attempts,
