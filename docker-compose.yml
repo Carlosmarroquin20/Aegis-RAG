@@ -160,7 +160,7 @@ services:
   # OTLP hub: receives spans from the API, forwards traces to Jaeger, and derives
   # span metrics (RED per pipeline stage) that Prometheus scrapes at :8889.
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.162.0
+    image: otel/opentelemetry-collector-contrib:0.162.0-386
     command: ["--config=/etc/otel/collector.yaml"]
     volumes:
       - ./infra/otel-collector/config.yaml:/etc/otel/collector.yaml:ro
@@ -200,7 +200,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:13.2.3
+    image: grafana/grafana:13.2.4
     ports:
       - "${AEGIS_PUBLIC_BIND:-127.0.0.1}:3000:3000"
     environment:
