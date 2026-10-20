@@ -161,7 +161,7 @@ Logs are single-line JSON via `structlog` with an auto-bound `request_id` for en
 
 **Distributed tracing (OpenTelemetry)** is opt-in (`TRACING_ENABLED`). When on, the FastAPI server span and the HTTPX call to Ollama are auto-instrumented, the query use case emits a child span per pipeline stage (`security.evaluate` → `rag.retrieve` → `llm.generate` → `output.sanitize`), and every log line carries the active `trace_id`/`span_id` so logs pivot to their trace. Spans export over OTLP/HTTP to an **OpenTelemetry Collector**, which fans them out two ways: the raw traces to a Jaeger backend at `http://localhost:16686`, and — via the **spanmetrics connector** — trace-derived RED metrics to Prometheus. The SDK lives in the optional `otel` extra, so the base image stays lean when tracing is off.
 
-Two pre-provisioned Grafana dashboards ship with the stack. **Production Overview** surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security into full-resolution time series. **Trace Analytics** turns the pipeline spans into per-stage RED charts (call rate, errors, and p50/p95/p99 latency for `security.evaluate` / `rag.retrieve` / `llm.generate` / `output.sanitize`), plus a SecurityGateway breakdown by threat level — and each latency exemplar links straight to its trace in Jaeger. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, any output-reflection event, sustained authentication failures, and an unreachable rate-limit store.
+Two pre-provisioned Grafana dashboards ship with the stack. **Production Overview** surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security into full-resolution time series. **Trace Analytics** turns the pipeline spans into per-stage RED charts (call rate, errors, and p50/p95/p99 latency for `security.evaluate` / `rag.retrieve` / `llm.generate` / `output.sanitize`), plus a SecurityGateway breakdown by threat level — and each latency exemplar links straight to its trace in Jaeger. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, any output-reflection event, sustained authentication failures, an unreachable rate-limit store, and an LLM backend whose circuit breaker stays open.
 
 <p align="center">
   <img src="docs/grafana-traces-overview.png" alt="Grafana Trace Analytics — overview tiles and per-stage RED charts" width="760">
@@ -260,6 +260,20 @@ rejected key or a rate limit surfaces as a **503**, and a timeout as a **504**. 
 `SecretStr`, sent only in the `Authorization` header, and never written to logs or error messages.
 The app refuses to start if the hosted provider is selected without its settings, or with a
 non-HTTPS URL outside debug mode.
+
+**Fallback.** A hosted provider's rate limits and outages need not reach users. Name a second
+backend and it answers when the first is rate limited, down or too slow:
+
+```bash
+LLM_FALLBACK_PROVIDER=ollama    # hosted primary, local model behind it
+```
+
+Each backend sits behind a circuit breaker: three consecutive failures open it, it is skipped for
+30 seconds, then one trial request decides whether it closes. A rate-limited reply opens it at
+once for as long as the provider's `Retry-After` asks. Answers keep reporting the backend that
+produced them, so cost is attributed correctly and a local answer is never billed at the hosted
+rate. The reasoning, including what the order means for where data goes, is in
+[ADR 0009](docs/adr/0009-llm-fallback-behind-circuit-breakers.md).
 
 **Usage and cost.** Every answer records the tokens it consumed, per provider, model and client
 (the digest the API assigns to each key, never the key itself). Set the provider's prices and the

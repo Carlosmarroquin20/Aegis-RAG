@@ -16,6 +16,15 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- **LLM fallback with circuit breakers.** `LLM_FALLBACK_PROVIDER` names a second backend that
+  answers when the first is rate limited, down or too slow. Each backend has a
+  consecutive-failure circuit breaker (`LLM_CIRCUIT_FAILURE_THRESHOLD`, default 3;
+  `LLM_CIRCUIT_RESET_SECONDS`, default 30); a 429 opens it at once for the provider's
+  `Retry-After`. New metrics `aegis_llm_fallbacks_total` and `aegis_llm_circuit_open`, an
+  `AegisLLMCircuitOpen` alert, two dashboard panels, and
+  [ADR 0009](docs/adr/0009-llm-fallback-behind-circuit-breakers.md).
+- A rate-limited 503 now carries the provider's own `Retry-After` (1 to 60 seconds) instead of
+  a fixed 5.
 - **LLM usage and cost metrics.** Each answer records its input and output tokens per provider,
   model and client (`aegis_llm_tokens_total`), and an estimated spend
   (`aegis_llm_cost_usd_total`) priced from the new `LLM_INPUT_PRICE_PER_MTOK` and
@@ -30,6 +39,9 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Fixed
 
+- Token prices applied to every answer, whichever backend produced it. They are now per
+  provider: the configured prices belong to the hosted provider, and Ollama answers are
+  costed at zero.
 - **Dashboards under-counted after every API restart.** A counter that first appears with a
   non-zero value had no earlier sample, so `increase()` missed what it counted before the first
   scrape; the new cost panels showed about half the real spend. `/metrics` now serves
