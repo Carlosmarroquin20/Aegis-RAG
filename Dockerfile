@@ -111,8 +111,12 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 EXPOSE 8000
 
-# Healthcheck for container orchestrators.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+# Healthcheck for container orchestrators. Startup loads the embedding model
+# into memory: about 45 s warm and close to two minutes cold on a laptop's
+# Docker VM with the multilingual model. Failures inside the start period do
+# not count, and the first success ends it, so a generous period costs nothing
+# when the container starts quickly.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # structlog owns application logging (configured at startup); the AccessLog
