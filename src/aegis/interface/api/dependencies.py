@@ -19,6 +19,7 @@ from aegis.application.use_cases.query_rag import QueryRAGUseCase
 from aegis.config import get_settings
 from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.vector_store import VectorStorePort
+from aegis.infrastructure.llm.fallback import Backend, FallbackLLMClient
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.llm.openai_compatible_adapter import OpenAICompatibleAdapter
 from aegis.infrastructure.observability.metrics import LLMPricing, PrometheusQueryMetrics
@@ -108,18 +109,35 @@ def get_llm_client() -> LLMClientPort:
     readiness probe and the shutdown hook all work through the port.
     """
     cfg = get_settings()
-    if cfg.llm_provider == "openai_compatible":
-        return OpenAICompatibleAdapter(
+    primary = _llm_backend(cfg.llm_provider)
+    if not cfg.llm_fallback_provider:
+        return primary.client
+    return FallbackLLMClient(
+        [primary, _llm_backend(cfg.llm_fallback_provider)],
+        failure_threshold=cfg.llm_circuit_failure_threshold,
+        reset_seconds=cfg.llm_circuit_reset_seconds,
+    )
+
+
+def _llm_backend(provider: str) -> Backend:
+    """One adapter, named the way its answers will report their provider."""
+    cfg = get_settings()
+    if provider == "openai_compatible":
+        adapter = OpenAICompatibleAdapter(
             base_url=cfg.llm_base_url,
             api_key=cfg.llm_api_key.get_secret_value(),
             model=cfg.llm_model,
             timeout_seconds=cfg.llm_timeout_seconds,
         )
-    return OllamaAdapter(
+        return Backend(
+            name=urlsplit(cfg.llm_base_url).hostname or "openai_compatible", client=adapter
+        )
+    ollama = OllamaAdapter(
         base_url=cfg.ollama_base_url,
         model=cfg.ollama_model,
         timeout_seconds=cfg.ollama_timeout_seconds,
     )
+    return Backend(name="ollama", client=ollama)
 
 
 @lru_cache(maxsize=1)

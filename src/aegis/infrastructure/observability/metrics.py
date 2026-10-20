@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from prometheus_client import CollectorRegistry, Counter, Histogram
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 from aegis.domain.models.generation import Generation, TokenUsage
 from aegis.domain.models.security import ThreatAssessment
@@ -114,6 +114,21 @@ llm_usage_unreported_total = Counter(
     "aegis_llm_usage_unreported_total",
     "LLM generations whose backend reported no token usage, so they are not costed.",
     ["provider", "model"],
+    registry=registry,
+)
+
+
+llm_fallbacks_total = Counter(
+    "aegis_llm_fallbacks_total",
+    "Answers served by a fallback LLM backend, by why the primary was not used.",
+    ["from_provider", "to_provider", "reason"],
+    registry=registry,
+)
+
+llm_circuit_open = Gauge(
+    "aegis_llm_circuit_open",
+    "1 while the circuit breaker for an LLM backend is open and calls skip it.",
+    ["provider"],
     registry=registry,
 )
 

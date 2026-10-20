@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("startup.begin", app=cfg.app_name, version=cfg.app_version)
 
-    if cfg.llm_provider == "openai_compatible":
+    if "openai_compatible" in (cfg.llm_provider, cfg.llm_fallback_provider):
         # Logged at warning level on purpose: this is the one configuration in
         # which document content leaves the host, and it should be impossible to
         # run that way without the log saying so.
@@ -118,7 +118,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "startup.hosted_llm_enabled",
             provider_host=urlsplit(cfg.llm_base_url).hostname,
             model=cfg.llm_model,
-            detail="queries and retrieved excerpts are sent to this provider",
+            role="primary" if cfg.llm_provider == "openai_compatible" else "fallback",
+            detail=(
+                "queries and retrieved excerpts are sent to this provider"
+                if cfg.llm_provider == "openai_compatible"
+                else "queries and retrieved excerpts are sent to this provider "
+                "whenever the local model fails"
+            ),
+        )
+    if cfg.llm_fallback_provider:
+        logger.info(
+            "startup.llm_fallback_enabled",
+            primary=cfg.llm_provider,
+            fallback=cfg.llm_fallback_provider,
+            failure_threshold=cfg.llm_circuit_failure_threshold,
+            reset_seconds=cfg.llm_circuit_reset_seconds,
         )
 
     if not cfg.api_keys_set:

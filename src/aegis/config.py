@@ -154,6 +154,15 @@ class Settings(BaseSettings):
     llm_input_price_per_mtok: float = Field(default=0.0, ge=0)
     llm_output_price_per_mtok: float = Field(default=0.0, ge=0)
 
+    # Fallback: a second backend that answers when the first is rate limited,
+    # down or too slow. "" disables it. A hosted fallback behind the local
+    # model sends data off the host whenever the local model fails.
+    llm_fallback_provider: str = ""  # "" | "ollama" | "openai_compatible"
+    # Consecutive failures that open a backend's circuit, and how long it is
+    # then skipped before one trial request may close it again.
+    llm_circuit_failure_threshold: int = Field(default=3, ge=1)
+    llm_circuit_reset_seconds: float = Field(default=30.0, gt=0)
+
     @field_validator("llm_provider")
     @classmethod
     def validate_llm_provider(cls, v: str) -> str:
@@ -163,13 +172,25 @@ class Settings(BaseSettings):
             raise ValueError(f"llm_provider must be one of {allowed}")
         return lowered
 
+    @field_validator("llm_fallback_provider")
+    @classmethod
+    def validate_llm_fallback_provider(cls, v: str) -> str:
+        allowed = {"", "ollama", "openai_compatible"}
+        lowered = v.strip().lower()
+        if lowered not in allowed:
+            raise ValueError(f"llm_fallback_provider must be one of {allowed}")
+        return lowered
+
     @model_validator(mode="after")
     def require_hosted_llm_settings(self) -> Settings:
         """
         Fails at startup, not on the first query, when the hosted provider is
-        selected without the settings it cannot work without.
+        selected, as the main backend or as the fallback, without the settings
+        it cannot work without.
         """
-        if self.llm_provider != "openai_compatible":
+        if self.llm_fallback_provider and self.llm_fallback_provider == self.llm_provider:
+            raise ValueError("LLM_FALLBACK_PROVIDER must differ from LLM_PROVIDER")
+        if "openai_compatible" not in (self.llm_provider, self.llm_fallback_provider):
             return self
         missing = [
             name
@@ -182,7 +203,7 @@ class Settings(BaseSettings):
         ]
         if missing:
             raise ValueError(
-                f"LLM_PROVIDER=openai_compatible requires {', '.join(missing)} to be set"
+                f"the openai_compatible LLM provider requires {', '.join(missing)} to be set"
             )
         if not self.llm_base_url.lower().startswith("https://") and not self.debug:
             # The API key travels in a header on every request.
