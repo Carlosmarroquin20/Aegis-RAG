@@ -15,7 +15,6 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from prometheus_client import CONTENT_TYPE_LATEST
 
 from aegis.interface.api.routes.health import router
 
@@ -34,10 +33,17 @@ class TestMetricsEndpointExposition:
         response = _build_client().get("/metrics")
         assert response.status_code == 200
 
-    def test_content_type_is_prometheus_text_format(self) -> None:
+    def test_plain_request_gets_the_classic_text_format(self) -> None:
         response = _build_client().get("/metrics")
-        # CONTENT_TYPE_LATEST is "text/plain; version=0.0.4; charset=utf-8".
-        assert response.headers["content-type"] == CONTENT_TYPE_LATEST
+        assert response.headers["content-type"].startswith("text/plain")
+        assert "# EOF" not in response.text
+
+    def test_openmetrics_is_served_when_the_scraper_asks_for_it(self) -> None:
+        """Prometheus asks for OpenMetrics; it carries the counters' creation times."""
+        accept = "application/openmetrics-text;version=1.0.0,text/plain;version=0.0.4;q=0.5"
+        response = _build_client().get("/metrics", headers={"Accept": accept})
+        assert response.headers["content-type"].startswith("application/openmetrics-text")
+        assert response.text.rstrip().endswith("# EOF")
 
     def test_body_is_non_empty(self) -> None:
         body = _build_client().get("/metrics").text

@@ -9,9 +9,9 @@ Health, readiness, and observability endpoints.
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse, Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client.exposition import choose_encoder
 from pydantic import BaseModel
 
 from aegis.infrastructure.observability.metrics import registry
@@ -70,12 +70,19 @@ async def ready() -> JSONResponse:
     include_in_schema=False,
     response_class=Response,
 )
-async def metrics() -> Response:
+async def metrics(request: Request) -> Response:
     """
-    Exposes counters and histograms in Prometheus text exposition format.
+    Exposes counters and histograms in the format the scraper asks for.
+
+    OpenMetrics when the Accept header requests it, as Prometheus does by
+    default, and the classic text format otherwise. OpenMetrics carries each
+    counter's creation time, which lets Prometheus count the increments a new
+    series made before its first scrape; without it the first queries after a
+    restart vanish from increase(), and the cost panels under-report.
 
     This endpoint is public at the application layer (no API key) so that
     scrape agents do not require rotating credentials; protect it at the
     network layer (e.g., a private listener or ingress ACL).
     """
-    return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
+    encoder, content_type = choose_encoder(request.headers.get("accept", ""))
+    return Response(content=encoder(registry), media_type=content_type)

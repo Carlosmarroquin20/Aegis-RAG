@@ -194,7 +194,11 @@ services:
       - "--storage.tsdb.retention.time=7d"
       - "--web.enable-lifecycle"
       # Store exemplars so a latency spike in Grafana links to its trace in Jaeger.
-      - "--enable-feature=exemplar-storage"
+      # created-timestamp-zero-ingestion: a counter's first scrape also records a
+      # zero at its creation time, so increase() includes what it counted before
+      # Prometheus first saw it. Without it a cost panel misses the first answers
+      # after every API restart.
+      - "--enable-feature=exemplar-storage,created-timestamp-zero-ingestion"
     networks:
       - aegis-net
     depends_on:
