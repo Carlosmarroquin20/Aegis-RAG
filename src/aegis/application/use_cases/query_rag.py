@@ -56,7 +56,11 @@ class QueryRAGUseCase:
         self._output_sanitizer = output_sanitizer
         self._metrics = metrics
 
-    async def execute(self, request: QueryRequest) -> QueryResponse:
+    async def execute(self, request: QueryRequest, *, client: str = "unknown") -> QueryResponse:
+        """
+        Runs the pipeline for one query. ``client`` attributes the LLM usage to
+        the caller; it comes from authentication, never from the request body.
+        """
         log = logger.bind(top_k=request.top_k)
 
         # ── Security evaluation: must precede all I/O ──────────────────────────
@@ -98,6 +102,14 @@ class QueryRAGUseCase:
         with tracer.start_as_current_span("llm.generate") as span:
             span.set_attribute("aegis.context_docs", len(documents))
             generation = await self._llm_client.generate(sanitized_text, documents)
+            # OpenTelemetry GenAI semantic conventions, so trace backends that
+            # understand them can chart usage without custom mapping.
+            span.set_attribute("gen_ai.provider.name", generation.provider)
+            span.set_attribute("gen_ai.request.model", generation.model)
+            if generation.usage is not None:
+                span.set_attribute("gen_ai.usage.input_tokens", generation.usage.input_tokens)
+                span.set_attribute("gen_ai.usage.output_tokens", generation.usage.output_tokens)
+        self._metrics.llm_generation(client, generation)
 
         # ── Output sanitization (LLM05) ────────────────────────────────────────
         # OutputReflectionError is intentionally NOT caught here: it propagates

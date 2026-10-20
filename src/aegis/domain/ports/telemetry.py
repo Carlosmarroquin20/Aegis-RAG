@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from aegis.domain.models.generation import Generation
 from aegis.domain.models.security import ThreatAssessment
 
 
@@ -24,3 +25,13 @@ class QueryMetricsPort(ABC):
     @abstractmethod
     def query_reached_retrieval(self) -> None:
         """A query passed the input guard and is about to hit the vector store."""
+
+    @abstractmethod
+    def llm_generation(self, client: str, generation: Generation) -> None:
+        """
+        The LLM answered a query for ``client``.
+
+        ``client`` is the opaque identifier the authentication layer assigns to
+        an API key, never the key itself. Pricing the tokens is the recorder's
+        concern: it depends on deployment configuration, not on the pipeline.
+        """

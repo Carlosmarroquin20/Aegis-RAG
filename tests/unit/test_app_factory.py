@@ -160,7 +160,7 @@ class TestDependencyFailures:
     @staticmethod
     def _query(monkeypatch: pytest.MonkeyPatch, error: Exception) -> Response:
         class FailingUseCase:
-            async def execute(self, _request: object) -> None:
+            async def execute(self, _request: object, **_: object) -> None:
                 raise error
 
         client = _client(monkeypatch, debug=False)

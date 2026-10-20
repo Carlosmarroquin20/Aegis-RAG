@@ -29,7 +29,7 @@ _QUERY_HASH_64 = "a" * 64  # valid SHA-256 hex length
 
 
 class _SuccessUseCase:
-    async def execute(self, request: QueryRequest) -> QueryResponse:
+    async def execute(self, request: QueryRequest, *, client: str = "") -> QueryResponse:
         return QueryResponse(
             answer="Aegis is a security-first RAG system.",
             sources=[],
@@ -42,7 +42,7 @@ _BLOCKED_HASH = "deadbeef" * 8  # 64 chars; first 16 = "deadbeefdeadbeef"
 
 
 class _BlockedUseCase:
-    async def execute(self, request: QueryRequest) -> QueryResponse:
+    async def execute(self, request: QueryRequest, *, client: str = "") -> QueryResponse:
         raise SecurityViolationError(
             reason="Injection attempt detected.",
             query_hash=_BLOCKED_HASH,
@@ -170,3 +170,38 @@ class TestRejectionContract:
         schema = _build_client(_SuccessUseCase()).get("/openapi.json").json()
         rejection = schema["components"]["schemas"]["SecurityRejectionResponse"]
         assert rejection["properties"]["detail"]["$ref"].endswith("/SecurityRejectionDetail")
+
+
+# ── Client attribution ─────────────────────────────────────────────────────────
+
+
+class _RecordingUseCase(_SuccessUseCase):
+    def __init__(self) -> None:
+        self.clients: list[str] = []
+
+    async def execute(self, request: QueryRequest, *, client: str = "") -> QueryResponse:
+        self.clients.append(client)
+        return await super().execute(request)
+
+
+class TestClientAttribution:
+    """LLM usage is attributed to the authenticated key, never to the request body."""
+
+    def test_client_comes_from_the_authentication_layer(self) -> None:
+        use_case = _RecordingUseCase()
+        app = FastAPI()
+        app.include_router(router)
+        app.dependency_overrides[get_query_use_case] = lambda: use_case
+
+        @app.middleware("http")
+        async def _authenticate(request, call_next):  # type: ignore[no-untyped-def]
+            request.state.client_id = "3f2a9c1e"
+            return await call_next(request)
+
+        TestClient(app).post("/api/v1/query", json={"query": "What is Aegis?", "client": "x"})
+        assert use_case.clients == ["3f2a9c1e"]
+
+    def test_unauthenticated_mount_is_attributed_to_unknown(self) -> None:
+        use_case = _RecordingUseCase()
+        _build_client(use_case).post("/api/v1/query", json={"query": "What is Aegis?"})
+        assert use_case.clients == ["unknown"]

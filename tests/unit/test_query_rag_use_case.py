@@ -20,7 +20,8 @@ from aegis.application.use_cases.query_rag import (
     SecurityViolationError,
 )
 from aegis.domain.models.document import Document
-from aegis.infrastructure.observability.metrics import PrometheusQueryMetrics
+from aegis.domain.models.generation import TokenUsage
+from aegis.infrastructure.observability.metrics import LLMPricing, PrometheusQueryMetrics
 from aegis.infrastructure.security.output_sanitizer import (
     OutputReflectionError,
     OutputSanitizer,
@@ -418,3 +419,112 @@ class TestQueryRAGMetrics:
             {"rule": "instruction_override"},
         )
         assert triggered == 1.0
+
+
+# ── LLM usage and cost ───────────────────────────────────────────────────────
+
+
+class TestLLMUsageMetrics:
+    """Tokens and estimated spend are attributed to the provider, model and client."""
+
+    @staticmethod
+    def _labels(direction: str | None = None) -> dict[str, str]:
+        labels = {"provider": "fake", "model": "fake-model", "client": "team-a"}
+        return {**labels, "direction": direction} if direction else labels
+
+    async def test_tokens_and_cost_are_recorded_for_the_client(
+        self,
+        fake_vector_store: FakeVectorStore,
+        security_gateway_strict: SecurityGateway,
+        reset_prometheus_registry: None,
+    ) -> None:
+        from aegis.infrastructure.observability.metrics import registry
+
+        llm = FakeLLMClient(usage=TokenUsage(input_tokens=2_000, output_tokens=500))
+        use_case = QueryRAGUseCase(
+            vector_store=fake_vector_store,
+            llm_client=llm,
+            security_gateway=security_gateway_strict,
+            output_sanitizer=OutputSanitizer(),
+            # $0.15 per million input tokens, $0.60 per million output tokens.
+            metrics=PrometheusQueryMetrics(LLMPricing(0.15, 0.60)),
+        )
+        await use_case.execute(QueryRequest(query=_CLEAN_QUERY), client="team-a")
+        await use_case.execute(QueryRequest(query=_CLEAN_QUERY), client="team-a")
+
+        tokens = "aegis_llm_tokens_total"
+        assert registry.get_sample_value(tokens, self._labels("input")) == 4_000
+        assert registry.get_sample_value(tokens, self._labels("output")) == 1_000
+        # 2 x (2000 x 0.15 + 500 x 0.60) / 1e6 = 0.0012
+        cost = registry.get_sample_value("aegis_llm_cost_usd_total", self._labels())
+        assert cost == pytest.approx(0.0012)
+
+    async def test_clients_are_counted_separately(
+        self,
+        fake_vector_store: FakeVectorStore,
+        fake_llm_client: FakeLLMClient,
+        security_gateway_strict: SecurityGateway,
+        reset_prometheus_registry: None,
+    ) -> None:
+        from aegis.infrastructure.observability.metrics import registry
+
+        use_case = _build_use_case(
+            vector_store=fake_vector_store,
+            llm_client=fake_llm_client,
+            gateway=security_gateway_strict,
+        )
+        await use_case.execute(QueryRequest(query=_CLEAN_QUERY), client="team-a")
+        await use_case.execute(QueryRequest(query=_CLEAN_QUERY), client="team-b")
+
+        for client in ("team-a", "team-b"):
+            labels = {**self._labels("output"), "client": client}
+            assert registry.get_sample_value("aegis_llm_tokens_total", labels) == 30
+
+    async def test_missing_usage_is_counted_not_costed(
+        self,
+        fake_vector_store: FakeVectorStore,
+        security_gateway_strict: SecurityGateway,
+        reset_prometheus_registry: None,
+    ) -> None:
+        from aegis.infrastructure.observability.metrics import registry
+
+        llm = FakeLLMClient()
+        llm.usage = None
+        use_case = _build_use_case(
+            vector_store=fake_vector_store, llm_client=llm, gateway=security_gateway_strict
+        )
+        await use_case.execute(QueryRequest(query=_CLEAN_QUERY), client="team-a")
+
+        unreported = {"provider": "fake", "model": "fake-model"}
+        assert registry.get_sample_value("aegis_llm_usage_unreported_total", unreported) == 1
+        assert registry.get_sample_value("aegis_llm_cost_usd_total", self._labels()) is None
+
+    async def test_blocked_query_costs_nothing(
+        self,
+        fake_vector_store: FakeVectorStore,
+        fake_llm_client: FakeLLMClient,
+        security_gateway_strict: SecurityGateway,
+        reset_prometheus_registry: None,
+    ) -> None:
+        from aegis.infrastructure.observability.metrics import registry
+
+        use_case = _build_use_case(
+            vector_store=fake_vector_store,
+            llm_client=fake_llm_client,
+            gateway=security_gateway_strict,
+        )
+        with pytest.raises(SecurityViolationError):
+            await use_case.execute(QueryRequest(query=_INJECTION_QUERY), client="team-a")
+
+        assert registry.get_sample_value("aegis_llm_cost_usd_total", self._labels()) is None
+        assert fake_llm_client.calls == []
+
+
+class TestLLMPricing:
+    def test_prices_are_per_million_tokens(self) -> None:
+        pricing = LLMPricing(input_per_million=0.15, output_per_million=0.60)
+        usage = TokenUsage(input_tokens=1_000_000, output_tokens=1_000_000)
+        assert pricing.cost(usage) == pytest.approx(0.75)
+
+    def test_default_pricing_is_free(self) -> None:
+        assert LLMPricing().cost(TokenUsage(10_000, 10_000)) == 0.0

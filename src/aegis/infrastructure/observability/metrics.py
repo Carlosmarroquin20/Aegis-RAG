@@ -15,8 +15,11 @@ Naming convention follows the Prometheus best-practice guide:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from prometheus_client import CollectorRegistry, Counter, Histogram
 
+from aegis.domain.models.generation import Generation, TokenUsage
 from aegis.domain.models.security import ThreatAssessment
 from aegis.domain.ports.telemetry import QueryMetricsPort
 
@@ -88,6 +91,50 @@ rag_queries_total = Counter(
     registry=registry,
 )
 
+# ── LLM usage and cost ────────────────────────────────────────────────────────
+# ``client`` is the digest prefix APIKeyMiddleware assigns to each configured
+# key, so its cardinality is bounded by the number of keys, not by traffic.
+
+llm_tokens_total = Counter(
+    "aegis_llm_tokens_total",
+    "Tokens consumed by LLM generations, by direction (input or output).",
+    ["provider", "model", "client", "direction"],
+    registry=registry,
+)
+
+llm_cost_usd_total = Counter(
+    "aegis_llm_cost_usd_total",
+    "Estimated LLM spend in US dollars, from the configured per-token prices.",
+    ["provider", "model", "client"],
+    registry=registry,
+)
+
+llm_usage_unreported_total = Counter(
+    "aegis_llm_usage_unreported_total",
+    "LLM generations whose backend reported no token usage, so they are not costed.",
+    ["provider", "model"],
+    registry=registry,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class LLMPricing:
+    """
+    Prices in US dollars per million tokens, as providers publish them.
+
+    Zero by default: a local model costs nothing per token, and a hosted one
+    should be costed only from prices someone has configured deliberately.
+    """
+
+    input_per_million: float = 0.0
+    output_per_million: float = 0.0
+
+    def cost(self, usage: TokenUsage) -> float:
+        return (
+            usage.input_tokens * self.input_per_million
+            + usage.output_tokens * self.output_per_million
+        ) / 1_000_000
+
 
 class PrometheusQueryMetrics(QueryMetricsPort):
     """
@@ -97,6 +144,9 @@ class PrometheusQueryMetrics(QueryMetricsPort):
     so any number of instances report into the same series.
     """
 
+    def __init__(self, pricing: LLMPricing | None = None) -> None:
+        self._pricing = pricing or LLMPricing()
+
     def query_blocked(self, assessment: ThreatAssessment) -> None:
         security_violations_total.labels(threat_level=assessment.level.name).inc()
         for rule in assessment.triggered_rules:
@@ -104,3 +154,15 @@ class PrometheusQueryMetrics(QueryMetricsPort):
 
     def query_reached_retrieval(self) -> None:
         rag_queries_total.inc()
+
+    def llm_generation(self, client: str, generation: Generation) -> None:
+        usage = generation.usage
+        if usage is None:
+            llm_usage_unreported_total.labels(
+                provider=generation.provider, model=generation.model
+            ).inc()
+            return
+        labels = {"provider": generation.provider, "model": generation.model, "client": client}
+        llm_tokens_total.labels(**labels, direction="input").inc(usage.input_tokens)
+        llm_tokens_total.labels(**labels, direction="output").inc(usage.output_tokens)
+        llm_cost_usd_total.labels(**labels).inc(self._pricing.cost(usage))

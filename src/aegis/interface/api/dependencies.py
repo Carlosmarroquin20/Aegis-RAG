@@ -20,7 +20,7 @@ from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.llm.openai_compatible_adapter import OpenAICompatibleAdapter
-from aegis.infrastructure.observability.metrics import PrometheusQueryMetrics
+from aegis.infrastructure.observability.metrics import LLMPricing, PrometheusQueryMetrics
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
 from aegis.infrastructure.security.rate_limiter import (
@@ -160,7 +160,12 @@ def get_query_use_case() -> QueryRAGUseCase:
         llm_client=get_llm_client(),
         security_gateway=get_security_gateway(),
         output_sanitizer=get_output_sanitizer(),
-        metrics=PrometheusQueryMetrics(),
+        metrics=PrometheusQueryMetrics(
+            LLMPricing(
+                input_per_million=get_settings().llm_input_price_per_mtok,
+                output_per_million=get_settings().llm_output_price_per_mtok,
+            )
+        ),
     )
 
 

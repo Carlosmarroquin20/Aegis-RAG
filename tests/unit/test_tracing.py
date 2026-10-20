@@ -113,3 +113,19 @@ class TestQueryRAGTracing:
         assert retrieve.attributes is not None
         assert retrieve.attributes["aegis.doc_count"] == 3
         assert retrieve.attributes["aegis.top_k"] == 3
+
+    async def test_generate_span_follows_the_genai_conventions(
+        self,
+        span_exporter: InMemorySpanExporter,
+        fake_vector_store: FakeVectorStore,
+        fake_llm_client: FakeLLMClient,
+    ) -> None:
+        use_case = _use_case(fake_vector_store, fake_llm_client)
+        await use_case.execute(QueryRequest(query="What is the security model?"))
+
+        span = next(s for s in span_exporter.get_finished_spans() if s.name == "llm.generate")
+        assert span.attributes is not None
+        assert span.attributes["gen_ai.provider.name"] == "fake"
+        assert span.attributes["gen_ai.request.model"] == "fake-model"
+        assert span.attributes["gen_ai.usage.input_tokens"] == 120
+        assert span.attributes["gen_ai.usage.output_tokens"] == 30

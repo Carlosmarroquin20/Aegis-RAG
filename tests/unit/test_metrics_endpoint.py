@@ -12,6 +12,7 @@ These tests verify:
 
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from prometheus_client import CONTENT_TYPE_LATEST
@@ -72,6 +73,13 @@ class TestMetricsEndpointCatalog:
 
     def test_exposes_rag_queries_total(self) -> None:
         assert "aegis_rag_queries_total" in self._body()
+
+    @pytest.mark.parametrize(
+        "name",
+        ["aegis_llm_tokens_total", "aegis_llm_cost_usd_total", "aegis_llm_usage_unreported_total"],
+    )
+    def test_exposes_llm_usage_metrics(self, name: str) -> None:
+        assert f"# TYPE {name} counter" in self._body()
 
 
 # ── Recorded values reach the exposition output ──────────────────────────────

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from aegis.application.dtos.rag_dtos import (
     QueryRequest,
@@ -43,10 +43,14 @@ router = APIRouter(prefix="/api/v1", tags=["rag"])
 )
 async def query_rag(
     request: QueryRequest,
+    http_request: Request,
     use_case: Annotated[QueryRAGUseCase, Depends(get_query_use_case)],
 ) -> QueryResponse:
+    # Set by APIKeyMiddleware: a truncated digest of the key, safe to use as a
+    # metric label. Absent only when the route is mounted without that middleware.
+    client = getattr(http_request.state, "client_id", "unknown")
     try:
-        return await use_case.execute(request)
+        return await use_case.execute(request, client=client)
     except SecurityViolationError as exc:
         # Return a structured 400 instead of 500 to communicate the rejection cause.
         # The detail is intentionally vague to avoid revealing detection logic.
