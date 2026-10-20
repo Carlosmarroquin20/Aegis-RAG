@@ -13,7 +13,11 @@ from fastapi.testclient import TestClient
 from httpx import Response
 
 from aegis.config import Settings
-from aegis.domain.ports.llm_client import LLMTimeoutError, LLMUnavailableError
+from aegis.domain.ports.llm_client import (
+    LLMRateLimitedError,
+    LLMTimeoutError,
+    LLMUnavailableError,
+)
 from aegis.domain.ports.vector_store import VectorStoreUnavailableError
 from aegis.interface.api import main
 from aegis.interface.api.dependencies import get_query_use_case
@@ -182,6 +186,19 @@ class TestDependencyFailures:
         assert response.status_code == 503
         assert response.headers["Retry-After"] == "5"
         assert response.json() == {"detail": DEPENDENCY_UNAVAILABLE_DETAIL}
+
+    @pytest.mark.parametrize(
+        ("retry_after", "header"),
+        [(12.2, "13"), (0.0, "1"), (3600.0, "60"), (None, "5")],
+        ids=["provider-value", "at-least-one", "capped", "default"],
+    )
+    def test_rate_limit_passes_on_the_provider_retry_after(
+        self, monkeypatch: pytest.MonkeyPatch, retry_after: float | None, header: str
+    ) -> None:
+        error = LLMRateLimitedError("api.groq.com is rate limiting", retry_after=retry_after)
+        response = self._query(monkeypatch, error)
+        assert response.status_code == 503
+        assert response.headers["Retry-After"] == header
 
     def test_llm_timeout_returns_504(self, monkeypatch: pytest.MonkeyPatch) -> None:
         response = self._query(monkeypatch, LLMTimeoutError("no answer after 120s"))

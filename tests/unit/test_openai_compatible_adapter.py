@@ -18,7 +18,11 @@ import respx
 from aegis.config import Settings
 from aegis.domain.models.document import Document
 from aegis.domain.models.generation import Generation, TokenUsage
-from aegis.domain.ports.llm_client import LLMTimeoutError, LLMUnavailableError
+from aegis.domain.ports.llm_client import (
+    LLMRateLimitedError,
+    LLMTimeoutError,
+    LLMUnavailableError,
+)
 from aegis.infrastructure.llm import openai_compatible_adapter as adapter_module
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.llm.openai_compatible_adapter import OpenAICompatibleAdapter
@@ -329,3 +333,39 @@ class TestWiring:
             await client.aclose()
         finally:
             dependencies.get_llm_client.cache_clear()
+
+
+class TestRateLimiting:
+    """A 429 keeps the provider's Retry-After, so callers can route around it."""
+
+    @respx.mock
+    @pytest.mark.parametrize(
+        ("header", "expected"),
+        [("12", 12.0), ("0.5", 0.5), ("-3", 0.0), (None, None), ("soon", None)],
+        ids=["seconds", "fraction", "negative", "absent", "unreadable"],
+    )
+    async def test_retry_after_is_parsed(self, header: str | None, expected: float | None) -> None:
+        headers = {"Retry-After": header} if header is not None else {}
+        respx.post(_CHAT).mock(return_value=httpx.Response(429, headers=headers, json={}))
+        with pytest.raises(LLMRateLimitedError) as caught:
+            await _generate()
+        assert caught.value.retry_after == expected
+
+    @respx.mock
+    async def test_retry_after_as_an_http_date(self) -> None:
+        from datetime import UTC, datetime, timedelta
+        from email.utils import format_datetime
+
+        when = format_datetime(datetime.now(UTC) + timedelta(seconds=30), usegmt=True)
+        respx.post(_CHAT).mock(return_value=httpx.Response(429, headers={"Retry-After": when}))
+        with pytest.raises(LLMRateLimitedError) as caught:
+            await _generate()
+        assert caught.value.retry_after is not None
+        assert 25 <= caught.value.retry_after <= 30
+
+    @respx.mock
+    async def test_rate_limit_is_still_an_unavailable_error(self) -> None:
+        """Existing handlers that catch LLMUnavailableError keep working."""
+        respx.post(_CHAT).mock(return_value=httpx.Response(429, json={}))
+        with pytest.raises(LLMUnavailableError):
+            await _generate()

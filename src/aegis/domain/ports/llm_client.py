@@ -22,6 +22,20 @@ class LLMTimeoutError(LLMUnavailableError):
     """The LLM backend was reached but did not answer within the configured timeout."""
 
 
+class LLMRateLimitedError(LLMUnavailableError):
+    """
+    The backend refused the request because the caller is over its quota.
+
+    ``retry_after`` is how long the provider asked callers to wait, in seconds,
+    when it said; None when it did not. Callers that route around a busy backend
+    use it to decide how long to leave it alone.
+    """
+
+    def __init__(self, message: str, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 class LLMClientPort(ABC):
     """Hexagonal port for LLM text generation."""
 

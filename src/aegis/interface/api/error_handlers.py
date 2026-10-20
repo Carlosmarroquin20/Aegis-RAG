@@ -11,6 +11,7 @@ place where they become status codes:
 
   VectorStoreUnavailableError → 503
   LLMUnavailableError         → 503
+  LLMRateLimitedError         → 503, with the provider's own Retry-After when it gave one
   LLMTimeoutError             → 504  (the upstream was reached but did not answer)
 
 Handlers for specific exception types are resolved inside the router, so these
@@ -19,11 +20,17 @@ responses travel back through the full middleware stack.
 
 from __future__ import annotations
 
+import math
+
 import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-from aegis.domain.ports.llm_client import LLMTimeoutError, LLMUnavailableError
+from aegis.domain.ports.llm_client import (
+    LLMRateLimitedError,
+    LLMTimeoutError,
+    LLMUnavailableError,
+)
 from aegis.domain.ports.vector_store import VectorStoreUnavailableError
 
 logger = structlog.get_logger(__name__)
@@ -31,6 +38,9 @@ logger = structlog.get_logger(__name__)
 # How long a client should wait before retrying. Short on purpose: these are
 # transient conditions (a restart, a model still loading), not maintenance windows.
 _RETRY_AFTER_SECONDS = "5"
+# A provider's quota window can be long; a client told to wait an hour would
+# rather hear "try again in a minute" and get a fresh answer then.
+_MAX_RETRY_AFTER_SECONDS = 60
 
 DEPENDENCY_UNAVAILABLE_DETAIL = "A backend dependency is temporarily unavailable. Retry shortly."
 DEPENDENCY_TIMEOUT_DETAIL = "The language model did not respond in time."
@@ -57,8 +67,11 @@ def register_dependency_error_handlers(app: FastAPI) -> None:
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
                 content={"detail": DEPENDENCY_TIMEOUT_DETAIL},
             )
+        retry_after = _RETRY_AFTER_SECONDS
+        if isinstance(exc, LLMRateLimitedError) and exc.retry_after is not None:
+            retry_after = str(min(_MAX_RETRY_AFTER_SECONDS, max(1, math.ceil(exc.retry_after))))
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"detail": DEPENDENCY_UNAVAILABLE_DETAIL},
-            headers={"Retry-After": _RETRY_AFTER_SECONDS},
+            headers={"Retry-After": retry_after},
         )

@@ -24,13 +24,19 @@ Handling of the credential:
 from __future__ import annotations
 
 import time
+from email.utils import parsedate_to_datetime
 
 import httpx
 import structlog
 
 from aegis.domain.models.document import Document
 from aegis.domain.models.generation import Generation, TokenUsage
-from aegis.domain.ports.llm_client import LLMClientPort, LLMTimeoutError, LLMUnavailableError
+from aegis.domain.ports.llm_client import (
+    LLMClientPort,
+    LLMRateLimitedError,
+    LLMTimeoutError,
+    LLMUnavailableError,
+)
 from aegis.infrastructure.llm.prompting import SYSTEM_PROMPT, build_user_message
 
 logger = structlog.get_logger(__name__)
@@ -99,6 +105,10 @@ class OpenAICompatibleAdapter(LLMClientPort):
                 f"request to {self._provider_host} failed ({type(exc).__name__})"
             ) from exc
 
+        if response.status_code == httpx.codes.TOO_MANY_REQUESTS:
+            raise LLMRateLimitedError(
+                self._describe_failure(response), retry_after=_retry_after(response)
+            )
         if response.status_code != httpx.codes.OK:
             raise LLMUnavailableError(self._describe_failure(response))
 
@@ -187,3 +197,22 @@ def _openai_usage(body: object) -> TokenUsage | None:
     if not isinstance(input_tokens, int) or not isinstance(output_tokens, int):
         return None
     return TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens)
+
+
+def _retry_after(response: httpx.Response) -> float | None:
+    """
+    Seconds to wait, from a Retry-After header in either form RFC 9110 allows:
+    a number of seconds or an HTTP date. None when absent or unreadable.
+    """
+    value = response.headers.get("retry-after", "").strip()
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, when.timestamp() - time.time())
