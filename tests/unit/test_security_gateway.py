@@ -70,7 +70,7 @@ class TestPromptInjectionBlocking:
         assert result.blocked
 
 
-# ── LLM07: System Prompt Disclosure ───────────────────────────────────────────
+# ── LLM07: System Prompt Leakage ─────────────────────────────────────────────
 
 
 class TestPromptDisclosureBlocking:

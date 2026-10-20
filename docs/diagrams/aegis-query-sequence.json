@@ -78,7 +78,7 @@
       "id": "sanitizer",
       "type": "security",
       "label": "OutputSanitizer",
-      "sublabel": "LLM02 guard"
+      "sublabel": "LLM05 guard"
     }
   ],
   "segments": [
@@ -95,7 +95,7 @@
     {
       "from": 420,
       "to": 505,
-      "label": "Sanitize + respond (LLM02)"
+      "label": "Sanitize + respond (LLM05)"
     }
   ],
   "messages": [
@@ -235,7 +235,7 @@
       "dot": "orange",
       "title": "Output guard",
       "items": [
-        "OutputSanitizer checks every response (LLM02)",
+        "OutputSanitizer checks every response (LLM05)",
         "A reflection leak fails loud as HTTP 500 — never a silent leak",
         "Each stage is wrapped in an OpenTelemetry span"
       ]

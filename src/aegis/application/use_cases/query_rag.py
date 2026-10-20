@@ -5,7 +5,7 @@ Execution order is intentional:
   1. SecurityGateway evaluation (no I/O, fast fail)     — LLM01
   2. Vector store retrieval (network I/O)
   3. LLM generation (network I/O, slow)
-  4. OutputSanitizer post-processing                    — LLM02
+  4. OutputSanitizer post-processing                    — LLM05
 
 The use case owns no state; all dependencies are injected at construction time,
 and every one of them is a domain port. Nothing here imports from the
@@ -99,7 +99,7 @@ class QueryRAGUseCase:
             span.set_attribute("aegis.context_docs", len(documents))
             raw_answer = await self._llm_client.generate(sanitized_text, documents)
 
-        # ── Output sanitization (LLM02) ────────────────────────────────────────
+        # ── Output sanitization (LLM05) ────────────────────────────────────────
         # OutputReflectionError is intentionally NOT caught here: it propagates
         # to the route handler which returns HTTP 500 (pipeline failure, not user error).
         # The span therefore records that failure, which is the desired signal.

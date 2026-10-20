@@ -252,7 +252,7 @@
       "title": "Security is the architecture",
       "items": [
         "SecurityGateway scores every query before retrieval — prompt injection blocked at 400",
-        "OutputSanitizer guards every LLM response (LLM02)",
+        "OutputSanitizer guards every LLM response (LLM05)",
         "API-key auth (constant-time) + per-key sliding-window rate limit"
       ]
     },

@@ -1,5 +1,5 @@
 """
-Output Sanitizer — OWASP LLM02 (Insecure Output Handling) mitigation.
+Output Sanitizer — OWASP LLM05 (Improper Output Handling) mitigation.
 
 The LLM's response is untrusted output: even with a hardened system prompt,
 a sufficiently adversarial document in the context window may have influenced

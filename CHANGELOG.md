@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
+## [Unreleased]
+
+### Fixed
+
+- OWASP references mixed the 2023 and 2025 editions of the Top 10 for LLM Applications (for
+  example LLM02 for output handling, from 2023, beside LLM07 for system-prompt leakage, which
+  only exists in 2025). Everything now uses the 2025 numbering: output handling is LLM05,
+  sensitive information LLM02, resource abuse LLM10, supply chain LLM03, and the
+  embedding-model guard is mapped to LLM08 (vector and embedding weaknesses).
+
 ## [1.1.1] — 2026-10-16
 
 Maintenance release: no change to the API or to how documents are stored. Tracing moves to

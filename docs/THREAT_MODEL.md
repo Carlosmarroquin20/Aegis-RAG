@@ -72,8 +72,8 @@ flowchart LR
 
 ## 5. Threats and controls
 
-Identifiers are stable so they can be referenced from issues and commits. "LLM0x" refers to
-the OWASP Top 10 for LLM Applications.
+Identifiers are stable so they can be referenced from issues and commits. "LLMxx" refers to
+the 2025 edition of the OWASP Top 10 for LLM Applications.
 
 ### Query path
 
@@ -83,9 +83,9 @@ the OWASP Top 10 for LLM Applications.
 | T-02 | **Obfuscated injection**: the same payload hidden with zero-width characters, fullwidth forms, bidi overrides or Cyrillic/Greek homoglyphs. | NFKC normalization, removal of control/format characters, and a homoglyph-folded view used only for matching. | same | `TestObfuscatedInjection`, `TestUnicodeNormalization` |
 | T-03 | **Detection as a DoS primitive**: a query crafted to make a signature backtrack and stall the event loop. | Every pattern is bounded or anchored to stay linear; the staged-reasoning rule is a two-pointer sweep, not a regex. | same, `infrastructure/security/markup.py` | `TestSignatureCostIsBounded`, `TestScanCostIsBounded`, `TestCostIsBounded` |
 | T-04 | **Indirect prompt injection** (LLM01): a retrieved document carries instructions. | Three layers: a system prompt that declares the context untrusted, shared by every backend; attribution framing around each document; and a reflection guard that fails the request if the output echoes an injection. | `infrastructure/llm/prompting.py`, `infrastructure/security/output_sanitizer.py` | `TestReflectionDetection`, `test_prompt_is_identical_to_the_one_ollama_receives` |
-| T-05 | **Unsafe output handling** (LLM02): the answer carries HTML, script, or a Markdown link whose label hides its target. | Tags are stripped; Markdown is flattened and every link is rewritten as `text (target)`; output length is capped. Flattening runs before the reflection scan so markers cannot split a phrase. | `output_sanitizer.py`, `markup.py` | `TestHTMLStripping`, `TestLinksExposeTheirTarget`, `TestSanitizerIntegration` |
-| T-06 | **System prompt disclosure** (LLM07). | Probing queries are blocked at the gateway; the prompt instructs non-disclosure; an output that looks like a prompt dump trips the reflection guard. | `security_gateway.py`, `prompting.py`, `output_sanitizer.py` | `TestPromptDisclosureBlocking` |
-| T-07 | **Sensitive data in answers** (LLM06). | PII patterns in the output are detected and logged with the query hash. **Detect-only — see residual risks.** | `output_sanitizer.py` | `TestPIIDetection` |
+| T-05 | **Improper output handling** (LLM05): the answer carries HTML, script, or a Markdown link whose label hides its target. | Tags are stripped; Markdown is flattened and every link is rewritten as `text (target)`; output length is capped. Flattening runs before the reflection scan so markers cannot split a phrase. | `output_sanitizer.py`, `markup.py` | `TestHTMLStripping`, `TestLinksExposeTheirTarget`, `TestSanitizerIntegration` |
+| T-06 | **System prompt leakage** (LLM07). | Probing queries are blocked at the gateway; the prompt instructs non-disclosure; an output that looks like a prompt dump trips the reflection guard. | `security_gateway.py`, `prompting.py`, `output_sanitizer.py` | `TestPromptDisclosureBlocking` |
+| T-07 | **Sensitive data in answers** (LLM02). | PII patterns in the output are detected and logged with the query hash. **Detect-only — see residual risks.** | `output_sanitizer.py` | `TestPIIDetection` |
 
 ### Transport, identity and abuse
 
@@ -94,7 +94,7 @@ the OWASP Top 10 for LLM Applications.
 | T-08 | **Unauthenticated access.** | API key on every non-public path, enforced in middleware so unknown routes are covered too. Fails closed when no key is configured. | `interface/api/middleware/security_middleware.py` | `TestAPIKeyMiddleware` |
 | T-09 | **Key recovery by timing.** | Keys are compared as SHA-256 digests with `hmac.compare_digest`, against every configured key, without an early exit. | same | `test_near_miss_keys_are_forbidden` |
 | T-10 | **Online key guessing.** | Per-address lockout after repeated rejected keys. It applies to valid keys too during the lockout, so the response is not a right/wrong oracle. The address is taken from `X-Forwarded-For` only at an explicitly trusted proxy depth (default: never). | same | `TestFailedAuthLockout`, `TestLockoutIsPerClientAddress`, `TestResolveClientIp` |
-| T-11 | **Resource exhaustion by an authenticated client** (LLM04). | Per-key sliding-window rate limit; rejected requests do not occupy the window, so it cannot grow under a retry storm. Request bodies are capped at the ASGI layer as they stream, including chunked uploads. | `infrastructure/security/rate_limiter.py`, `middleware/body_limit.py` | `TestRejectedRequestsAreNotRetained`, `TestStreamedBodyWithoutLength`, `TestFrameworkParsedBodies` |
+| T-11 | **Resource exhaustion by an authenticated client** (LLM10). | Per-key sliding-window rate limit; rejected requests do not occupy the window, so it cannot grow under a retry storm. Request bodies are capped at the ASGI layer as they stream, including chunked uploads. | `infrastructure/security/rate_limiter.py`, `middleware/body_limit.py` | `TestRejectedRequestsAreNotRetained`, `TestStreamedBodyWithoutLength`, `TestFrameworkParsedBodies` |
 | T-12 | **Lateral access to backing services** from the local network. | Every published compose port is bound to loopback; only the API and Grafana can be exposed, by explicit setting. On AWS the security group opens the API port only. | `docker-compose.yml`, `infra/terraform/modules/compute` | manual: `docker compose ps` shows `127.0.0.1:` bindings |
 | T-13 | **Credential exposure through the service itself.** | The client key never leaves the auth layer: downstream sees a truncated digest. The hosted-LLM key is a `SecretStr`, sent only as a header, and absent from logs and error text. | `security_middleware.py`, `infrastructure/llm/openai_compatible_adapter.py` | `test_rate_limit_bucket_is_keyed_by_a_digest_not_the_api_key`, `TestCredentialDoesNotLeak` |
 | T-14 | **Log and header injection.** | A caller-supplied `X-Request-ID` is reused only if it looks like an identifier; uploaded filenames are reduced to a single-line display name. | `security_middleware.py`, `interface/api/routes/documents.py` | `test_malformed_caller_id_is_replaced`, `TestUploadedFilename` |
@@ -113,11 +113,11 @@ the OWASP Top 10 for LLM Applications.
 
 | ID | Threat | Control | Enforced in | Verified by |
 |---|---|---|---|---|
-| T-20 | **Vulnerable dependency.** | `pip-audit` on every push fails on any advisory with a fix; the image is scanned by Trivy; installs are locked. Unfixable advisories are recorded with a rationale and a review date. | `.github/workflows/ci.yml`, `uv.lock`, `SECURITY.md` | CI |
-| T-21 | **Compromised CI action.** | The actions with the most reach (image scanner, toolchain installer) are pinned to a commit SHA; the job token is read-only. | `.github/workflows/ci.yml` | review of the workflow |
+| T-20 | **Vulnerable dependency** (LLM03). | `pip-audit` on every push fails on any advisory with a fix; the image is scanned by Trivy; installs are locked. Unfixable advisories are recorded with a rationale and a review date. | `.github/workflows/ci.yml`, `uv.lock`, `SECURITY.md` | CI |
+| T-21 | **Compromised CI action** (LLM03). | The actions with the most reach (image scanner, toolchain installer) are pinned to a commit SHA; the job token is read-only. | `.github/workflows/ci.yml` | review of the workflow |
 | T-22 | **Silent degradation of a control.** | A rate-limit store outage, authentication-failure spikes, output reflections and 5xx rates each have a metric and an alert. Failing open is a logged, counted decision, never a default nobody chose. | `infrastructure/observability/metrics.py`, `infra/prometheus/alerts.yml` | `TestRateLimitBackendFailure`, `TestThrottleStoreOutage` |
 | T-23 | **Architectural erosion** that would let a control be bypassed in a later change. | The layer dependency rule is enforced by a test that parses every module's imports. | `tests/unit/test_architecture.py` | itself |
-| T-24 | **Silently wrong retrieval after an embedding-model change.** Two models of the same dimension are accepted by ChromaDB, so queries are compared with vectors from another model and answers come from the wrong documents, with no error. | Each collection records the model that built it; the API refuses to start on a collection recorded with a different model and says how to recover. A collection that predates the record is served with a warning. | `infrastructure/vector_stores/chromadb_adapter.py` | `TestEmbeddingModelGuard` |
+| T-24 | **Silently wrong retrieval after an embedding-model change** (LLM08). Two models of the same dimension are accepted by ChromaDB, so queries are compared with vectors from another model and answers come from the wrong documents, with no error. | Each collection records the model that built it; the API refuses to start on a collection recorded with a different model and says how to recover. A collection that predates the record is served with a warning. | `infrastructure/vector_stores/chromadb_adapter.py` | `TestEmbeddingModelGuard` |
 
 ## 6. Residual risks and non-goals
 

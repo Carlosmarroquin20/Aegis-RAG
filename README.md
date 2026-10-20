@@ -108,7 +108,7 @@ sequenceDiagram
     S-->>A: top-k chunks
     A->>L: generate(context, query)
     L-->>A: answer
-    A->>O: sanitize(answer) · LLM02
+    A->>O: sanitize(answer) · LLM05
     O-->>A: clean
     A-->>C: 200 JSON {answer, sources}
     Note over A,G: a BLOCKED verdict short-circuits to HTTP 400 — no retrieval, no LLM call
@@ -120,7 +120,7 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 ---
 
-## Security Controls — OWASP LLM Top 10
+## Security Controls — OWASP LLM Top 10 (2025)
 
 > The full **[threat model](docs/THREAT_MODEL.md)** lists 24 threats across the query, transport, ingestion and supply-chain surfaces — each with the module that enforces the control and the test that verifies it — and states the residual risks plainly, including what the input gateway does *not* catch.
 >
@@ -131,12 +131,13 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 | Threat | Control | OWASP |
 |---|---|---|
 | Prompt injection | Regex signatures in English and Spanish (voseo included) + staged-reasoning (CoT) check + Shannon entropy, matched after Unicode NFKC normalization, invisible-character stripping, accent removal and homoglyph folding | LLM01 |
-| Insecure output handling | Length cap · HTML strip · reflection detection · PII flagging | LLM02 |
-| System-prompt disclosure | Signature rules block probing queries (*"show me your prompt"*) | LLM07 |
-| API abuse | Per-key sliding-window rate limiter with burst allowance · rejected requests never occupy the window · explicit fail-open/fail-closed policy if the store is down | LLM06 |
+| Improper output handling | Length cap · HTML strip · reflection detection · PII flagging | LLM05 |
+| System-prompt leakage | Signature rules block probing queries (*"show me your prompt"*) | LLM07 |
+| API abuse | Per-key sliding-window rate limiter with burst allowance · rejected requests never occupy the window · explicit fail-open/fail-closed policy if the store is down | LLM10 |
 | Credential guessing | Client address locked out (429) after repeated rejected keys — valid keys included, so the response is no oracle · address taken from `X-Forwarded-For` only at an explicitly trusted proxy depth (`TRUSTED_PROXY_HOPS`, default 0) · short keys reported at startup | General |
-| Sensitive data exposure | API key auth at ASGI level (constant-time digest comparison; the key never reaches logs or the rate-limit store) · non-root container · `Cache-Control: no-store` · OpenAPI schema and docs disabled outside debug | LLM06 |
+| Sensitive data exposure | API key auth at ASGI level (constant-time digest comparison; the key never reaches logs or the rate-limit store) · non-root container · `Cache-Control: no-store` · OpenAPI schema and docs disabled outside debug | LLM02 |
 | File-upload attacks | Magic-byte MIME detection · request body capped at the ASGI layer as it streams in (no reliance on a proxy; chunked uploads included) · 50 MB file cap enforced before the upload is buffered · uncompressed-size budget for DOCX archives (decompression bombs) | General |
+| Silently wrong retrieval | Each vector collection records the embedding model that built it; the API refuses to start on a mismatch, which ChromaDB itself accepts in silence | LLM08 |
 | Browser-side attacks | HSTS · CSP `default-src 'none'` · X-Frame-Options DENY · nosniff | General |
 
 ---

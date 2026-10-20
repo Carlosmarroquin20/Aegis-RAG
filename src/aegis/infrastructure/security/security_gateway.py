@@ -13,12 +13,13 @@ Every query passes through this pipeline before touching the RAG engine:
 The gateway is intentionally I/O-free: no network calls, no DB access.
 This keeps it fast (<1 ms for typical queries) and easily testable.
 
-OWASP LLM coverage:
+OWASP Top 10 for LLM Applications (2025) coverage:
   LLM01 — Prompt Injection           → _INJECTION_SIGNATURES, _normalize_unicode,
                                        _detection_view
-  LLM02 — Insecure Output Handling   → enforced at the LLM adapter layer (see llm_client.py)
-  LLM06 — Sensitive Information      → rate limiter + API key enforcement (middleware)
-  LLM07 — System Prompt Disclosure   → _INJECTION_SIGNATURES (prompt_leakage category)
+  LLM07 — System Prompt Leakage      → _INJECTION_SIGNATURES (prompt_leakage category)
+  LLM10 — Unbounded Consumption      → query length cap here; rate limiting in the middleware
+  Covered elsewhere: LLM05 Improper Output Handling (output_sanitizer.py) and
+  LLM02 Sensitive Information Disclosure (API keys, PII scan).
 """
 
 from __future__ import annotations
@@ -204,7 +205,7 @@ _INJECTION_SIGNATURES: Final[list[tuple[re.Pattern[str], str, int]]] = [
         "roleplay_jailbreak",
         85,
     ),
-    # ── HTML / Script Injection (LLM02, severity: medium-high) ────────────────
+    # ── HTML / Script Injection (LLM05, severity: medium-high) ────────────────
     (
         re.compile(r"<\s*(script|iframe|object|embed|svg|img|link|meta)[^>]*>", re.IGNORECASE),
         "html_injection",

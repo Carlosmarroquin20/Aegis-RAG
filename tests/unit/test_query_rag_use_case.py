@@ -3,7 +3,7 @@ Unit tests for QueryRAGUseCase — the RAG pipeline orchestrator.
 
 The use case is the central piece of application logic: it sequences the
 SecurityGateway, vector store, LLM client, and OutputSanitizer in the exact
-order required by the security design (LLM01 before I/O, LLM02 after LLM).
+order required by the security design (LLM01 before I/O, LLM05 after LLM).
 
 These tests exercise it with the in-memory fakes defined in ``tests/conftest.py``
 so the assertions focus on orchestration, not on the behavior of any single
@@ -274,7 +274,7 @@ class TestQueryRAGOrchestration:
         assert fake_llm_client.calls[0]["context_len"] == 0
 
 
-# ── Output sanitization (LLM02) ──────────────────────────────────────────────
+# ── Output sanitization (LLM05) ──────────────────────────────────────────────
 
 
 class TestQueryRAGOutputSanitization:

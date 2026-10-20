@@ -36,7 +36,7 @@ class LLMClientPort(ABC):
         """
         Generates a grounded answer for query using context as retrieved evidence.
         Implementations are responsible for building a safe system prompt that
-        instructs the model to answer only from the provided context (LLM02 mitigation).
+        instructs the model to answer only from the provided context (LLM09, misinformation).
 
         Raises:
             LLMTimeoutError:     the backend did not answer in time.
