@@ -128,6 +128,41 @@ class TestPIIDetection:
         result = sanitizer.sanitize("The vacation policy allows 15 days per year.")
         assert result.pii_types_detected == []
 
+    @pytest.mark.parametrize(
+        ("text", "label"),
+        [
+            ("Su DPI es 2456 78901 0101.", "dpi_gt"),
+            ("DPI 2456789010101 registrado.", "dpi_gt"),
+            ("Facture a NIT: 1234567-8.", "nit_gt"),
+            ("nit 576937-K", "nit_gt"),
+            ("Llame al +502 5555 1234.", "phone_gt"),
+            ("Teléfono: 5555-1234.", "phone_gt"),
+            ("Oficina central 2222 3333", "phone_gt"),
+        ],
+    )
+    def test_detects_guatemalan_formats(
+        self, sanitizer: OutputSanitizer, text: str, label: str
+    ) -> None:
+        assert label in sanitizer.sanitize(text).pii_types_detected
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # A department code above 22 does not exist.
+            "Código 2456 78901 2301 del inventario.",
+            # The shape of a NIT, but an order number: the label is missing.
+            "Su pedido 1234567-8 está en camino.",
+            # Year ranges share the 4-4 shape of a phone number.
+            "La política 2024-2025 reemplaza a la de 2023 2024.",
+            "El envío cuesta Q55 y tarda 2 a 4 días hábiles.",
+        ],
+    )
+    def test_guatemalan_lookalikes_are_not_flagged(
+        self, sanitizer: OutputSanitizer, text: str
+    ) -> None:
+        detected = sanitizer.sanitize(text).pii_types_detected
+        assert not {"dpi_gt", "nit_gt", "phone_gt"} & set(detected), detected
+
     def test_pii_does_not_block_response(self, sanitizer: OutputSanitizer) -> None:
         # PII detection is log-only, must never raise.
         result = sanitizer.sanitize("Call 555-123-4567 for support.")
@@ -177,8 +212,11 @@ class TestScanCostIsBounded:
             "a.",  # dotted run: every position is a candidate email local part
             "1 ",  # digit run for the card and phone patterns
             "<a ",  # tag openers that never close
+            "NIT 1",  # NIT labels that never complete a number
+            "+502 1",  # country codes that never complete a phone number
+            "2024-",  # year-range lookahead re-tried at every 4-digit group
         ],
-        ids=["dotted-run", "digit-run", "open-tags"],
+        ids=["dotted-run", "digit-run", "open-tags", "nit-labels", "gt-phone", "year-runs"],
     )
     def test_scan_time_grows_linearly_with_output_size(self, unit: str) -> None:
         small = self._best_of_three(unit * 16_000)

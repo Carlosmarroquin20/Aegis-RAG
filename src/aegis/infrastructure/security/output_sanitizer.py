@@ -15,6 +15,7 @@ Sanitization pipeline:
                               injection payloads (adversarial prompt reflection).
   4. PII pattern detection  — flags potential PII leakage without blocking (logged
                               for review; blocking would require a dedicated classifier).
+                              Covers US formats and Guatemalan DPI, NIT and phones.
 
 The sanitizer is intentionally conservative: it modifies as little as possible
 and logs what it does so security teams can tune the rules over time.
@@ -55,6 +56,24 @@ _PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         re.compile(r"\b[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,253}\.[A-Za-z]{2,}\b"),
     ),
     ("phone_us", re.compile(r"\b(?:\+1[\s.-])?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b")),
+    # ── Guatemala ─────────────────────────────────────────────────────────────
+    # DPI (CUI): 13 digits, usually written 4-5-4. The last four are the
+    # department (01-22) and municipality codes; requiring a valid department
+    # rules out most unrelated 13-digit numbers. The check digit is not
+    # verified, so a mistyped DPI is still flagged, which is the safer error.
+    ("dpi_gt", re.compile(r"\b\d{4}[ -]?\d{5}[ -]?(?:0[1-9]|1\d|2[0-2])(?!00)\d{2}\b")),
+    # NIT: a run of digits, a hyphen and a check character (a digit or K). That
+    # shape is shared by order and invoice numbers, so the label must be present.
+    ("nit_gt", re.compile(r"\bNIT\b[\s:#.]{0,3}\d{4,12}-?[\dK]\b", re.IGNORECASE)),
+    # Phone: eight digits starting 2-7, written 4-4, optionally with +502. A bare
+    # 4-4 pair that looks like a year range ("2024-2025") is not a number.
+    (
+        "phone_gt",
+        re.compile(
+            r"\+502[\s.-]?\d{4}[\s-]?\d{4}\b"
+            r"|\b(?!(?:19|20)\d{2}[\s-](?:19|20)\d{2}\b)[2-7]\d{3}[\s-]\d{4}\b"
+        ),
+    ),
 ]
 
 _MAX_OUTPUT_CHARS: int = 8192

@@ -9,6 +9,13 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ## [Unreleased]
 
+### Added
+
+- PII detection in answers recognises Guatemalan formats: DPI (with a valid department code),
+  NIT (only next to the "NIT" label, since order numbers share its shape) and +502 / 4-4 phone
+  numbers, excluding year ranges such as "2024-2025". It previously knew only US formats. Like
+  the rest of PII detection it flags and logs; it does not redact.
+
 ### Fixed
 
 - OWASP references mixed the 2023 and 2025 editions of the Top 10 for LLM Applications (for
