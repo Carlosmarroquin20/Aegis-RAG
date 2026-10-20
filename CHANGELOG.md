@@ -7,7 +7,12 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
-## [Unreleased]
+## [1.2.0] — 2026-10-20
+
+Platform features for running the service as a shared LLM backend: per-client token and cost
+accounting, and a fallback between LLM providers behind circuit breakers. Both were verified
+live against the hosted provider, which is how the three fixes listed under *Fixed* were found.
+The HTTP API is unchanged.
 
 ### Security
 
@@ -36,6 +41,14 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
   NIT (only next to the "NIT" label, since order numbers share its shape) and +502 / 4-4 phone
   numbers, excluding year ranges such as "2024-2025". It previously knew only US formats. Like
   the rest of PII detection it flags and logs; it does not redact.
+
+### Changed
+
+- `LLMClientPort.generate()` returns a `Generation` (text, provider, model, token usage) instead
+  of a string, and `QueryRAGUseCase.execute()` takes the authenticated `client`. Custom LLM
+  adapters must return the new type.
+- `/metrics` serves OpenMetrics when the scraper asks for it; a plain request still gets the
+  classic text format.
 
 ### Fixed
 
@@ -266,6 +279,7 @@ rate limiting, structured logging, Prometheus metrics, OpenTelemetry tracing wit
 dashboards, a React demo console, a multi-stage Docker image, docker-compose stack, GitHub
 Actions CI and an AWS Terraform skeleton.
 
+[1.2.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.2.0
 [1.1.1]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.1.1
 [1.1.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.1.0
 [1.0.1]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.0.1
