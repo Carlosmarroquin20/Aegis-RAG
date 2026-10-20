@@ -125,8 +125,20 @@ services:
       - ollama-models:/root/.ollama
     networks:
       - aegis-net
-    # Pull the default model on first startup.
-    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3.2 && wait"]
+    environment:
+      # Keep the model in memory instead of unloading it after five idle minutes.
+      # Loading it from the volume took about 3.5 minutes on a laptop's Docker
+      # VM, longer than OLLAMA_TIMEOUT_SECONDS. As the default backend that
+      # would fail the first query after every quiet spell; as a fallback, which
+      # sits idle by definition, it would fail exactly when it is needed. The
+      # cost is the model's memory (about 2.5 GB for llama3.2) held permanently.
+      - OLLAMA_KEEP_ALIVE=-1
+    # Pull the default model on first startup, then load it with a one-word
+    # prompt so the first real query does not pay for the load.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - ollama serve & sleep 5 && ollama pull llama3.2 && ollama run llama3.2 ok >/dev/null && wait
     restart: unless-stopped
 
   redis:

@@ -35,10 +35,19 @@ local model fails, and nothing else says so.
 
 ## Consequences
 
-- A provider's rate limit or outage costs latency (a local answer takes tens of seconds on
-  CPU) instead of availability. The answer reports the backend that produced it, so usage
-  and the per-provider cost metrics stay correct, and an answer from Ollama is not billed
-  at the hosted rate.
+- A provider's rate limit or outage costs latency and quality instead of availability. In a
+  live test with the hosted key revoked, the local llama3.2 answered in 21 to 89 seconds on
+  CPU (the first one exceeded the 120 s timeout), and two of three answers contradicted the
+  documents. The fallback keeps the service answering; it does not make a 3B local model as
+  good as the hosted one, and an operator should size and choose it with that in mind.
+- A fallback sits idle by definition, and Ollama unloads an idle model after five minutes.
+  Loading llama3.2 from its volume took about 3.5 minutes on a laptop's Docker VM, so a cold
+  fallback would have failed exactly when needed. The compose file keeps the model resident
+  (`OLLAMA_KEEP_ALIVE=-1`) and loads it at startup, at the cost of its memory held
+  permanently.
+- Every answer reports the backend and model that produced it, so usage and the
+  per-provider cost metrics stay correct (an answer from Ollama is not billed at the hosted
+  rate), and a degraded answer can be told apart.
 - A failing backend stops costing every request its timeout after the threshold is reached.
   The first requests of an outage still pay it; that is the price of not opening on a
   single transient error.
