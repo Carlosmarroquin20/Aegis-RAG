@@ -261,6 +261,20 @@ rejected key or a rate limit surfaces as a **503**, and a timeout as a **504**. 
 The app refuses to start if the hosted provider is selected without its settings, or with a
 non-HTTPS URL outside debug mode.
 
+**Usage and cost.** Every answer records the tokens it consumed, per provider, model and client
+(the digest the API assigns to each key, never the key itself). Set the provider's prices and the
+estimated spend follows:
+
+```bash
+LLM_INPUT_PRICE_PER_MTOK=0.15    # US dollars per million input tokens
+LLM_OUTPUT_PRICE_PER_MTOK=0.60   # and per million output tokens
+```
+
+The *LLM usage and cost* row of the Production Overview dashboard shows spend, tokens, cost per
+answered query and spend by client and model. A backend that reports no usage is counted
+separately (`aegis_llm_usage_unreported_total`), so missing data shows up instead of reading as
+free. The `llm.generate` span carries the OpenTelemetry GenAI attributes (`gen_ai.usage.*`).
+
 ---
 
 ## Web Console

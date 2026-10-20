@@ -16,6 +16,13 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- **LLM usage and cost metrics.** Each answer records its input and output tokens per provider,
+  model and client (`aegis_llm_tokens_total`), and an estimated spend
+  (`aegis_llm_cost_usd_total`) priced from the new `LLM_INPUT_PRICE_PER_MTOK` and
+  `LLM_OUTPUT_PRICE_PER_MTOK` settings (0 by default). Answers whose backend reports no usage
+  are counted in `aegis_llm_usage_unreported_total`. A new dashboard row shows spend, tokens,
+  cost per answered query and spend by client and model, and the `llm.generate` span carries
+  the OpenTelemetry GenAI usage attributes.
 - PII detection in answers recognises Guatemalan formats: DPI (with a valid department code),
   NIT (only next to the "NIT" label, since order numbers share its shape) and +502 / 4-4 phone
   numbers, excluding year ranges such as "2024-2025". It previously knew only US formats. Like

@@ -44,6 +44,8 @@ services:
       - LLM_BASE_URL=${LLM_BASE_URL:-}
       - LLM_MODEL=${LLM_MODEL:-}
       - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_INPUT_PRICE_PER_MTOK=${LLM_INPUT_PRICE_PER_MTOK:-0}
+      - LLM_OUTPUT_PRICE_PER_MTOK=${LLM_OUTPUT_PRICE_PER_MTOK:-0}
       # Share the rate-limit window across workers via Redis (swappable backend).
       - RATE_LIMIT_BACKEND=redis
       - REDIS_URL=redis://redis:6379/0
