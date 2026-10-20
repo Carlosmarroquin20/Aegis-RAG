@@ -92,6 +92,19 @@ groups:
             throttling; with false they are being refused with 503.
             Restore Redis or switch RATE_LIMIT_BACKEND to memory.
 
+      - alert: AegisLLMCircuitOpen
+        expr: max by (provider) (aegis_llm_circuit_open) == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM backend {{ $labels.provider }} has been skipped for 5 minutes"
+          description: >
+            Its circuit breaker is open: it failed repeatedly or rate limited
+            the key, and queries are being answered by the fallback backend,
+            usually slower. Check llm.backend_failed in the API log for the
+            reason, and aegis_llm_fallbacks_total for how much traffic moved.
+
       - alert: AegisAuthFailureSpike
         expr: sum(rate(aegis_auth_failures_total[5m])) > 1
         for: 5m
