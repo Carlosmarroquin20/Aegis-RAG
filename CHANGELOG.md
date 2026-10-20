@@ -39,6 +39,12 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Fixed
 
+- **The local model could not serve as a fallback.** Ollama unloads an idle model after five
+  minutes, and reloading llama3.2 took about 3.5 minutes on a laptop's Docker VM, longer than
+  the generation timeout; a fallback is idle by definition, so it failed exactly when needed.
+  The compose file now keeps the model resident (`OLLAMA_KEEP_ALIVE=-1`) and loads it at
+  startup. The same fix stops the first query after a quiet spell from timing out when Ollama
+  is the default backend.
 - Token prices applied to every answer, whichever backend produced it. They are now per
   provider: the configured prices belong to the hosted provider, and Ollama answers are
   costed at zero.
