@@ -148,8 +148,9 @@ class Settings(BaseSettings):
     # SecretStr keeps the value out of repr(), logs and validation error dumps.
     llm_api_key: SecretStr = SecretStr("")
     llm_timeout_seconds: int = Field(default=60, ge=1)
-    # US dollars per million tokens, used only to estimate spend in the
-    # aegis_llm_cost_usd_total metric. Leave at 0 for a local model.
+    # US dollars per million tokens charged by the hosted (openai_compatible)
+    # provider, used only to estimate spend in aegis_llm_cost_usd_total.
+    # Answers from the local Ollama backend are always costed at zero.
     llm_input_price_per_mtok: float = Field(default=0.0, ge=0)
     llm_output_price_per_mtok: float = Field(default=0.0, ge=0)
 

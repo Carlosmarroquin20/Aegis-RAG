@@ -447,7 +447,7 @@ class TestLLMUsageMetrics:
             security_gateway=security_gateway_strict,
             output_sanitizer=OutputSanitizer(),
             # $0.15 per million input tokens, $0.60 per million output tokens.
-            metrics=PrometheusQueryMetrics(LLMPricing(0.15, 0.60)),
+            metrics=PrometheusQueryMetrics({"fake": LLMPricing(0.15, 0.60)}),
         )
         await use_case.execute(QueryRequest(query=_CLEAN_QUERY), client="team-a")
         await use_case.execute(QueryRequest(query=_CLEAN_QUERY), client="team-a")
@@ -518,6 +518,31 @@ class TestLLMUsageMetrics:
 
         assert registry.get_sample_value("aegis_llm_cost_usd_total", self._labels()) is None
         assert fake_llm_client.calls == []
+
+
+class TestPricingIsPerProvider:
+    async def test_a_provider_without_prices_is_costed_at_zero(
+        self,
+        fake_vector_store: FakeVectorStore,
+        security_gateway_strict: SecurityGateway,
+        reset_prometheus_registry: None,
+    ) -> None:
+        """An answer from the local fallback must not be billed at the hosted rate."""
+        from aegis.infrastructure.observability.metrics import registry
+
+        use_case = QueryRAGUseCase(
+            vector_store=fake_vector_store,
+            llm_client=FakeLLMClient(),  # reports provider "fake"
+            security_gateway=security_gateway_strict,
+            output_sanitizer=OutputSanitizer(),
+            metrics=PrometheusQueryMetrics({"api.groq.com": LLMPricing(0.15, 0.60)}),
+        )
+        await use_case.execute(QueryRequest(query=_CLEAN_QUERY), client="team-a")
+
+        labels = {"provider": "fake", "model": "fake-model", "client": "team-a"}
+        assert registry.get_sample_value("aegis_llm_cost_usd_total", labels) == 0.0
+        tokens = {**labels, "direction": "input"}
+        assert registry.get_sample_value("aegis_llm_tokens_total", tokens) == 120
 
 
 class TestLLMPricing:

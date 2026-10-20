@@ -15,6 +15,7 @@ Naming convention follows the Prometheus best-practice guide:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from prometheus_client import CollectorRegistry, Counter, Histogram
@@ -144,8 +145,11 @@ class PrometheusQueryMetrics(QueryMetricsPort):
     so any number of instances report into the same series.
     """
 
-    def __init__(self, pricing: LLMPricing | None = None) -> None:
-        self._pricing = pricing or LLMPricing()
+    def __init__(self, prices: Mapping[str, LLMPricing] | None = None) -> None:
+        # Keyed by Generation.provider. A provider without an entry is costed at
+        # zero: with a fallback in place, one deployment can be answered by a
+        # hosted model and by a local one, and only the former is billed.
+        self._prices = dict(prices or {})
 
     def query_blocked(self, assessment: ThreatAssessment) -> None:
         security_violations_total.labels(threat_level=assessment.level.name).inc()
@@ -165,4 +169,5 @@ class PrometheusQueryMetrics(QueryMetricsPort):
         labels = {"provider": generation.provider, "model": generation.model, "client": client}
         llm_tokens_total.labels(**labels, direction="input").inc(usage.input_tokens)
         llm_tokens_total.labels(**labels, direction="output").inc(usage.output_tokens)
-        llm_cost_usd_total.labels(**labels).inc(self._pricing.cost(usage))
+        pricing = self._prices.get(generation.provider, LLMPricing())
+        llm_cost_usd_total.labels(**labels).inc(pricing.cost(usage))

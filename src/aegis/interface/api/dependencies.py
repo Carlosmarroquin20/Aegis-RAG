@@ -12,6 +12,7 @@ the cache ensures the underlying heavy object is built only once per process.
 from __future__ import annotations
 
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from aegis.application.use_cases.ingest_documents import IngestDocumentsUseCase
 from aegis.application.use_cases.query_rag import QueryRAGUseCase
@@ -153,6 +154,20 @@ def get_vector_store() -> VectorStorePort:
     return get_chromadb_adapter()
 
 
+def _hosted_llm_prices() -> dict[str, LLMPricing]:
+    """Prices for the hosted provider, keyed the way its adapter names itself."""
+    cfg = get_settings()
+    if not cfg.llm_base_url:
+        return {}
+    host = urlsplit(cfg.llm_base_url).hostname or ""
+    return {
+        host: LLMPricing(
+            input_per_million=cfg.llm_input_price_per_mtok,
+            output_per_million=cfg.llm_output_price_per_mtok,
+        )
+    }
+
+
 def get_query_use_case() -> QueryRAGUseCase:
     """FastAPI dependency factory for the query pipeline."""
     return QueryRAGUseCase(
@@ -160,12 +175,7 @@ def get_query_use_case() -> QueryRAGUseCase:
         llm_client=get_llm_client(),
         security_gateway=get_security_gateway(),
         output_sanitizer=get_output_sanitizer(),
-        metrics=PrometheusQueryMetrics(
-            LLMPricing(
-                input_per_million=get_settings().llm_input_price_per_mtok,
-                output_per_million=get_settings().llm_output_price_per_mtok,
-            )
-        ),
+        metrics=PrometheusQueryMetrics(_hosted_llm_prices()),
     )
 
 
