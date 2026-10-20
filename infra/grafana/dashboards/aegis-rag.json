@@ -488,6 +488,67 @@
         "displayMode": "gradient",
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
       }
+    },
+    {
+      "type": "timeseries",
+      "title": "Answers served by the fallback, by reason",
+      "id": 18,
+      "description": "Why the primary LLM backend was not used: unavailable, timeout, rate_limited, or circuit_open (skipped without being called).",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 52 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (to_provider, reason) (rate(aegis_llm_fallbacks_total[5m]))",
+          "legendFormat": "{{to_provider}} · {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 15 }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "type": "state-timeline",
+      "title": "LLM circuit breakers",
+      "id": 19,
+      "description": "Open: the backend is being skipped. It closes after one successful trial once the cool-down ends.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 52 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "max by (provider) (aegis_llm_circuit_open)",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "closed", "color": "green" },
+                "1": { "text": "open", "color": "red" }
+              }
+            }
+          ],
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": { "showValue": "never", "mergeValues": true }
     }
   ],
   "refresh": "15s",
