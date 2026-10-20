@@ -9,6 +9,11 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ## [Unreleased]
 
+### Security
+
+- aiohttp, a transitive dependency of ChromaDB, upgraded from 3.14.3 to 3.14.5 for
+  CVE-2026-111063, CVE-2026-111064 and GHSA-2g87-pp6c-29x5.
+
 ### Added
 
 - PII detection in answers recognises Guatemalan formats: DPI (with a valid department code),
