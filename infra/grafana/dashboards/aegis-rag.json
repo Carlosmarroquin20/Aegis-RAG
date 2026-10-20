@@ -351,6 +351,143 @@
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom" }
       }
+    },
+    {
+      "type": "row",
+      "title": "LLM usage and cost",
+      "id": 103,
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Estimated spend (24h)",
+      "id": 12,
+      "description": "Priced from LLM_INPUT_PRICE_PER_MTOK and LLM_OUTPUT_PRICE_PER_MTOK. Zero for a local model.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "sum(increase(aegis_llm_cost_usd_total[24h]))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 4 }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tokens (24h)",
+      "id": 13,
+      "description": "Input plus output tokens across every provider and client.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "sum(increase(aegis_llm_tokens_total[24h]))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Cost per answered query (1h)",
+      "id": 14,
+      "description": "Spend divided by the queries that reached generation.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_llm_cost_usd_total[1h])) / clamp_min(sum(increase(aegis_rag_queries_total[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 6 }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Generations without usage (24h)",
+      "id": 15,
+      "description": "Answers whose backend reported no token counts. They are not costed, so a non-zero value means the spend is an underestimate.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 40 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_llm_usage_unreported_total[24h])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Token rate by client",
+      "id": 16,
+      "description": "client is the digest prefix the API assigns to each key, never the key itself.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (client, direction) (rate(aegis_llm_tokens_total[5m]))",
+          "legendFormat": "{{client}} {{direction}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 15 }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Spend by client and model (24h)",
+      "id": 17,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (client, model) (increase(aegis_llm_cost_usd_total[24h])))",
+          "legendFormat": "{{client}} · {{model}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 4 }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
     }
   ],
   "refresh": "15s",
