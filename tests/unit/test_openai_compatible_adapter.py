@@ -17,6 +17,7 @@ import respx
 
 from aegis.config import Settings
 from aegis.domain.models.document import Document
+from aegis.domain.models.generation import Generation, TokenUsage
 from aegis.domain.ports.llm_client import LLMTimeoutError, LLMUnavailableError
 from aegis.infrastructure.llm import openai_compatible_adapter as adapter_module
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
@@ -30,11 +31,11 @@ _CHAT = f"{_BASE}/chat/completions"
 _DOCS = [Document(id="1", content="Remote work: two days.", metadata={"source": "policy.md"})]
 
 
-def _ok(content: object = "The answer.") -> httpx.Response:
-    return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+def _ok(content: object = "The answer.", **extra: object) -> httpx.Response:
+    return httpx.Response(200, json={"choices": [{"message": {"content": content}}], **extra})
 
 
-async def _generate(query: str = "q", docs: list[Document] | None = None) -> str:
+async def _generate(query: str = "q", docs: list[Document] | None = None) -> Generation:
     adapter = OpenAICompatibleAdapter(_BASE, _KEY, _MODEL)
     try:
         return await adapter.generate(query, docs if docs is not None else _DOCS)
@@ -46,7 +47,29 @@ class TestRequest:
     @respx.mock
     async def test_returns_the_message_content(self) -> None:
         respx.post(_CHAT).mock(return_value=_ok("Two days per week."))
-        assert await _generate() == "Two days per week."
+        generation = await _generate()
+        assert generation.text == "Two days per week."
+        assert (generation.provider, generation.model) == ("llm.example.test", _MODEL)
+
+    @respx.mock
+    @pytest.mark.parametrize(
+        ("usage", "expected"),
+        [
+            (
+                {"prompt_tokens": 512, "completion_tokens": 64, "total_tokens": 576},
+                TokenUsage(512, 64),
+            ),
+            (None, None),
+            ({"prompt_tokens": 512}, None),
+        ],
+        ids=["reported", "absent", "partial"],
+    )
+    async def test_reports_token_usage(
+        self, usage: dict[str, int] | None, expected: TokenUsage | None
+    ) -> None:
+        extra = {"usage": usage} if usage is not None else {}
+        respx.post(_CHAT).mock(return_value=_ok("ok", **extra))
+        assert (await _generate()).usage == expected
 
     @respx.mock
     async def test_sends_bearer_key_model_and_generation_parameters(self) -> None:

@@ -27,6 +27,7 @@ from fastapi.testclient import TestClient
 from aegis.application.dtos.rag_dtos import QueryRequest
 from aegis.config import Settings
 from aegis.domain.models.document import Document
+from aegis.domain.models.generation import Generation, TokenUsage
 from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
@@ -108,9 +109,11 @@ class FakeLLMClient(LLMClientPort):
         *,
         fixed_response: str = "The answer is grounded in the provided context.",
         healthy: bool = True,
+        usage: TokenUsage | None = None,
     ) -> None:
         self.fixed_response = fixed_response
         self._healthy = healthy
+        self.usage = usage if usage is not None else TokenUsage(input_tokens=120, output_tokens=30)
         self.calls: list[dict[str, Any]] = []
 
     async def generate(
@@ -120,7 +123,7 @@ class FakeLLMClient(LLMClientPort):
         *,
         max_tokens: int = 1024,
         temperature: float = 0.1,
-    ) -> str:
+    ) -> Generation:
         self.calls.append(
             {
                 "query": query,
@@ -129,7 +132,9 @@ class FakeLLMClient(LLMClientPort):
                 "temperature": temperature,
             }
         )
-        return self.fixed_response
+        return Generation(
+            text=self.fixed_response, provider="fake", model="fake-model", usage=self.usage
+        )
 
     async def health_check(self) -> bool:
         return self._healthy

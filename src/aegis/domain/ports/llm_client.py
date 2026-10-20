@@ -11,6 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from aegis.domain.models.document import Document
+from aegis.domain.models.generation import Generation
 
 
 class LLMUnavailableError(Exception):
@@ -32,11 +33,14 @@ class LLMClientPort(ABC):
         *,
         max_tokens: int = 1024,
         temperature: float = 0.1,
-    ) -> str:
+    ) -> Generation:
         """
         Generates a grounded answer for query using context as retrieved evidence.
         Implementations are responsible for building a safe system prompt that
         instructs the model to answer only from the provided context (LLM09, misinformation).
+
+        Returns the answer together with the provider, the model and the token
+        usage the backend reported, or ``usage=None`` if it reported none.
 
         Raises:
             LLMTimeoutError:     the backend did not answer in time.

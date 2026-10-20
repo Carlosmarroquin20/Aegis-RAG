@@ -29,6 +29,7 @@ import httpx
 import structlog
 
 from aegis.domain.models.document import Document
+from aegis.domain.models.generation import Generation, TokenUsage
 from aegis.domain.ports.llm_client import LLMClientPort, LLMTimeoutError, LLMUnavailableError
 from aegis.infrastructure.llm.prompting import SYSTEM_PROMPT, build_user_message
 
@@ -69,7 +70,7 @@ class OpenAICompatibleAdapter(LLMClientPort):
         *,
         max_tokens: int = 1024,
         temperature: float = 0.1,
-    ) -> str:
+    ) -> Generation:
         payload = {
             "model": self._model,
             "messages": [
@@ -102,7 +103,8 @@ class OpenAICompatibleAdapter(LLMClientPort):
             raise LLMUnavailableError(self._describe_failure(response))
 
         try:
-            answer = response.json()["choices"][0]["message"]["content"]
+            body = response.json()
+            answer = body["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise LLMUnavailableError(
                 f"{self._provider_host} returned an unexpected response body"
@@ -112,13 +114,16 @@ class OpenAICompatibleAdapter(LLMClientPort):
             # visible text; an empty answer is a failed generation, not a result.
             raise LLMUnavailableError(f"{self._provider_host} returned no text content")
 
+        usage = _openai_usage(body)
         logger.info(
             "llm.response_received",
             provider=self._provider_host,
             model=self._model,
             words=len(answer.split()),
+            input_tokens=usage.input_tokens if usage else None,
+            output_tokens=usage.output_tokens if usage else None,
         )
-        return answer
+        return Generation(text=answer, provider=self._provider_host, model=self._model, usage=usage)
 
     def _describe_failure(self, response: httpx.Response) -> str:
         """
@@ -164,3 +169,21 @@ class OpenAICompatibleAdapter(LLMClientPort):
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+def _openai_usage(body: object) -> TokenUsage | None:
+    """
+    Token counts from the ``usage`` object of a /chat/completions reply.
+
+    Every provider this adapter targets sends it, but it is optional in the
+    wire format, so its absence is reported as no usage rather than an error:
+    the answer is still good.
+    """
+    usage = body.get("usage") if isinstance(body, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    input_tokens = usage.get("prompt_tokens")
+    output_tokens = usage.get("completion_tokens")
+    if not isinstance(input_tokens, int) or not isinstance(output_tokens, int):
+        return None
+    return TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens)

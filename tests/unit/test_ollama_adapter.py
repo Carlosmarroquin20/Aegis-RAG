@@ -12,6 +12,7 @@ import pytest
 import respx
 
 from aegis.domain.models.document import Document
+from aegis.domain.models.generation import TokenUsage
 from aegis.domain.ports.llm_client import LLMTimeoutError, LLMUnavailableError
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 
@@ -32,11 +33,35 @@ class TestOllamaGenerate:
             return_value=httpx.Response(200, json={"message": {"content": "Grounded answer."}})
         )
         adapter = OllamaAdapter(base_url=_BASE, model="llama3.2")
-        answer = await adapter.generate("What is X?", [_doc("1", "X is a thing.")])
+        generation = await adapter.generate("What is X?", [_doc("1", "X is a thing.")])
         await adapter.aclose()
 
-        assert answer == "Grounded answer."
+        assert generation.text == "Grounded answer."
+        assert (generation.provider, generation.model) == ("ollama", "llama3.2")
         assert route.called
+
+    @respx.mock
+    @pytest.mark.parametrize(
+        ("counts", "usage"),
+        [
+            ({"prompt_eval_count": 210, "eval_count": 42}, TokenUsage(210, 42)),
+            # Ollama omits the prompt count when the prompt came from its cache.
+            ({"eval_count": 42}, TokenUsage(0, 42)),
+            ({}, None),
+            ({"prompt_eval_count": "210", "eval_count": 42}, None),
+        ],
+        ids=["both", "cached-prompt", "absent", "malformed"],
+    )
+    async def test_reports_token_usage(
+        self, counts: dict[str, object], usage: TokenUsage | None
+    ) -> None:
+        body = {"message": {"content": "ok"}, **counts}
+        respx.post(f"{_BASE}/api/chat").mock(return_value=httpx.Response(200, json=body))
+        adapter = OllamaAdapter(base_url=_BASE, model="llama3.2")
+        generation = await adapter.generate("q", [])
+        await adapter.aclose()
+
+        assert generation.usage == usage
 
     @respx.mock
     async def test_sends_system_prompt_and_context(self) -> None:
@@ -57,7 +82,7 @@ class TestOllamaFailuresAreTranslated:
     """No httpx exception may cross the port; callers only know the domain errors."""
 
     @staticmethod
-    async def _generate() -> str:
+    async def _generate() -> object:
         adapter = OllamaAdapter(base_url=_BASE, model="llama3.2")
         try:
             return await adapter.generate("q", [])

@@ -97,14 +97,14 @@ class QueryRAGUseCase:
         # ── Generation ────────────────────────────────────────────────────────
         with tracer.start_as_current_span("llm.generate") as span:
             span.set_attribute("aegis.context_docs", len(documents))
-            raw_answer = await self._llm_client.generate(sanitized_text, documents)
+            generation = await self._llm_client.generate(sanitized_text, documents)
 
         # ── Output sanitization (LLM05) ────────────────────────────────────────
         # OutputReflectionError is intentionally NOT caught here: it propagates
         # to the route handler which returns HTTP 500 (pipeline failure, not user error).
         # The span therefore records that failure, which is the desired signal.
         with tracer.start_as_current_span("output.sanitize") as span:
-            sanitized = self._output_sanitizer.sanitize(raw_answer, query_hash=query_hash)
+            sanitized = self._output_sanitizer.sanitize(generation.text, query_hash=query_hash)
             span.set_attribute("aegis.reflection_detected", sanitized.reflection_detected)
         if sanitized.has_warnings:
             log.warning(

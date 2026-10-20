@@ -15,6 +15,7 @@ import httpx
 import structlog
 
 from aegis.domain.models.document import Document
+from aegis.domain.models.generation import Generation, TokenUsage
 from aegis.domain.ports.llm_client import LLMClientPort, LLMTimeoutError, LLMUnavailableError
 from aegis.infrastructure.llm.prompting import SYSTEM_PROMPT, build_user_message, format_context
 
@@ -42,7 +43,7 @@ class OllamaAdapter(LLMClientPort):
         *,
         max_tokens: int = 1024,
         temperature: float = 0.1,
-    ) -> str:
+    ) -> Generation:
         payload = {
             "model": self._model,
             "messages": [
@@ -68,14 +69,22 @@ class OllamaAdapter(LLMClientPort):
             raise LLMUnavailableError(f"Ollama request failed: {exc!r}") from exc
 
         try:
-            answer = response.json()["message"]["content"]
+            body = response.json()
+            answer = body["message"]["content"]
         except (ValueError, KeyError, TypeError) as exc:
             raise LLMUnavailableError("Ollama returned an unexpected response body") from exc
         if not isinstance(answer, str):
             raise LLMUnavailableError("Ollama returned a non-text message content")
 
-        logger.info("llm.response_received", model=self._model, words=len(answer.split()))
-        return answer
+        usage = _ollama_usage(body)
+        logger.info(
+            "llm.response_received",
+            model=self._model,
+            words=len(answer.split()),
+            input_tokens=usage.input_tokens if usage else None,
+            output_tokens=usage.output_tokens if usage else None,
+        )
+        return Generation(text=answer, provider="ollama", model=self._model, usage=usage)
 
     async def health_check(self) -> bool:
         try:
@@ -89,3 +98,20 @@ class OllamaAdapter(LLMClientPort):
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+def _ollama_usage(body: object) -> TokenUsage | None:
+    """
+    Token counts from an Ollama /api/chat reply.
+
+    ``prompt_eval_count`` is omitted when the prompt was served from Ollama's
+    cache, so a missing input count is read as zero rather than as no usage;
+    a missing output count means the reply carried no usage at all.
+    """
+    if not isinstance(body, dict):
+        return None
+    output_tokens = body.get("eval_count")
+    input_tokens = body.get("prompt_eval_count", 0)
+    if not isinstance(output_tokens, int) or not isinstance(input_tokens, int):
+        return None
+    return TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens)
