@@ -30,6 +30,14 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Fixed
 
+- **Dashboards under-counted after every API restart.** A counter that first appears with a
+  non-zero value had no earlier sample, so `increase()` missed what it counted before the first
+  scrape; the new cost panels showed about half the real spend. `/metrics` now serves
+  OpenMetrics when asked, which carries each counter's creation time, and Prometheus runs with
+  `created-timestamp-zero-ingestion`.
+- The API healthcheck gave up before the multilingual embedding model finished loading (about
+  45 s warm, up to two minutes cold), so `docker compose up --wait` reported it unhealthy. The
+  start period is now 180 s; a fast start is not delayed.
 - OWASP references mixed the 2023 and 2025 editions of the Top 10 for LLM Applications (for
   example LLM02 for output handling, from 2023, beside LLM07 for system-prompt leakage, which
   only exists in 2025). Everything now uses the 2025 numbering: output handling is LLM05,
