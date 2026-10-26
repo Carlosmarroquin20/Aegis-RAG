@@ -84,6 +84,14 @@ _CLIENT_ID_HEX_CHARS = 16
 
 
 def _digest(api_key: str) -> bytes:
+    """
+    A plain SHA-256, deliberately not a password hash such as bcrypt or Argon2.
+
+    Slow hashes exist to make guessing low-entropy, human-chosen passwords
+    expensive. API keys are random tokens (startup warns about short ones), so
+    guessing one is infeasible at any hash speed. A slow hash would instead
+    hand every unauthenticated caller a lever to burn CPU on each request.
+    """
     return hashlib.sha256(api_key.encode()).digest()
 
 
