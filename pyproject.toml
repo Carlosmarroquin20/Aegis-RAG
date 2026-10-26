@@ -32,7 +32,7 @@ dependencies = [
     # libraries. The service runs embeddings on CPU (embedding_device="cpu").
     "torch>=2.2.0",
     # Document parsing (Phase 2)
-    "pypdf>=5.1.0",
+    "pypdf>=6.21.2",
     "python-docx>=1.1.0",
     "filetype>=1.2.0",      # MIME detection from magic bytes (not Content-Type header)
     "markdown-it-py>=3.0.0", # Markdown → plain text stripping
