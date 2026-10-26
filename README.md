@@ -182,7 +182,7 @@ Two pre-provisioned Grafana dashboards ship with the stack. **Production Overvie
 - **Rate limiting** — in-process sliding window, or a shared **Redis** backend (same port, one config flag)
 - **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy · ~90% test coverage
 - **Observability** — `structlog` (JSON) · `prometheus-client` + Grafana dashboards · **OpenTelemetry** traces via an OTel Collector (spanmetrics → Prometheus) to Jaeger
-- **Frontend** — React 18 · Vite 5 · TypeScript (strict) · Tailwind CSS (demo console)
+- **Frontend** — React 19 · Vite 8 · TypeScript (strict) · Tailwind CSS (demo console)
 - **Delivery & infra** — Multi-stage Docker (non-root, CPU-only Torch, ~1.8 GB) · GitHub Actions CI · docker-compose · **AWS Terraform** (opt-in)
 
 ---
