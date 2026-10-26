@@ -9,6 +9,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![OWASP LLM](https://img.shields.io/badge/OWASP_LLM_Top_10-mitigated-d6262c)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 [![CI](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/codeql.yml/badge.svg)](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Carlosmarroquin20/Aegis-RAG/badge)](https://scorecard.dev/viewer/?uri=github.com/Carlosmarroquin20/Aegis-RAG)
 [![Coverage](https://img.shields.io/badge/coverage-~90%25-brightgreen)](#testing)
 
 Aegis-RAG is a Retrieval-Augmented Generation API designed for environments where you cannot afford to ship "best effort" security. Every query is evaluated by a domain-level **Security Gateway** before any retrieval or generation happens, every LLM response is post-processed by an **Output Sanitizer**, and the whole pipeline is wrapped in a defence-in-depth middleware stack with first-class observability.
