@@ -17,6 +17,13 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 - OpenSSF Scorecard, scoring the repository's supply-chain practices weekly and whenever
   branch protection changes; the published score is shown as a README badge.
 
+### Changed
+
+- The demo frontend moves to React 19 and Vite 8 (with @vitejs/plugin-react 6). Vite 8 bundles
+  with Rolldown instead of esbuild, which also removes the esbuild advisory reported against
+  the old toolchain. Building the frontend now needs Node.js 20.19+ or 22.12+; the image and
+  the CI already use Node.js 26.
+
 ### Security
 
 - pypdf upgraded from 6.20.0 to 6.21.2, and the minimum raised to match, for nine
