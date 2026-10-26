@@ -1,0 +1,56 @@
+name: CodeQL
+
+# Static analysis of the code itself, complementing the CI's dependency and
+# image scans (pip-audit, Trivy), which only see published advisories. CodeQL
+# follows data flow, so it can flag an injection or path traversal that no
+# advisory will ever describe. Results land in the Security tab as code
+# scanning alerts.
+#
+# Three languages: the Python service, the TypeScript frontend, and the
+# workflows themselves ("actions"), where untrusted input interpolated into a
+# run step is a classic way to compromise a pipeline. None needs a build, so
+# every language runs in build-mode none.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so new queries shipped with CodeQL are run against unchanged code.
+    - cron: "27 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload the SARIF results
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          # security-extended adds lower-precision security queries to the
+          # default suite; quality-only queries stay out of the Security tab.
+          queries: security-extended
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}
