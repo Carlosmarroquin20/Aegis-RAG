@@ -14,14 +14,13 @@
 #   - Read-only filesystem compatible (all writes go to /tmp or mounted volumes)
 # ─────────────────────────────────────────────────────────────────────────────
 
-# UV_VERSION must be recent enough to read the committed uv.lock format
-# (lockfile version 1 / revision 3). Keep it aligned with the uv used to
-# regenerate the lock; an older uv will reject the lockfile under --frozen.
-ARG PYTHON_VERSION=3.11
-ARG UV_VERSION=0.12.9
+# Base images are pinned by digest as well as tag: the tag says what it is, the
+# digest makes the build reproducible and immune to a re-pushed tag. Dependabot
+# updates both together, which it cannot do through a build ARG, so the
+# references are spelled out in each FROM.
 
 # ── Stage 1: Base ─────────────────────────────────────────────────────────────
-FROM python:${PYTHON_VERSION}-slim AS base
+FROM python:3.11-slim@sha256:b7a9e5f6a93d6d4a31f129bbd4bdee69efccb6ded0fb230d78aafaf37af98377 AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -36,10 +35,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # ── uv provider ───────────────────────────────────────────────────────────────
-# Pin the uv binary via a named stage. BuildKit does not expand build ARGs inside
-# a COPY --from image reference, but it does in a FROM (where global ARGs are in
-# scope), so alias the image here and COPY from the alias below.
-FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+# The uv binary comes from a named stage, copied from below. Its version must be
+# recent enough to read the committed uv.lock format (lockfile version 1 /
+# revision 3) and match UV_VERSION in the CI workflow; an older uv rejects the
+# lockfile under --frozen.
+FROM ghcr.io/astral-sh/uv:0.12.9@sha256:8b940d3a9d65bed080436972241af2e21c84b5e8c9193f7014ed71479ee795ff AS uv
 
 # ── Stage 2: Builder ──────────────────────────────────────────────────────────
 FROM base AS builder
