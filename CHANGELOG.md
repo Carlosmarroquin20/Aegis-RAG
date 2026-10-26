@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
+## [Unreleased]
+
+### Security
+
+- pypdf upgraded from 6.20.0 to 6.21.2, and the minimum raised to match, for nine
+  denial-of-service advisories triggered by malformed PDFs (including CVE-2026-115572,
+  CVE-2026-115580 and CVE-2026-115585). Uploaded PDFs are untrusted input, so these were
+  reachable through the ingestion endpoint.
+- certifi upgraded to 2026.10.23, which drops the emSign root CAs whose intermediate keys were
+  compromised (GHSA-6q48-6c7w-9gw2, critical).
+- filelock upgraded from 3.32.5 to 4.2.4 for CVE-2026-112940, CVE-2026-112913 and
+  CVE-2026-112907 (arbitrary file overwrite), and setuptools and virtualenv to their patched
+  releases.
+
 ## [1.2.0] — 2026-10-20
 
 Platform features for running the service as a shared LLM backend: per-client token and cost
