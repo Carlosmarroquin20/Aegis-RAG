@@ -9,6 +9,14 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ## [Unreleased]
 
+### Added
+
+- CodeQL static analysis of the Python service, the TypeScript frontend and the GitHub
+  workflows, on every push, every pull request and weekly, with the `security-extended`
+  query suite.
+- OpenSSF Scorecard, scoring the repository's supply-chain practices weekly and whenever
+  branch protection changes; the published score is shown as a README badge.
+
 ### Security
 
 - pypdf upgraded from 6.20.0 to 6.21.2, and the minimum raised to match, for nine
