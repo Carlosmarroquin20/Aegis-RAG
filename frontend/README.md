@@ -6,7 +6,7 @@ prompt-injection payloads in real time.
 
 ## Stack
 
-- **React 18** + **TypeScript** (strict) + **Vite 5**
+- **React 19** + **TypeScript** (strict) + **Vite 8** (Node.js 20.19+ or 22.12+)
 - **Tailwind CSS 3**
 - No state library — a couple of hooks and the `fetch` API are enough.
 
