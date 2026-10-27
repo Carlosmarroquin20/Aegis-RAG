@@ -1,0 +1,34 @@
+# Load-test overlay for docker-compose.yml. Use both files together:
+#
+#   docker compose -f docker-compose.yml -f loadtest/compose.loadtest.yml up -d --wait api
+#   docker compose -f docker-compose.yml -f loadtest/compose.loadtest.yml run --rm k6 \
+#     run -e SCENARIO=protection /scripts/aegis.js
+#
+# The API runs as it would in production rather than as the development stack
+# does: JSON logs at INFO, not DEBUG console logs, which would otherwise be what
+# the test measures. The per-key rate limit is lifted by default so a load test
+# measures the API instead of the limiter; set RATE_LIMIT_REQUESTS=60 to test the
+# limiter itself (the ratelimit scenario). See loadtest/README.md.
+
+services:
+  api:
+    # k6 reaches the API on the compose network, so the host port is not needed;
+    # without it the API can be scaled out (--scale api=N) to measure replicas.
+    ports: !reset []
+    environment:
+      - DEBUG=false
+      - LOG_FORMAT=json
+      - LOG_LEVEL=${LOADTEST_LOG_LEVEL:-INFO}
+      - TRACING_ENABLED=${LOADTEST_TRACING:-true}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-1000000}
+
+  k6:
+    image: grafana/k6:2.3.0@sha256:2dd4756ec6e14e62778916e1eb850108e4b499304c02df56760fa0bdb0fba0b8
+    # Only started on demand, with `compose run`.
+    profiles: ["loadtest"]
+    networks: [aegis-net]
+    volumes:
+      # Relative to the project directory (the first compose file's), not this one.
+      - ./loadtest/k6:/scripts:ro
+    environment:
+      - BASE_URL=http://api:8000
