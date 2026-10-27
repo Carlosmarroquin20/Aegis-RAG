@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from math import ceil
-from typing import Any
+from typing import Any, ClassVar
 from uuid import uuid4
 
 import structlog
@@ -69,6 +69,13 @@ class RateLimitStore(ABC):
     Port for the rate-limit persistence backend.
     Implementations must be safe for the concurrency model they are deployed in.
     """
+
+    #: True when calls wait on the network. Callers on an event loop must then
+    #: run them in a worker thread: a store that stalls would otherwise stall
+    #: every request in the process, not only the ones it is asked about.
+    #: In-process stores leave it False and are called inline, which is also
+    #: what keeps a store that is not thread-safe on a single thread.
+    performs_io: ClassVar[bool] = False
 
     @abstractmethod
     def record_and_get(
@@ -143,10 +150,15 @@ class RedisRateLimitStore(RateLimitStore):
     under-count. ZCARD and a one-element ZRANGE are O(1) and O(log N): what a
     check costs does not depend on how many requests the window holds.
 
+    Calls block on the network, so ``performs_io`` is True and the middleware
+    runs them in a worker thread.
+
     The ``redis`` package is an optional dependency; install it with the extra:
     ``pip install "aegis-rag[redis]"``. Import is deferred so the module loads
     even when Redis is not installed and the in-memory store is in use.
     """
+
+    performs_io: ClassVar[bool] = True
 
     def __init__(
         self,
@@ -243,6 +255,11 @@ class RateLimiter:
     def limit(self) -> int:
         """Requests admitted per window, burst allowance included."""
         return self._max_requests
+
+    @property
+    def performs_io(self) -> bool:
+        """Whether checks wait on the network; see ``RateLimitStore.performs_io``."""
+        return self._store.performs_io
 
     def _reset_at(self, window: WindowState) -> float:
         """When the window frees a slot: as its oldest entry expires."""

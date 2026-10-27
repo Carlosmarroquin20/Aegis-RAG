@@ -17,12 +17,14 @@ preventing information leakage about undiscovered endpoints.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import math
 import re
 import time
 import uuid
+from collections.abc import Callable
 
 import structlog
 from opentelemetry import trace
@@ -38,7 +40,7 @@ from aegis.infrastructure.observability.metrics import (
     http_requests_total,
     rate_limit_backend_errors_total,
 )
-from aegis.infrastructure.security.rate_limiter import RateLimiter
+from aegis.infrastructure.security.rate_limiter import RateLimiter, RateLimitResult
 
 logger = structlog.get_logger(__name__)
 
@@ -81,6 +83,25 @@ _REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._\-]{1,64}")
 # 64 bits of the key digest: ample to keep clients apart, useless for recovering
 # or verifying a key offline.
 _CLIENT_ID_HEX_CHARS = 16
+
+
+async def _check(
+    limiter: RateLimiter, call: Callable[[str], RateLimitResult], bucket: str
+) -> RateLimitResult:
+    """
+    Runs ``call(bucket)``, one of ``limiter``'s methods, off the event loop when its
+    store does I/O.
+
+    The Redis client is synchronous. Called inline, a Redis that stops answering
+    held the event loop for the length of its socket timeout on every request:
+    in a load test, pausing Redis for 10 s made /health, which never touches
+    it, take 10 s as well. In a worker thread only the requests that need the
+    limiter wait. In-process stores stay inline: they are fast, and not
+    thread-safe.
+    """
+    if limiter.performs_io:
+        return await asyncio.to_thread(call, bucket)
+    return call(bucket)
 
 
 def _digest(api_key: str) -> bytes:
@@ -316,7 +337,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         # Checked BEFORE the key is examined. During a lockout nothing about the
         # presented key may influence the response, or the 429/200 split would
         # still tell a guesser which attempt was right.
-        retry_after = self._lockout_seconds(client_ip)
+        retry_after = await self._lockout_seconds(client_ip)
         if retry_after is not None:
             auth_failures_total.labels(outcome="throttled").inc()
             logger.warning("auth.throttled", path=request.url.path, ip=client_ip)
@@ -333,7 +354,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             authenticated |= hmac.compare_digest(candidate, valid)
 
         if not authenticated:
-            self._record_failure(client_ip)
+            await self._record_failure(client_ip)
             auth_failures_total.labels(outcome="rejected").inc()
             logger.warning("auth.rejected", path=request.url.path, ip=client_ip)
             return JSONResponse(
@@ -344,12 +365,14 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         request.state.client_id = candidate.hex()[:_CLIENT_ID_HEX_CHARS]
         return await call_next(request)  # type: ignore[no-any-return,operator]
 
-    def _lockout_seconds(self, client_ip: str) -> int | None:
+    async def _lockout_seconds(self, client_ip: str) -> int | None:
         """Seconds until ``client_ip`` may authenticate again, or None if it may now."""
         if self._failure_limiter is None:
             return None
         try:
-            state = self._failure_limiter.peek(_AUTH_FAILURE_BUCKET + client_ip)
+            state = await _check(
+                self._failure_limiter, self._failure_limiter.peek, _AUTH_FAILURE_BUCKET + client_ip
+            )
         except Exception as exc:
             # Same reasoning as the request limiter: an unreachable store must not
             # take authentication down with it. Counted and logged, never silent.
@@ -360,11 +383,15 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             return None
         return max(1, math.ceil(state.reset_at - time.time()))
 
-    def _record_failure(self, client_ip: str) -> None:
+    async def _record_failure(self, client_ip: str) -> None:
         if self._failure_limiter is None:
             return
         try:
-            self._failure_limiter.check_and_record(_AUTH_FAILURE_BUCKET + client_ip)
+            await _check(
+                self._failure_limiter,
+                self._failure_limiter.check_and_record,
+                _AUTH_FAILURE_BUCKET + client_ip,
+            )
         except Exception as exc:
             rate_limit_backend_errors_total.inc()
             logger.error("auth.throttle_backend_unavailable", error=repr(exc))
@@ -392,7 +419,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         client_id: str = getattr(request.state, "client_id", "anonymous")
         try:
-            result = self._limiter.check_and_record(client_id)
+            result = await _check(self._limiter, self._limiter.check_and_record, client_id)
         except Exception as exc:
             rate_limit_backend_errors_total.inc()
             logger.error(
