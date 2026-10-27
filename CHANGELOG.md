@@ -62,6 +62,8 @@ All three were found by the load tests.
 - filelock upgraded from 3.32.5 to 4.2.4 for CVE-2026-112940, CVE-2026-112913 and
   CVE-2026-112907 (arbitrary file overwrite), and setuptools and virtualenv to their patched
   releases.
+- msgpack upgraded from 1.2.2 to 1.2.4 for CVE-2026-114613. It is only pulled in by
+  pip-audit, a development tool, so the service image was not affected.
 
 ## [1.2.0] — 2026-10-20
 
