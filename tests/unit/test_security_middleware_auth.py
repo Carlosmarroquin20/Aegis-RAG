@@ -20,6 +20,7 @@ from aegis.infrastructure.security.rate_limiter import (
     InMemoryRateLimitStore,
     RateLimiter,
     RateLimitPolicy,
+    WindowState,
 )
 from aegis.interface.api.middleware.security_middleware import (
     APIKeyMiddleware,
@@ -178,7 +179,7 @@ class TestRateLimitMiddleware:
 class _UnreachableStore(InMemoryRateLimitStore):
     def record_and_get(
         self, key: str, window_seconds: int, max_entries: int | None = None
-    ) -> list[float]:
+    ) -> WindowState:
         raise ConnectionError("redis:6379 refused")
 
 

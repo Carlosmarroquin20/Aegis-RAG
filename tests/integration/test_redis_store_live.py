@@ -54,30 +54,30 @@ class TestAgainstRealRedis:
         assert store._client.ping() is True
 
     def test_record_counts_each_request(self, store: RedisRateLimitStore) -> None:
-        counts = [len(store.record_and_get("client", 60)) for _ in range(4)]
+        counts = [store.record_and_get("client", 60).count for _ in range(4)]
         assert counts == [1, 2, 3, 4]
 
     def test_peek_does_not_record(self, store: RedisRateLimitStore) -> None:
         store.record_and_get("client", 60)
-        assert len(store.peek("client", 60)) == 1
-        assert len(store.peek("client", 60)) == 1
+        assert store.peek("client", 60).count == 1
+        assert store.peek("client", 60).count == 1
 
     def test_simultaneous_requests_are_all_kept(self, store: RedisRateLimitStore) -> None:
         """Members are unique, so identical timestamps must not overwrite each other."""
         for _ in range(25):
             store.record_and_get("client", 60)
-        assert len(store.peek("client", 60)) == 25
+        assert store.peek("client", 60).count == 25
 
     def test_window_never_exceeds_max_entries(self, store: RedisRateLimitStore) -> None:
         for _ in range(40):
             store.record_and_get("client", 60, max_entries=5)
-        assert len(store.peek("client", 60)) == 5
+        assert store.peek("client", 60).count == 5
 
     def test_entries_expire_with_the_window(self, store: RedisRateLimitStore) -> None:
         store.record_and_get("client", 1)
         time.sleep(1.2)
-        assert store.peek("client", 1) == []
-        assert len(store.record_and_get("client", 1)) == 1
+        assert store.peek("client", 1).count == 0
+        assert store.record_and_get("client", 1).count == 1
 
     def test_key_gets_a_ttl_so_idle_clients_do_not_accumulate(
         self, store: RedisRateLimitStore, prefix: str

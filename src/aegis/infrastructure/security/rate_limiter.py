@@ -41,6 +41,22 @@ class RateLimitPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class WindowState:
+    """
+    What the limiter needs to know about a client's sliding window.
+
+    Only the size and the oldest entry: the decision depends on the count, and
+    the window resets when its oldest entry expires. Stores report this summary
+    rather than every timestamp, so the cost of a check does not grow with the
+    limit. A key allowed 10,000 requests a minute would otherwise transfer and
+    parse up to 10,000 entries on each of its requests.
+    """
+
+    count: int
+    oldest: float | None  # wall-clock timestamp; None when the window is empty
+
+
+@dataclass(frozen=True, slots=True)
 class RateLimitResult:
     allowed: bool
     remaining: int  # Requests left in the current window.
@@ -57,22 +73,22 @@ class RateLimitStore(ABC):
     @abstractmethod
     def record_and_get(
         self, key: str, window_seconds: int, max_entries: int | None = None
-    ) -> list[float]:
+    ) -> WindowState:
         """
-        Atomically records a new request timestamp and returns all timestamps
-        within the active sliding window, including the one just recorded.
+        Atomically records a new request timestamp and returns the state of the
+        active sliding window, including the request just recorded.
 
-        ``max_entries`` bounds what the store RETAINS, not what it returns: if the
-        new request takes the window past it, the request still appears in the
-        returned list (so the caller can see the limit was exceeded) but is not
+        ``max_entries`` bounds what the store RETAINS, not what it reports: if the
+        new request takes the window past it, the request is still counted in the
+        returned state (so the caller can see the limit was exceeded) but is not
         kept. Without that bound a throttled client that keeps retrying would
         grow the window with every rejected attempt — unbounded memory, a
         full-window read on each request, and a window that never drains.
         """
 
     @abstractmethod
-    def peek(self, key: str, window_seconds: int) -> list[float]:
-        """Returns current window timestamps without recording a new request."""
+    def peek(self, key: str, window_seconds: int) -> WindowState:
+        """Returns the current window state without recording a new request."""
 
 
 class InMemoryRateLimitStore(RateLimitStore):
@@ -89,21 +105,21 @@ class InMemoryRateLimitStore(RateLimitStore):
 
     def record_and_get(
         self, key: str, window_seconds: int, max_entries: int | None = None
-    ) -> list[float]:
+    ) -> WindowState:
         now = time.time()
         bucket = self._buckets[key]
         self._evict_expired(bucket, now - window_seconds)
         bucket.append(now)
-        window = list(bucket)
-        if max_entries is not None and len(window) > max_entries:
+        state = WindowState(count=len(bucket), oldest=bucket[0])
+        if max_entries is not None and state.count > max_entries:
             bucket.pop()
-        return window
+        return state
 
-    def peek(self, key: str, window_seconds: int) -> list[float]:
+    def peek(self, key: str, window_seconds: int) -> WindowState:
         now = time.time()
         bucket = self._buckets[key]
         self._evict_expired(bucket, now - window_seconds)
-        return list(bucket)
+        return WindowState(count=len(bucket), oldest=bucket[0] if bucket else None)
 
     @staticmethod
     def _evict_expired(bucket: deque[float], cutoff: float) -> None:
@@ -122,8 +138,10 @@ class RedisRateLimitStore(RateLimitStore):
     fragmented the way they are with the in-memory store.
 
     Atomicity: the record path runs as a single MULTI/EXEC transaction — evict
-    expired members, add the new one, refresh the key TTL, and read the window
-    back — so concurrent requests cannot interleave and under-count.
+    expired members, add the new one, refresh the key TTL, and read the window's
+    size and oldest member back — so concurrent requests cannot interleave and
+    under-count. ZCARD and a one-element ZRANGE are O(1) and O(log N): what a
+    check costs does not depend on how many requests the window holds.
 
     The ``redis`` package is an optional dependency; install it with the extra:
     ``pip install "aegis-rag[redis]"``. Import is deferred so the module loads
@@ -160,7 +178,7 @@ class RedisRateLimitStore(RateLimitStore):
 
     def record_and_get(
         self, key: str, window_seconds: int, max_entries: int | None = None
-    ) -> list[float]:
+    ) -> WindowState:
         now = time.time()
         redis_key = self._key_prefix + key
         cutoff = now - window_seconds
@@ -171,27 +189,34 @@ class RedisRateLimitStore(RateLimitStore):
         pipe.zremrangebyscore(redis_key, "-inf", cutoff)
         pipe.zadd(redis_key, {member: now})
         pipe.expire(redis_key, ceil(window_seconds))
-        pipe.zrange(redis_key, 0, -1, withscores=True)
-        results = pipe.execute()
+        pipe.zcard(redis_key)
+        pipe.zrange(redis_key, 0, 0, withscores=True)
+        *_, count, oldest = pipe.execute()
+        state = _window_state(count, oldest)
 
-        # results[-1] is the ZRANGE ... WITHSCORES payload: [(member, score), ...].
-        window = [float(score) for _member, score in results[-1]]
-
-        if max_entries is not None and len(window) > max_entries:
+        if max_entries is not None and state.count > max_entries:
             # Outside the transaction on purpose. The member is unique to this
             # request, so removing it late can only make a concurrent request see
             # one extra entry in a window that is already over the limit — it
             # would have been rejected anyway.
             self._client.zrem(redis_key, member)
-        return window
+        return state
 
-    def peek(self, key: str, window_seconds: int) -> list[float]:
+    def peek(self, key: str, window_seconds: int) -> WindowState:
         now = time.time()
         redis_key = self._key_prefix + key
         cutoff = now - window_seconds
-        # Read-only: do not evict or record, just read the live window.
-        entries = self._client.zrangebyscore(redis_key, cutoff, "+inf", withscores=True)
-        return [float(score) for _member, score in entries]
+        # Read-only: do not evict or record, just measure the live window.
+        pipe = self._client.pipeline(transaction=True)
+        pipe.zcount(redis_key, cutoff, "+inf")
+        pipe.zrangebyscore(redis_key, cutoff, "+inf", start=0, num=1, withscores=True)
+        count, oldest = pipe.execute()
+        return _window_state(count, oldest)
+
+
+def _window_state(count: int, oldest: list[tuple[bytes, float]]) -> WindowState:
+    """Builds the state from a count and a ZRANGE ... WITHSCORES reply of at most one member."""
+    return WindowState(count=int(count), oldest=float(oldest[0][1]) if oldest else None)
 
 
 class RateLimiter:
@@ -219,6 +244,12 @@ class RateLimiter:
         """Requests admitted per window, burst allowance included."""
         return self._max_requests
 
+    def _reset_at(self, window: WindowState) -> float:
+        """When the window frees a slot: as its oldest entry expires."""
+        if window.oldest is None:
+            return time.time()
+        return window.oldest + self._policy.window_seconds
+
     def check_and_record(self, client_id: str) -> RateLimitResult:
         """
         Records the request and returns whether it is permitted.
@@ -233,12 +264,12 @@ class RateLimiter:
         a client that waits ``retry_after`` is admitted on its next attempt.
         Callers must reject if ``result.allowed`` is False.
         """
-        timestamps = self._store.record_and_get(
+        window = self._store.record_and_get(
             client_id, self._policy.window_seconds, max_entries=self._max_requests
         )
-        count = len(timestamps)
+        count = window.count
 
-        reset_at = timestamps[0] + self._policy.window_seconds if timestamps else time.time()
+        reset_at = self._reset_at(window)
 
         if count > self._max_requests:
             retry_after = max(0.0, reset_at - time.time())
@@ -263,9 +294,9 @@ class RateLimiter:
 
     def peek(self, client_id: str) -> RateLimitResult:
         """Non-mutating check — useful for pre-flight validation without side effects."""
-        timestamps = self._store.peek(client_id, self._policy.window_seconds)
-        count = len(timestamps)
-        reset_at = timestamps[0] + self._policy.window_seconds if timestamps else time.time()
+        window = self._store.peek(client_id, self._policy.window_seconds)
+        count = window.count
+        reset_at = self._reset_at(window)
         remaining = max(0, self._max_requests - count)
         allowed = count < self._max_requests
         return RateLimitResult(allowed=allowed, remaining=remaining, reset_at=reset_at)

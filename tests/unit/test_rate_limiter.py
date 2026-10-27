@@ -50,31 +50,31 @@ class TestInMemoryRateLimitStore:
     def test_record_returns_one_timestamp_on_first_call(self) -> None:
         store = InMemoryRateLimitStore()
         result = store.record_and_get("key", _WINDOW)
-        assert len(result) == 1
+        assert result.count == 1
 
     def test_second_record_returns_two_timestamps(self) -> None:
         store = InMemoryRateLimitStore()
         store.record_and_get("key", _WINDOW)
         result = store.record_and_get("key", _WINDOW)
-        assert len(result) == 2
+        assert result.count == 2
 
     def test_peek_does_not_add_timestamps(self) -> None:
         store = InMemoryRateLimitStore()
         store.record_and_get("key", _WINDOW)
-        assert len(store.peek("key", _WINDOW)) == 1
-        assert len(store.peek("key", _WINDOW)) == 1  # still 1 after two peeks
+        assert store.peek("key", _WINDOW).count == 1
+        assert store.peek("key", _WINDOW).count == 1  # still 1 after two peeks
 
     def test_keys_are_isolated(self) -> None:
         store = InMemoryRateLimitStore()
         store.record_and_get("alice", _WINDOW)
         store.record_and_get("alice", _WINDOW)
         store.record_and_get("bob", _WINDOW)
-        assert len(store.peek("alice", _WINDOW)) == 2
-        assert len(store.peek("bob", _WINDOW)) == 1
+        assert store.peek("alice", _WINDOW).count == 2
+        assert store.peek("bob", _WINDOW).count == 1
 
     def test_unknown_key_peek_returns_empty(self) -> None:
         store = InMemoryRateLimitStore()
-        assert store.peek("ghost", _WINDOW) == []
+        assert store.peek("ghost", _WINDOW).count == 0
 
 
 # ── RateLimiter ────────────────────────────────────────────────────────────────
@@ -179,26 +179,26 @@ class TestRedisRateLimitStore:
     def test_record_returns_one_timestamp_on_first_call(
         self, redis_store: RedisRateLimitStore
     ) -> None:
-        assert len(redis_store.record_and_get("key", _WINDOW)) == 1
+        assert redis_store.record_and_get("key", _WINDOW).count == 1
 
     def test_second_record_returns_two_timestamps(self, redis_store: RedisRateLimitStore) -> None:
         redis_store.record_and_get("key", _WINDOW)
-        assert len(redis_store.record_and_get("key", _WINDOW)) == 2
+        assert redis_store.record_and_get("key", _WINDOW).count == 2
 
     def test_peek_does_not_add_timestamps(self, redis_store: RedisRateLimitStore) -> None:
         redis_store.record_and_get("key", _WINDOW)
-        assert len(redis_store.peek("key", _WINDOW)) == 1
-        assert len(redis_store.peek("key", _WINDOW)) == 1
+        assert redis_store.peek("key", _WINDOW).count == 1
+        assert redis_store.peek("key", _WINDOW).count == 1
 
     def test_keys_are_isolated(self, redis_store: RedisRateLimitStore) -> None:
         redis_store.record_and_get("alice", _WINDOW)
         redis_store.record_and_get("alice", _WINDOW)
         redis_store.record_and_get("bob", _WINDOW)
-        assert len(redis_store.peek("alice", _WINDOW)) == 2
-        assert len(redis_store.peek("bob", _WINDOW)) == 1
+        assert redis_store.peek("alice", _WINDOW).count == 2
+        assert redis_store.peek("bob", _WINDOW).count == 1
 
     def test_unknown_key_peek_returns_empty(self, redis_store: RedisRateLimitStore) -> None:
-        assert redis_store.peek("ghost", _WINDOW) == []
+        assert redis_store.peek("ghost", _WINDOW).count == 0
 
     def test_expired_timestamps_are_evicted_on_record(
         self, redis_store: RedisRateLimitStore
@@ -206,13 +206,13 @@ class TestRedisRateLimitStore:
         # A zero-length window means every previously recorded request has already
         # aged out, so each record starts a fresh single-entry window.
         redis_store.record_and_get("key", 0)
-        assert len(redis_store.record_and_get("key", 0)) == 1
+        assert redis_store.record_and_get("key", 0).count == 1
 
     def test_concurrent_members_at_same_timestamp_coexist(
         self, redis_store: RedisRateLimitStore
     ) -> None:
         # Unique members must prevent same-score requests from overwriting.
-        counts = [len(redis_store.record_and_get("key", _WINDOW)) for _ in range(3)]
+        counts = [redis_store.record_and_get("key", _WINDOW).count for _ in range(3)]
         assert counts == [1, 2, 3]
 
 
@@ -277,11 +277,71 @@ def any_store(request: pytest.FixtureRequest) -> RateLimitStore:
     return InMemoryRateLimitStore()
 
 
+class TestWindowState:
+    """Stores report the window's size and oldest entry, not every timestamp."""
+
+    def test_reports_the_count_and_the_oldest_entry(
+        self, any_store: RateLimitStore, clock: _Clock
+    ) -> None:
+        first = clock.now
+        for _ in range(3):
+            any_store.record_and_get("key", _WINDOW)
+            clock.now += 1.0
+
+        recorded = any_store.record_and_get("key", _WINDOW)
+        peeked = any_store.peek("key", _WINDOW)
+
+        assert (recorded.count, recorded.oldest) == (4, pytest.approx(first))
+        assert (peeked.count, peeked.oldest) == (4, pytest.approx(first))
+
+    def test_the_oldest_entry_moves_as_entries_expire(
+        self, any_store: RateLimitStore, clock: _Clock
+    ) -> None:
+        any_store.record_and_get("key", _WINDOW)
+        clock.now += 10.0
+        second = clock.now
+        any_store.record_and_get("key", _WINDOW)
+        clock.now += _WINDOW - 5.0  # the first entry is now out of the window
+
+        assert any_store.peek("key", _WINDOW).oldest == pytest.approx(second)
+
+    def test_an_empty_window_has_no_oldest_entry(self, any_store: RateLimitStore) -> None:
+        state = any_store.peek("ghost", _WINDOW)
+        assert (state.count, state.oldest) == (0, None)
+
+    def test_a_large_window_is_summarised_not_transferred(self) -> None:
+        """Regression: the Redis store read back the whole window on every request."""
+        client = fakeredis.FakeStrictRedis()
+        store = RedisRateLimitStore(client=client)
+        for _ in range(500):
+            store.record_and_get("key", _WINDOW)
+
+        replies: list[object] = []
+        real_execute = client.pipeline
+
+        def recording_pipeline(*args: object, **kwargs: object) -> object:
+            pipe = real_execute(*args, **kwargs)
+            execute = pipe.execute
+
+            def capture() -> list[object]:
+                result = execute()
+                replies.extend(result)
+                return result
+
+            pipe.execute = capture
+            return pipe
+
+        client.pipeline = recording_pipeline  # type: ignore[method-assign]
+        assert store.record_and_get("key", _WINDOW).count == 501
+        # No reply in the transaction carries more than one window member.
+        assert all(not isinstance(r, list) or len(r) <= 1 for r in replies)
+
+
 class TestRejectedRequestsAreNotRetained:
     def test_store_keeps_at_most_max_entries(self, any_store: RateLimitStore) -> None:
         for _ in range(50):
             any_store.record_and_get("key", _WINDOW, max_entries=5)
-        assert len(any_store.peek("key", _WINDOW)) == 5
+        assert any_store.peek("key", _WINDOW).count == 5
 
     def test_over_limit_request_is_still_visible_to_the_caller(
         self, any_store: RateLimitStore
@@ -289,14 +349,14 @@ class TestRejectedRequestsAreNotRetained:
         """The returned window includes the rejected request, or it would look admitted."""
         for _ in range(5):
             any_store.record_and_get("key", _WINDOW, max_entries=5)
-        assert len(any_store.record_and_get("key", _WINDOW, max_entries=5)) == 6
+        assert any_store.record_and_get("key", _WINDOW, max_entries=5).count == 6
 
     def test_window_does_not_grow_under_a_retry_storm(self, any_store: RateLimitStore) -> None:
         limiter = RateLimiter(RateLimitPolicy(5, _WINDOW), store=any_store)
         results = [limiter.check_and_record("user") for _ in range(2_000)]
 
         assert sum(r.allowed for r in results) == 5
-        assert len(any_store.peek("user", _WINDOW)) == 5
+        assert any_store.peek("user", _WINDOW).count == 5
 
     def test_client_that_waits_retry_after_is_admitted(
         self, any_store: RateLimitStore, clock: _Clock
