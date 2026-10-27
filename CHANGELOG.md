@@ -20,10 +20,14 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
   (`aegis-rag-api`, `aegis-rag-frontend`), signed keylessly with Sigstore cosign, with a SLSA
   build provenance attestation and an SPDX SBOM (in the registry and as a release asset).
   How to verify them is in `SECURITY.md`.
-
 - Retrieval quality gate: CI measures hit@5 and MRR of the default embedding model against
   the Spanish customer-service corpus and fails below 0.94 and 0.82 (measured: 0.974 and
   0.863), so a regression in parsing, chunking or the model cannot merge unnoticed.
+- k6 load tests (`loadtest/`): steady-rate, stress, rate-limit and RAG scenarios against the
+  compose stack, plus a Redis-outage check, with the results and what they found in
+  `loadtest/README.md`.
+- `aegis_gc_pause_seconds`, the time each garbage collection stops the process, by generation,
+  and the `AegisLongGCPauses` alert when full collections exceed 250 ms.
 
 ### Changed
 
@@ -31,6 +35,21 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
   with Rolldown instead of esbuild, which also removes the esbuild advisory reported against
   the old toolchain. Building the frontend now needs Node.js 20.19+ or 22.12+; the image and
   the CI already use Node.js 26.
+
+### Fixed
+
+All three were found by the load tests.
+
+- The Redis rate-limit store read back every entry in the client's window on each request,
+  so a check cost more the higher the limit; with a high limit it took 56% of the API's CPU.
+  It now reads the window's size and oldest entry only. Throughput on one worker rose from 37
+  to about 70 requests per second on the same test.
+- Full garbage collections walked the roughly 520,000 objects startup leaves behind, and
+  froze the event loop for up to 1.3 s under load. Startup now freezes its heap; at 40
+  requests per second the p99 fell from 974 ms to under 75 ms.
+- The synchronous Redis client was called on the event loop, so a stalled Redis stalled every
+  request in the process, including `/health` (p99 10.25 s during a 10 s pause). Network-backed
+  rate-limit stores now run in a worker thread; `/health` stays at a p99 of 39 ms.
 
 ### Security
 
