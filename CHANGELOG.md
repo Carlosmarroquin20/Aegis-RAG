@@ -21,6 +21,10 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
   build provenance attestation and an SPDX SBOM (in the registry and as a release asset).
   How to verify them is in `SECURITY.md`.
 
+- Retrieval quality gate: CI measures hit@5 and MRR of the default embedding model against
+  the Spanish customer-service corpus and fails below 0.94 and 0.82 (measured: 0.974 and
+  0.863), so a regression in parsing, chunking or the model cannot merge unnoticed.
+
 ### Changed
 
 - The demo frontend moves to React 19 and Vite 8 (with @vitejs/plugin-react 6). Vite 8 bundles
