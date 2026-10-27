@@ -8,6 +8,7 @@ Usage:
         --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
     uv run python scripts/evaluate_retrieval.py --corpus examples/atencion-cliente \\
         --questions evals/retrieval/atencion-cliente.jsonl
+    uv run python scripts/evaluate_retrieval.py --min-hit5 0.94 --min-mrr 0.82
 
 Retrieval is the half of RAG that decides whether the model ever sees the
 answer: a question whose document is not in the top results is answered with
@@ -17,9 +18,13 @@ the chunks are the ones the API would store, embeds them with the given model,
 and reports for each question where the first chunk of the expected document
 ranks.
 
-It needs the embedding model locally (downloaded on first use) and is not run
-in CI. Results are printed rather than written, because they depend on the
-model files and not only on the code.
+It needs the embedding model locally (downloaded on first use). Results are
+printed rather than written, because they depend on the model files and not
+only on the code. With --min-hit5 and --min-mrr it is a quality gate: it exits
+non-zero when any model scores below either threshold over all questions. CI
+runs it that way, so a change to parsing, chunking or the default model that
+makes retrieval worse fails the build instead of reaching users as unanswered
+questions.
 """
 
 from __future__ import annotations
@@ -139,6 +144,18 @@ def _summary(ranks: Sequence[int]) -> str:
     return f"{hits}  MRR {mrr:.3f}  (n={len(ranks)})"
 
 
+def shortfalls(ranks: Sequence[int], *, min_hit5: float | None, min_mrr: float | None) -> list[str]:
+    """The thresholds the ranks fall short of, as readable lines; empty when all are met."""
+    problems = []
+    hit5 = sum(r <= 5 for r in ranks) / len(ranks)
+    mrr = statistics.fmean(1 / r for r in ranks)
+    if min_hit5 is not None and hit5 < min_hit5:
+        problems.append(f"hit@5 {hit5:.3f} is below the required {min_hit5:.3f}")
+    if min_mrr is not None and mrr < min_mrr:
+        problems.append(f"MRR {mrr:.3f} is below the required {min_mrr:.3f}")
+    return problems
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     parser.add_argument(
@@ -147,6 +164,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
     parser.add_argument("--show-misses", action="store_true", help="list questions ranked past 5")
+    parser.add_argument("--min-hit5", type=float, help="fail below this hit@5 over all questions")
+    parser.add_argument("--min-mrr", type=float, help="fail below this MRR over all questions")
     args = parser.parse_args(argv)
 
     # Ingestion logs one line per stage per file; the result would be lost in them.
@@ -156,6 +175,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     questions = _load_questions(args.questions)
     print(f"{len(chunks)} chunks from {args.corpus.name}, {len(questions)} questions")
 
+    failed = False
     for model_name in models:
         started = time.perf_counter()
         ranks = _ranks(model_name, chunks, questions)
@@ -168,7 +188,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             for rank, question in zip(ranks, questions, strict=True):
                 if rank > max(CUTOFFS):
                     print(f"    rank {rank:2d}  {question.id}  {question.text}")
-    return 0
+        for problem in shortfalls(ranks, min_hit5=args.min_hit5, min_mrr=args.min_mrr):
+            print(f"  FAIL: {problem}")
+            failed = True
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
