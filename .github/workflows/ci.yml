@@ -295,6 +295,45 @@ jobs:
           files: ./coverage.xml
           fail_ci_if_error: false
 
+  retrieval-quality:
+    name: Retrieval Quality Gate
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Cache the embedding model
+        # About 470 MB. Keyed on the configured default, so changing the model
+        # downloads the new one instead of measuring a stale cache.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ hashFiles('src/aegis/config.py') }}
+
+      - name: Measure retrieval against the example corpus
+        # The thresholds sit just under the measured hit@5 0.974 (37 of 38
+        # questions) and MRR 0.863: one more miss still passes, two fail, and so
+        # does a ranking that drifts down without losing a hit. Raise them when
+        # retrieval improves; lowering them is a decision to record in the PR.
+        env:
+          HF_HUB_DISABLE_XET: "1"
+        run: >-
+          uv run python scripts/evaluate_retrieval.py --show-misses
+          --min-hit5 0.94 --min-mrr 0.82
+
   docker-build:
     name: Docker Build Validation
     runs-on: ubuntu-latest

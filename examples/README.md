@@ -42,6 +42,10 @@ uv run python scripts/evaluate_retrieval.py --show-misses \
   --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 ```
 
+CI runs the same measurement with the default model as a gate (`--min-hit5 0.94
+--min-mrr 0.82`, just under the figures above), so a change to parsing, chunking or the
+model that makes retrieval worse fails the build.
+
 ### Questions to try
 
 These are answered by the documents and are let through by the gateway. A test keeps both
