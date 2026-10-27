@@ -7,7 +7,13 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
-## [Unreleased]
+## [1.3.0] — 2026-10-27
+
+Supply-chain hardening and measured performance. Released images are now signed, attested and
+shipped with an SBOM; the repository is analysed by CodeQL and scored by OpenSSF Scorecard; and
+retrieval quality is a merge gate. The first load tests found three defects that no unit test
+could see, all fixed below: throughput on one worker roughly doubled, and the p99 at a steady
+rate fell from about a second to under 75 ms. The HTTP API is unchanged.
 
 ### Added
 
@@ -337,6 +343,7 @@ rate limiting, structured logging, Prometheus metrics, OpenTelemetry tracing wit
 dashboards, a React demo console, a multi-stage Docker image, docker-compose stack, GitHub
 Actions CI and an AWS Terraform skeleton.
 
+[1.3.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.2.0
 [1.1.1]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.1.1
 [1.1.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.1.0
