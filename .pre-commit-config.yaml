@@ -53,8 +53,10 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-yaml
-        # Grafana provisioning and compose files are plain YAML; nothing here
-        # uses custom tags that would need --unsafe.
+        # --unsafe checks syntax without constructing custom tags. The load-test
+        # compose overlay uses compose's `!reset` tag to drop the API's host
+        # port, which the default safe loader rejects as unknown.
+        args: [--unsafe]
       - id: check-toml
       - id: check-json
         # Both formats allow comments, which strict JSON does not.
