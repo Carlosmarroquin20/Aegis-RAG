@@ -34,6 +34,7 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 - **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
 - **Magic-byte file detection.** Document uploads are dispatched to parsers based on actual file content, not the attacker-controllable `Content-Type` header.
 - **Hexagonal for real.** The `LLMClientPort`, `VectorStorePort` and `RateLimitStore` interfaces mean swapping Ollama for OpenAI, ChromaDB for pgvector, or the in-memory rate limiter for the shared **Redis** backend is a one-file change — and there are fakes in the test suite that prove it. The dependency rule itself (`interface → application → domain ← infrastructure`) is enforced by a test that parses every module's imports. Adapters translate vendor failures at the boundary, so a vector-store or LLM outage reaches the client as a retryable **503/504**, never as a leaked client-library exception.
+- **A supply chain you can verify.** Every action is pinned by commit and every base image by digest; CodeQL and OpenSSF Scorecard run on the repository itself. Released images are signed keylessly with Sigstore and carry SLSA build provenance and an SPDX SBOM, so a consumer can check what they run came from this repository's workflow and from which commit.
 - **Three pillars of observability.** Structured JSON logs, Prometheus metrics, and opt-in **OpenTelemetry** traces (a span per pipeline stage) all correlate through a single `request_id` / `trace_id`.
 - **Air-gap by default, hosted by choice.** Out of the box the full stack runs on local infrastructure (Ollama + ChromaDB) and no data leaves the network. The same `LLMClientPort` also has an adapter for any OpenAI-compatible hosted provider (Groq, OpenRouter, Mistral, a vLLM gateway), selected with one setting — an explicit opt-in that is logged at startup, because it is the one configuration in which document content leaves the host.
 
@@ -235,6 +236,11 @@ directory.
 ```bash
 uv run python scripts/seed_documents.py --source-dir examples/atencion-cliente
 ```
+
+**Prebuilt images.** Every release publishes the API and the console to GHCR as
+`ghcr.io/carlosmarroquin20/aegis-rag-api` and `ghcr.io/carlosmarroquin20/aegis-rag-frontend`,
+signed with Sigstore and shipped with build provenance and an SPDX SBOM. See
+[Supply Chain](SECURITY.md#supply-chain) for how to verify one before running it.
 
 ---
 

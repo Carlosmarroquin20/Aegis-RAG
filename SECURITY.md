@@ -45,6 +45,33 @@ actually act on:
 The image itself is kept minimal (CPU-only PyTorch, multi-stage build, no build
 tools in the final layer) which also keeps the scan's attack surface small.
 
+## Supply Chain
+
+What runs in CI and what ships are both pinned and verifiable:
+
+- **Pinned inputs.** Every GitHub Action is referenced by full commit SHA, and both
+  Dockerfiles pin their base images by digest. A tag can be re-pointed after the fact; a
+  commit or a digest cannot. Dependabot moves the pins and their version comments together.
+- **Static analysis.** CodeQL analyses the Python service, the TypeScript frontend and the
+  workflows themselves on every push and pull request (`.github/workflows/codeql.yml`).
+  OpenSSF Scorecard scores the repository's practices weekly (`scorecard.yml`).
+- **Signed releases.** Each GitHub release publishes the API and frontend images to GHCR
+  (`release.yml`). Every image digest is signed keylessly with Sigstore cosign, using the
+  workflow's OIDC identity, so there is no long-lived signing key to leak. It also carries a
+  SLSA build provenance attestation and an SPDX SBOM, which is attached to the release too.
+
+To verify an image before running it:
+
+```bash
+IMAGE=ghcr.io/carlosmarroquin20/aegis-rag-api:1.3.0
+
+# Keyless signature: made by this repository's release workflow, nothing else
+cosign verify "$IMAGE"   --certificate-identity-regexp '^https://github.com/Carlosmarroquin20/Aegis-RAG/.github/workflows/release.yml@'   --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# SLSA build provenance: which commit and which workflow run built this digest
+gh attestation verify "oci://$IMAGE" --repo Carlosmarroquin20/Aegis-RAG
+```
+
 ## Accepted Risks Register
 
 > Deployment assumptions that back these acceptances: ChromaDB runs as an
