@@ -84,6 +84,18 @@ rate_limit_backend_errors_total = Counter(
     registry=registry,
 )
 
+# ── Runtime ───────────────────────────────────────────────────────────────────
+
+gc_pause_seconds = Histogram(
+    "aegis_gc_pause_seconds",
+    "Time the Python garbage collector stopped the process, by generation.",
+    labelnames=("generation",),
+    # A young-generation pass takes microseconds; a full pass over an unfrozen
+    # heap took over a second under load, which is the tail this must show.
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
+    registry=registry,
+)
+
 # ── RAG pipeline ──────────────────────────────────────────────────────────────
 
 rag_queries_total = Counter(

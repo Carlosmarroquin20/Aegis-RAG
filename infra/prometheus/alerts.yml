@@ -52,6 +52,25 @@ groups:
             Sustained p95 latency > 5s usually indicates an LLM generation
             bottleneck or an under-provisioned embedding step.
 
+      - alert: AegisLongGCPauses
+        # Startup freezes its heap so full collections stay short. Pauses this
+        # long mean something now builds large long-lived state after startup,
+        # and every request in flight waits for each of them.
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(aegis_gc_pause_seconds_bucket{generation="2"}[10m]))
+          ) > 0.25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Aegis-RAG garbage-collection pauses above 250 ms"
+          description: >
+            Full collections are stopping the process for more than 250 ms
+            (p99 over 10 minutes). Compare aegis_gc_pause_seconds before and
+            after the last deploy; see infrastructure/observability/runtime.py.
+
   - name: aegis-rag.security
     interval: 30s
     rules:

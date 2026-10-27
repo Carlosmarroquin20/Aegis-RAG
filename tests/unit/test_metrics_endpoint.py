@@ -80,6 +80,9 @@ class TestMetricsEndpointCatalog:
     def test_exposes_rag_queries_total(self) -> None:
         assert "aegis_rag_queries_total" in self._body()
 
+    def test_exposes_gc_pause_seconds(self) -> None:
+        assert "# TYPE aegis_gc_pause_seconds histogram" in self._body()
+
     @pytest.mark.parametrize(
         "name",
         ["aegis_llm_tokens_total", "aegis_llm_cost_usd_total", "aegis_llm_usage_unreported_total"],

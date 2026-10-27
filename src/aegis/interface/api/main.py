@@ -27,6 +27,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from aegis.config import MIN_RECOMMENDED_API_KEY_CHARS, get_settings
+from aegis.infrastructure.observability.runtime import (
+    freeze_startup_heap,
+    install_gc_pause_metrics,
+)
 from aegis.infrastructure.observability.tracing import (
     add_trace_context,
     configure_tracing,
@@ -154,7 +158,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     vector_store = get_chromadb_adapter()
     await vector_store.initialize()
 
-    logger.info("startup.complete")
+    # Last, so everything startup built is frozen: full collections that walked
+    # it were the API's p99 latency under load (see observability/runtime.py).
+    frozen = freeze_startup_heap()
+    install_gc_pause_metrics()
+
+    logger.info("startup.complete", gc_frozen_objects=frozen)
     yield
 
     # Graceful shutdown: release the LLM HTTP client connection pool.
