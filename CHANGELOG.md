@@ -16,6 +16,10 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
   query suite.
 - OpenSSF Scorecard, scoring the repository's supply-chain practices weekly and whenever
   branch protection changes; the published score is shown as a README badge.
+- Release images: every GitHub release publishes the API and frontend images to GHCR
+  (`aegis-rag-api`, `aegis-rag-frontend`), signed keylessly with Sigstore cosign, with a SLSA
+  build provenance attestation and an SPDX SBOM (in the registry and as a release asset).
+  How to verify them is in `SECURITY.md`.
 
 ### Changed
 
