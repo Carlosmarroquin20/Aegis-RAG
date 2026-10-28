@@ -7,6 +7,33 @@ All notable changes to this project are documented here. The format follows
 Entries describe what changed for someone running or integrating the service, not the
 commit history; the reasoning behind the larger decisions is in [`docs/adr`](docs/adr/README.md).
 
+## [Unreleased]
+
+### Added
+
+- Multi-tenancy for running one deployment for several teams. Tenants are declared in a TOML
+  file (`TENANTS_FILE`), each with its own collection, API keys stored as SHA-256 digests, an
+  optional request limit and an optional daily LLM token budget; see
+  [ADR 0010](docs/adr/0010-tenants-isolated-by-collection.md) and
+  `examples/tenants.example.toml`.
+  - The tenant is resolved from the API key alone, and every route reaches only that tenant's
+    collection, so one team cannot list, retrieve, delete or be answered from another's
+    documents.
+  - All of a tenant's keys share one rate-limit bucket, at the tenant's own limit if it sets one.
+  - A spent token budget answers `429` with a `Retry-After` until 00:00 UTC. Budgets are kept in
+    Redis, so they hold across replicas. New metrics: `aegis_token_budget_rejections_total` and
+    `aegis_token_ledger_errors_total`, with the `AegisTenantTokenBudgetExhausted` and
+    `AegisTokenLedgerUnavailable` alerts.
+  - A tenants file that would leak data or lift a limit by mistake stops the API at startup.
+  - `scripts/tenant_key.py` generates a key and its digest; `scripts/seed_documents.py --tenant`
+    indexes into one tenant's collection.
+- Without `TENANTS_FILE` nothing changes: every key in `VALID_API_KEYS` keeps its rate-limit
+  bucket, its metric label and the shared collection.
+
+### Changed
+
+- `/ready` checks every tenant's collection, and is degraded if any of them is unreachable.
+
 ## [1.3.0] — 2026-10-27
 
 Supply-chain hardening and measured performance. Released images are now signed, attested and
