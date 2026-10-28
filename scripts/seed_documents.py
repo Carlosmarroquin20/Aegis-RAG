@@ -82,13 +82,31 @@ async def seed(
     return summary
 
 
-async def _run(source_dir: Path, chunk_size: int, overlap: int) -> int:
+async def _run(source_dir: Path, chunk_size: int, overlap: int, tenant_id: str | None) -> int:
     # Imported here so the module (and ``seed``) can be used without the heavy
     # wiring, which loads the embedding model.
-    from aegis.interface.api.dependencies import get_chromadb_adapter, get_ingest_use_case
+    from aegis.config import get_settings
+    from aegis.interface.api.dependencies import (
+        build_ingest_use_case,
+        get_collection_store,
+        get_tenant_registry,
+    )
 
-    await get_chromadb_adapter().initialize()
-    summary = await seed(source_dir, get_ingest_use_case(), chunk_size=chunk_size, overlap=overlap)
+    collection = get_settings().chroma_collection
+    if tenant_id is not None:
+        tenants = {t.id: t for t in get_tenant_registry().tenants}
+        if tenant_id not in tenants:
+            print(
+                f"Unknown tenant {tenant_id!r}; known: {', '.join(sorted(tenants))}",
+                file=sys.stderr,
+            )
+            return 2
+        collection = tenants[tenant_id].collection
+
+    await get_collection_store(collection).initialize()
+    summary = await seed(
+        source_dir, build_ingest_use_case(collection), chunk_size=chunk_size, overlap=overlap
+    )
 
     print(
         f"Indexed {summary.files_indexed} file(s): {summary.chunks_created} new chunk(s), "
@@ -111,6 +129,10 @@ def main() -> None:
         default=Path("data/docs"),
         help="Directory to index recursively (TXT, MD, PDF, DOCX).",
     )
+    parser.add_argument(
+        "--tenant",
+        help="Index into this tenant's collection (TENANTS_FILE) instead of CHROMA_COLLECTION.",
+    )
     parser.add_argument("--chunk-size", type=int, default=512)
     parser.add_argument("--overlap", type=int, default=64)
     args = parser.parse_args()
@@ -118,7 +140,7 @@ def main() -> None:
     if not args.source_dir.is_dir():
         parser.error(f"--source-dir is not a directory: {args.source_dir}")
 
-    sys.exit(asyncio.run(_run(args.source_dir, args.chunk_size, args.overlap)))
+    sys.exit(asyncio.run(_run(args.source_dir, args.chunk_size, args.overlap, args.tenant)))
 
 
 if __name__ == "__main__":

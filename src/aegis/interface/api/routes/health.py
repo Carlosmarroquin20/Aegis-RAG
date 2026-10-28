@@ -15,7 +15,7 @@ from prometheus_client.exposition import choose_encoder
 from pydantic import BaseModel
 
 from aegis.infrastructure.observability.metrics import registry
-from aegis.interface.api.dependencies import get_llm_client, get_vector_store
+from aegis.interface.api.dependencies import get_llm_client, get_tenant_vector_stores
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(tags=["ops"])
@@ -46,7 +46,9 @@ async def ready() -> JSONResponse:
     Returns HTTP 503 if any component is unavailable so that orchestrators
     (Kubernetes, ECS) hold traffic until the service is fully operational.
     """
-    vector_store_ok = await get_vector_store().health_check()
+    # Every tenant's collection: one that has gone missing makes that tenant's
+    # requests fail, which is not ready, even if the others are fine.
+    vector_store_ok = all([await s.health_check() for s in get_tenant_vector_stores()])
     llm_ok = await get_llm_client().health_check()
 
     components = {"vector_store": vector_store_ok, "llm": llm_ok}

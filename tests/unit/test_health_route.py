@@ -37,17 +37,32 @@ class TestHealth:
 
 class TestReady:
     def test_ready_when_all_components_healthy(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(health, "get_vector_store", lambda: _FakeAdapter(healthy=True))
+        monkeypatch.setattr(
+            health, "get_tenant_vector_stores", lambda: [_FakeAdapter(healthy=True)]
+        )
         monkeypatch.setattr(health, "get_llm_client", lambda: _FakeAdapter(healthy=True))
         resp = _client().get("/ready")
         assert resp.status_code == 200
         assert resp.json()["status"] == "ready"
 
     def test_degraded_when_a_component_is_down(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(health, "get_vector_store", lambda: _FakeAdapter(healthy=True))
+        monkeypatch.setattr(
+            health, "get_tenant_vector_stores", lambda: [_FakeAdapter(healthy=True)]
+        )
         monkeypatch.setattr(health, "get_llm_client", lambda: _FakeAdapter(healthy=False))
         resp = _client().get("/ready")
         assert resp.status_code == 503
         body = resp.json()
         assert body["status"] == "degraded"
         assert body["components"]["llm"] is False
+
+    def test_degraded_when_one_tenants_collection_is_down(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """That tenant's requests would fail, so the service is not ready."""
+        stores = [_FakeAdapter(healthy=True), _FakeAdapter(healthy=False)]
+        monkeypatch.setattr(health, "get_tenant_vector_stores", lambda: stores)
+        monkeypatch.setattr(health, "get_llm_client", lambda: _FakeAdapter(healthy=True))
+        resp = _client().get("/ready")
+        assert resp.status_code == 503
+        assert resp.json()["components"]["vector_store"] is False

@@ -39,12 +39,12 @@ from aegis.infrastructure.observability.tracing import (
 )
 from aegis.interface.api.dependencies import (
     get_auth_failure_limiter,
-    get_chromadb_adapter,
     get_llm_client,
     get_parser_registry,
     get_rate_limiter,
     get_security_gateway,
     get_tenant_registry,
+    get_tenant_vector_stores,
 )
 from aegis.interface.api.error_handlers import register_dependency_error_handlers
 from aegis.interface.api.middleware.body_limit import BodySizeLimitMiddleware
@@ -163,9 +163,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Pre-load the parser registry (deferred imports in parsers run at first get).
     get_parser_registry()
 
-    # Initialize the vector store (creates collection if absent).
-    vector_store = get_chromadb_adapter()
-    await vector_store.initialize()
+    # Initialize every tenant's collection (each is created if absent), so a
+    # tenant whose collection was built with another embedding model stops the
+    # process here rather than failing its first query.
+    for vector_store in get_tenant_vector_stores():
+        await vector_store.initialize()
 
     # Last, so everything startup built is frozen: full collections that walked
     # it were the API's p99 latency under load (see observability/runtime.py).

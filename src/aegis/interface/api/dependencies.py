@@ -11,12 +11,16 @@ the cache ensures the underlying heavy object is built only once per process.
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache, lru_cache
+from typing import Any
 from urllib.parse import urlsplit
+
+from starlette.requests import Request
 
 from aegis.application.use_cases.ingest_documents import IngestDocumentsUseCase
 from aegis.application.use_cases.query_rag import QueryRAGUseCase
 from aegis.config import get_settings
+from aegis.domain.models.tenant import Tenant
 from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.llm.fallback import Backend, FallbackLLMClient
@@ -155,35 +159,71 @@ def _llm_backend(provider: str) -> Backend:
 
 
 @lru_cache(maxsize=1)
-def get_chromadb_adapter() -> ChromaDBAdapter:
+def get_embedding_function() -> Any:
     """
-    Builds the ChromaDB adapter with a SentenceTransformers embedding function.
-    The adapter is NOT initialized here — that happens in the lifespan handler
-    so initialization errors surface at startup, not mid-request.
+    The SentenceTransformers model, loaded once and shared by every collection:
+    tenants differ in what they store, not in how text is embedded.
     """
     from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
     cfg = get_settings()
-    embedding_fn = SentenceTransformerEmbeddingFunction(
+    return SentenceTransformerEmbeddingFunction(
         model_name=cfg.embedding_model,
         device=cfg.embedding_device,
     )
+
+
+@cache
+def get_collection_store(collection: str) -> ChromaDBAdapter:
+    """
+    The adapter for one collection, one per collection for the process's life.
+    It is NOT initialized here — that happens in the lifespan handler so
+    initialization errors surface at startup, not mid-request. The cache is
+    bounded by the tenants file: only configured collections are ever asked for.
+    """
+    cfg = get_settings()
     return ChromaDBAdapter(
         host=cfg.chroma_host,
         port=cfg.chroma_port,
-        collection_name=cfg.chroma_collection,
-        embedding_function=embedding_fn,
+        collection_name=collection,
+        embedding_function=get_embedding_function(),
         embedding_model=cfg.embedding_model,
     )
 
 
-def get_vector_store() -> VectorStorePort:
+def get_chromadb_adapter() -> ChromaDBAdapter:
+    """The adapter for CHROMA_COLLECTION, the collection of a single-team deployment."""
+    return get_collection_store(get_settings().chroma_collection)
+
+
+def get_tenant_vector_stores() -> list[ChromaDBAdapter]:
+    """One adapter per collection any tenant uses, for startup and readiness."""
+    collections = sorted({t.collection for t in get_tenant_registry().tenants})
+    return [get_collection_store(c) for c in collections]
+
+
+def request_tenant(request: Request) -> Tenant:
     """
-    The vector store as the rest of the application sees it: through its port.
-    Routes and use cases depend on this, never on the concrete adapter, so
-    replacing ChromaDB means changing this one return statement.
+    The tenant APIKeyMiddleware resolved for this request.
+
+    There is deliberately no fallback to a default collection: a route reached
+    without a tenant is a wiring defect, and serving it from some collection
+    would hand one tenant's documents to a caller nobody authenticated as it.
     """
-    return get_chromadb_adapter()
+    tenant: Tenant | None = getattr(request.state, "tenant", None)
+    if tenant is None:
+        raise LookupError("no tenant on the request; is APIKeyMiddleware installed?")
+    return tenant
+
+
+def get_vector_store(request: Request) -> VectorStorePort:
+    """
+    The calling tenant's vector store, through its port. Routes and use cases
+    depend on this, never on the concrete adapter, so replacing ChromaDB means
+    changing this module only. Each tenant reaches its own collection and
+    nothing else, so a list, a delete or a search cannot cross tenants.
+    """
+    return get_collection_store(request_tenant(request).collection)
 
 
 def _hosted_llm_prices() -> dict[str, LLMPricing]:
@@ -200,10 +240,10 @@ def _hosted_llm_prices() -> dict[str, LLMPricing]:
     }
 
 
-def get_query_use_case() -> QueryRAGUseCase:
-    """FastAPI dependency factory for the query pipeline."""
+def get_query_use_case(request: Request) -> QueryRAGUseCase:
+    """FastAPI dependency factory for the query pipeline, bound to the caller's tenant."""
     return QueryRAGUseCase(
-        vector_store=get_vector_store(),
+        vector_store=get_vector_store(request),
         llm_client=get_llm_client(),
         security_gateway=get_security_gateway(),
         output_sanitizer=get_output_sanitizer(),
@@ -211,11 +251,15 @@ def get_query_use_case() -> QueryRAGUseCase:
     )
 
 
-def get_ingest_use_case() -> IngestDocumentsUseCase:
-    """FastAPI dependency factory for the ingestion pipeline."""
-    cfg = get_settings()
+def get_ingest_use_case(request: Request) -> IngestDocumentsUseCase:
+    """FastAPI dependency factory for the ingestion pipeline, into the caller's collection."""
+    return build_ingest_use_case(request_tenant(request).collection)
+
+
+def build_ingest_use_case(collection: str) -> IngestDocumentsUseCase:
+    """The ingestion pipeline for one collection; also used by the seed script."""
     return IngestDocumentsUseCase(
-        vector_store=get_vector_store(),
+        vector_store=get_collection_store(collection),
         parser_registry=get_parser_registry(),
-        collection=cfg.chroma_collection,
+        collection=collection,
     )
