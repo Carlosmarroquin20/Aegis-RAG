@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     api_key_header: str = "X-API-Key"
     # Comma-separated list of valid API keys; in production, load from a secrets manager.
     valid_api_keys: str = Field(default="", description="Comma-separated API keys")
+    # Path to a TOML file declaring tenants: each with its own key digests,
+    # collection, rate limit and daily token budget (see
+    # infrastructure/tenancy/registry.py). When set, VALID_API_KEYS is ignored;
+    # when empty, every key in VALID_API_KEYS is a tenant on CHROMA_COLLECTION.
+    tenants_file: str = ""
 
     # ── Failed-authentication throttling ──────────────────────────────────────
     # After this many rejected API keys from one client address inside the
