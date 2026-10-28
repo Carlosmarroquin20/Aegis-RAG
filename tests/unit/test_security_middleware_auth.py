@@ -171,6 +171,73 @@ class TestTenantResolution:
         assert response.status_code == 403
 
 
+class TestPerTenantRateLimits:
+    _SUPPORT = "support-test-key"
+    _SUPPORT_ROTATED = "support-rotated-key"
+    _BILLING = "billing-test-key"
+
+    def _client(self) -> TestClient:
+        tenants = TenantRegistry.from_mapping(
+            {
+                "tenant": [
+                    {
+                        "id": "support",
+                        "collection": "support-docs",
+                        "api_key_sha256": [
+                            key_digest(self._SUPPORT).hex(),
+                            key_digest(self._SUPPORT_ROTATED).hex(),
+                        ],
+                        "rate_limit_requests": 2,
+                    },
+                    {
+                        "id": "billing",
+                        "collection": "billing-docs",
+                        "api_key_sha256": [key_digest(self._BILLING).hex()],
+                    },
+                ]
+            }
+        )
+        store = InMemoryRateLimitStore()
+        limiters: dict[int, RateLimiter] = {}
+
+        def limiter_for(limit: int) -> RateLimiter:
+            return limiters.setdefault(limit, RateLimiter(RateLimitPolicy(limit, 3600), store))
+
+        app = FastAPI()
+        app.add_middleware(
+            RateLimitMiddleware, rate_limiter=limiter_for(5), limiter_for=limiter_for
+        )
+        app.add_middleware(APIKeyMiddleware, settings=_settings(), tenants=tenants)
+
+        @app.get("/ping")
+        async def ping() -> dict[str, bool]:
+            return {"pong": True}
+
+        return TestClient(app)
+
+    def _statuses(self, client: TestClient, key: str, n: int) -> list[int]:
+        return [client.get("/ping", headers={"X-API-Key": key}).status_code for _ in range(n)]
+
+    def test_a_tenant_with_its_own_limit_is_held_to_it(self) -> None:
+        client = self._client()
+        assert self._statuses(client, self._SUPPORT, 3) == [200, 200, 429]
+
+    def test_other_tenants_keep_the_default_and_their_own_budget(self) -> None:
+        client = self._client()
+        self._statuses(client, self._SUPPORT, 3)  # support is now throttled
+        assert self._statuses(client, self._BILLING, 6) == [200] * 5 + [429]
+
+    def test_the_limit_header_reports_the_tenants_own_limit(self) -> None:
+        response = self._client().get("/ping", headers={"X-API-Key": self._SUPPORT})
+        assert response.headers["X-RateLimit-Limit"] == "2"
+
+    def test_a_tenants_keys_share_one_budget(self) -> None:
+        """A second key, or a rotated one, must not double what the tenant may send."""
+        client = self._client()
+        assert self._statuses(client, self._SUPPORT, 2) == [200, 200]
+        assert self._statuses(client, self._SUPPORT_ROTATED, 1) == [429]
+
+
 class TestRateLimitMiddleware:
     def test_allowed_requests_expose_quota_headers(self) -> None:
         client = TestClient(_app(with_rate_limit=True, limit=5))

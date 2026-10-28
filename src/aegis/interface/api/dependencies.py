@@ -54,9 +54,20 @@ def get_output_sanitizer() -> OutputSanitizer:
 
 @lru_cache(maxsize=1)
 def get_rate_limiter() -> RateLimiter:
+    """The deployment-wide limit, for tenants that do not set their own."""
+    return get_tenant_rate_limiter(get_settings().rate_limit_requests)
+
+
+@cache
+def get_tenant_rate_limiter(requests_per_window: int) -> RateLimiter:
+    """
+    A limiter admitting ``requests_per_window`` per window, one per distinct
+    limit in the tenants file. Window and burst stay deployment-wide; every
+    limiter shares the one store, so the Redis window still spans replicas.
+    """
     cfg = get_settings()
     policy = RateLimitPolicy(
-        requests_per_window=cfg.rate_limit_requests,
+        requests_per_window=requests_per_window,
         window_seconds=cfg.rate_limit_window_seconds,
         burst_allowance=cfg.rate_limit_burst,
     )

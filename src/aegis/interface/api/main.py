@@ -43,6 +43,7 @@ from aegis.interface.api.dependencies import (
     get_parser_registry,
     get_rate_limiter,
     get_security_gateway,
+    get_tenant_rate_limiter,
     get_tenant_registry,
     get_tenant_vector_stores,
 )
@@ -231,6 +232,7 @@ def create_app() -> FastAPI:
         RateLimitMiddleware,
         rate_limiter=get_rate_limiter(),
         fail_open=cfg.rate_limit_fail_open,
+        limiter_for=get_tenant_rate_limiter,
     )
     app.add_middleware(
         APIKeyMiddleware,

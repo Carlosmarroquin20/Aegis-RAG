@@ -382,8 +382,13 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Sliding-window rate limiter enforced per validated API key.
+    Sliding-window rate limiter enforced per tenant.
     Must run AFTER APIKeyMiddleware so request.state.client_id is populated.
+
+    The bucket is the tenant id, so every key a tenant holds draws on one budget:
+    rotating keys, or handing a team several, cannot multiply its allowance. A
+    tenant with its own ``rate_limit_requests`` is checked against a limiter for
+    that limit (``limiter_for``); the others against the deployment default.
 
     ``fail_open`` decides what happens when the limiter's store is unreachable
     (see ``Settings.rate_limit_fail_open`` for the trade-off): serve the request
@@ -391,18 +396,32 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     otherwise escape as a 500 on every request for as long as the store is down.
     """
 
-    def __init__(self, app: ASGIApp, rate_limiter: RateLimiter, fail_open: bool = True) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        rate_limiter: RateLimiter,
+        fail_open: bool = True,
+        limiter_for: Callable[[int], RateLimiter] | None = None,
+    ) -> None:
         super().__init__(app)
         self._limiter = rate_limiter
         self._fail_open = fail_open
+        self._limiter_for = limiter_for
+
+    def _limiter_of(self, request: Request) -> RateLimiter:
+        tenant = getattr(request.state, "tenant", None)
+        if tenant is not None and tenant.rate_limit_requests is not None and self._limiter_for:
+            return self._limiter_for(tenant.rate_limit_requests)
+        return self._limiter
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
         if request.url.path in _PUBLIC_PATHS:
             return await call_next(request)  # type: ignore[no-any-return,operator]
 
         client_id: str = getattr(request.state, "client_id", "anonymous")
+        limiter = self._limiter_of(request)
         try:
-            result = await _check(self._limiter, self._limiter.check_and_record, client_id)
+            result = await _check(limiter, limiter.check_and_record, client_id)
         except Exception as exc:
             rate_limit_backend_errors_total.inc()
             logger.error(
@@ -423,7 +442,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Limit is the effective ceiling (baseline + burst) so that it agrees with
         # Remaining; reset_at is already a Unix wall-clock timestamp.
         headers = {
-            "X-RateLimit-Limit": str(self._limiter.limit),
+            "X-RateLimit-Limit": str(limiter.limit),
             "X-RateLimit-Remaining": str(result.remaining),
             "X-RateLimit-Reset": str(math.ceil(result.reset_at)),
         }
