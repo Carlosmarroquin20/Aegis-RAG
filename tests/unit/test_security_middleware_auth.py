@@ -12,7 +12,7 @@ import hashlib
 import time
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from aegis.config import Settings
@@ -22,6 +22,7 @@ from aegis.infrastructure.security.rate_limiter import (
     RateLimitPolicy,
     WindowState,
 )
+from aegis.infrastructure.tenancy.registry import TenantRegistry, key_digest
 from aegis.interface.api.middleware.security_middleware import (
     APIKeyMiddleware,
     RateLimitMiddleware,
@@ -107,6 +108,67 @@ class TestAPIKeyMiddleware:
 
 
 # ── RateLimitMiddleware ──────────────────────────────────────────────────────
+
+
+class TestTenantResolution:
+    """With a tenants file, the key decides the tenant, and nothing else can."""
+
+    _SUPPORT = "support-test-key"
+    _BILLING = "billing-test-key"
+
+    def _client(self) -> TestClient:
+        tenants = TenantRegistry.from_mapping(
+            {
+                "tenant": [
+                    {
+                        "id": "support",
+                        "collection": "support-docs",
+                        "api_key_sha256": [key_digest(self._SUPPORT).hex()],
+                    },
+                    {
+                        "id": "billing",
+                        "collection": "billing-docs",
+                        "api_key_sha256": [key_digest(self._BILLING).hex()],
+                    },
+                ]
+            }
+        )
+        app = FastAPI()
+        app.add_middleware(APIKeyMiddleware, settings=_settings(), tenants=tenants)
+
+        @app.get("/whoami")
+        async def whoami(request: Request) -> dict[str, str]:
+            return {
+                "tenant": request.state.tenant.id,
+                "collection": request.state.tenant.collection,
+                "client_id": request.state.client_id,
+            }
+
+        return TestClient(app)
+
+    def test_each_key_reaches_its_own_tenant(self) -> None:
+        client = self._client()
+        support = client.get("/whoami", headers={"X-API-Key": self._SUPPORT}).json()
+        billing = client.get("/whoami", headers={"X-API-Key": self._BILLING}).json()
+
+        assert support == {
+            "tenant": "support",
+            "collection": "support-docs",
+            "client_id": "support",
+        }
+        assert billing["collection"] == "billing-docs"
+
+    def test_the_tenant_cannot_be_chosen_by_the_caller(self) -> None:
+        response = self._client().get(
+            "/whoami?tenant=billing",
+            headers={"X-API-Key": self._SUPPORT, "X-Tenant": "billing"},
+        )
+        assert response.json()["tenant"] == "support"
+
+    def test_keys_outside_the_file_are_refused(self) -> None:
+        """VALID_API_KEYS no longer applies once a tenants file is in use."""
+        response = self._client().get("/whoami", headers={"X-API-Key": _KEY})
+        assert response.status_code == 403
 
 
 class TestRateLimitMiddleware:

@@ -18,8 +18,6 @@ preventing information leakage about undiscovered endpoints.
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import math
 import re
 import time
@@ -41,6 +39,7 @@ from aegis.infrastructure.observability.metrics import (
     rate_limit_backend_errors_total,
 )
 from aegis.infrastructure.security.rate_limiter import RateLimiter, RateLimitResult
+from aegis.infrastructure.tenancy.registry import TenantRegistry
 
 logger = structlog.get_logger(__name__)
 
@@ -80,10 +79,6 @@ INTERNAL_ERROR_DETAIL = "An internal error occurred. Check server logs."
 # because \w would also admit Unicode letters.
 _REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._\-]{1,64}")
 
-# 64 bits of the key digest: ample to keep clients apart, useless for recovering
-# or verifying a key offline.
-_CLIENT_ID_HEX_CHARS = 16
-
 
 async def _check(
     limiter: RateLimiter, call: Callable[[str], RateLimitResult], bucket: str
@@ -102,18 +97,6 @@ async def _check(
     if limiter.performs_io:
         return await asyncio.to_thread(call, bucket)
     return call(bucket)
-
-
-def _digest(api_key: str) -> bytes:
-    """
-    A plain SHA-256, deliberately not a password hash such as bcrypt or Argon2.
-
-    Slow hashes exist to make guessing low-entropy, human-chosen passwords
-    expensive. API keys are random tokens (startup warns about short ones), so
-    guessing one is infeasible at any hash speed. A slow hash would instead
-    hand every unauthenticated caller a lever to burn CPU on each request.
-    """
-    return hashlib.sha256(api_key.encode()).digest()
 
 
 # Prefix for failed-authentication buckets, so they can never collide with the
@@ -295,23 +278,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
     """
-    Validates the X-API-Key header against the configured key set.
+    Validates the X-API-Key header and resolves the tenant it belongs to.
 
     Security notes:
     - Keys are compared as SHA-256 digests with hmac.compare_digest, against
-      every configured key and without an early exit. A set lookup is not
-      constant-time: it hashes the candidate and then runs a short-circuiting
-      string comparison on the bucket hit. Digesting first also equalizes the
-      length, which compare_digest would otherwise leak.
+      every configured key and without an early exit (TenantRegistry.resolve).
+      A set lookup is not constant-time: it hashes the candidate and then runs
+      a short-circuiting string comparison on the bucket hit.
     - Returns 403 (not 401) for missing keys to avoid revealing that
       authentication via API key is expected on this endpoint.
     - Repeated failures from one client address trigger a temporary lockout
       (429) when a ``failure_limiter`` is supplied. Valid requests never count
       against it, and the limiter sits behind the rejection path only, so a
       healthy client costs it nothing.
-    - Downstream layers receive ``request.state.client_id``, a truncated digest
-      of the key, never the key itself. It is a stable per-key identifier that
-      is safe to use as a rate-limit bucket name and to write to logs.
+    - Downstream layers receive ``request.state.tenant`` and its id as
+      ``request.state.client_id``, never the key. The id is safe to use as a
+      rate-limit bucket name, a metric label and a log field. The tenant comes
+      from the key alone: nothing in a request body or query string chooses it.
     """
 
     def __init__(
@@ -319,10 +302,13 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         app: ASGIApp,
         settings: Settings,
         failure_limiter: RateLimiter | None = None,
+        tenants: TenantRegistry | None = None,
     ) -> None:
         super().__init__(app)
         self._header_name = settings.api_key_header
-        self._valid_key_digests = tuple(_digest(key) for key in settings.api_keys_set)
+        self._tenants = tenants or TenantRegistry.from_api_keys(
+            settings.api_keys_set, settings.chroma_collection
+        )
         self._trusted_proxy_hops = settings.trusted_proxy_hops
         self._failure_limiter = failure_limiter
 
@@ -347,13 +333,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
                 headers={"Retry-After": str(retry_after)},
             )
 
-        candidate = _digest(request.headers.get(self._header_name, ""))
-        authenticated = False
-        for valid in self._valid_key_digests:
-            # Bitwise OR, not `or`/any(): every key is compared on every request.
-            authenticated |= hmac.compare_digest(candidate, valid)
+        tenant = self._tenants.resolve(request.headers.get(self._header_name, ""))
 
-        if not authenticated:
+        if tenant is None:
             await self._record_failure(client_ip)
             auth_failures_total.labels(outcome="rejected").inc()
             logger.warning("auth.rejected", path=request.url.path, ip=client_ip)
@@ -362,7 +344,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Forbidden: valid API key required."},
             )
 
-        request.state.client_id = candidate.hex()[:_CLIENT_ID_HEX_CHARS]
+        request.state.tenant = tenant
+        request.state.client_id = tenant.id
         return await call_next(request)  # type: ignore[no-any-return,operator]
 
     async def _lockout_seconds(self, client_ip: str) -> int | None:

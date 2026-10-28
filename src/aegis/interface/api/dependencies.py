@@ -33,6 +33,7 @@ from aegis.infrastructure.security.rate_limiter import (
     RedisRateLimitStore,
 )
 from aegis.infrastructure.security.security_gateway import SecurityGateway
+from aegis.infrastructure.tenancy.registry import TenantRegistry
 from aegis.infrastructure.vector_stores.chromadb_adapter import ChromaDBAdapter
 
 
@@ -88,6 +89,19 @@ def get_auth_failure_limiter() -> RateLimiter | None:
         window_seconds=cfg.auth_failure_window_seconds,
     )
     return RateLimiter(policy=policy, store=get_rate_limit_store())
+
+
+@lru_cache(maxsize=1)
+def get_tenant_registry() -> TenantRegistry:
+    """
+    The tenants and their keys: from TENANTS_FILE when set, otherwise one tenant
+    per key in VALID_API_KEYS on the configured collection. Built at app creation,
+    so an invalid tenants file stops the process before it serves anything.
+    """
+    cfg = get_settings()
+    if cfg.tenants_file:
+        return TenantRegistry.from_file(cfg.tenants_file)
+    return TenantRegistry.from_api_keys(cfg.api_keys_set, cfg.chroma_collection)
 
 
 @lru_cache(maxsize=1)

@@ -19,6 +19,7 @@ from aegis.domain.ports.llm_client import (
     LLMUnavailableError,
 )
 from aegis.domain.ports.vector_store import VectorStoreUnavailableError
+from aegis.infrastructure.tenancy.registry import TenantRegistry
 from aegis.interface.api import main
 from aegis.interface.api.dependencies import get_query_use_case
 from aegis.interface.api.error_handlers import (
@@ -35,6 +36,9 @@ def _client(monkeypatch: pytest.MonkeyPatch, *, debug: bool) -> TestClient:
     # The real factory is a process-wide singleton; sharing it would let failed
     # requests in one test count towards a lockout in another.
     monkeypatch.setattr(main, "get_auth_failure_limiter", lambda: None)
+    # Tenants from these settings, not from whatever the cached registry was built with.
+    tenants = TenantRegistry.from_api_keys(settings.api_keys_set, settings.chroma_collection)
+    monkeypatch.setattr(main, "get_tenant_registry", lambda: tenants)
     return TestClient(main.create_app(), raise_server_exceptions=False)
 
 

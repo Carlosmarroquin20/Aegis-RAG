@@ -44,6 +44,7 @@ from aegis.interface.api.dependencies import (
     get_parser_registry,
     get_rate_limiter,
     get_security_gateway,
+    get_tenant_registry,
 )
 from aegis.interface.api.error_handlers import register_dependency_error_handlers
 from aegis.interface.api.middleware.body_limit import BodySizeLimitMiddleware
@@ -139,8 +140,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             reset_seconds=cfg.llm_circuit_reset_seconds,
         )
 
-    if not cfg.api_keys_set:
+    tenants = get_tenant_registry()
+    if not len(tenants):
         logger.warning("startup.no_api_keys", detail="every authenticated route will return 403")
+    elif cfg.tenants_file:
+        logger.info(
+            "startup.tenants_loaded",
+            source=cfg.tenants_file,
+            tenants=[t.id for t in tenants.tenants],
+            keys=len(tenants),
+        )
     elif cfg.weak_api_key_count:
         logger.warning(
             "startup.weak_api_keys",
@@ -225,6 +234,7 @@ def create_app() -> FastAPI:
         APIKeyMiddleware,
         settings=cfg,
         failure_limiter=get_auth_failure_limiter(),
+        tenants=get_tenant_registry(),
     )
     app.add_middleware(
         CORSMiddleware,
