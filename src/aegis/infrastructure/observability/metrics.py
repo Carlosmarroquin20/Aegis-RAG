@@ -84,6 +84,21 @@ rate_limit_backend_errors_total = Counter(
     registry=registry,
 )
 
+# ── Tenancy ───────────────────────────────────────────────────────────────────
+
+token_budget_rejections_total = Counter(
+    "aegis_token_budget_rejections_total",
+    "Queries refused because the tenant had used its daily token budget.",
+    labelnames=("tenant",),
+    registry=registry,
+)
+
+token_ledger_errors_total = Counter(
+    "aegis_token_ledger_errors_total",
+    "Queries served without a budget check or charge because the ledger failed.",
+    registry=registry,
+)
+
 # ── Runtime ───────────────────────────────────────────────────────────────────
 
 gc_pause_seconds = Histogram(
@@ -198,3 +213,9 @@ class PrometheusQueryMetrics(QueryMetricsPort):
         llm_tokens_total.labels(**labels, direction="output").inc(usage.output_tokens)
         pricing = self._prices.get(generation.provider, LLMPricing())
         llm_cost_usd_total.labels(**labels).inc(pricing.cost(usage))
+
+    def token_budget_exhausted(self, tenant_id: str) -> None:
+        token_budget_rejections_total.labels(tenant=tenant_id).inc()
+
+    def token_ledger_unavailable(self) -> None:
+        token_ledger_errors_total.inc()

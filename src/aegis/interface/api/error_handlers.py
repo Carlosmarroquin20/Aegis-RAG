@@ -13,6 +13,7 @@ place where they become status codes:
   LLMUnavailableError         → 503
   LLMRateLimitedError         → 503, with the provider's own Retry-After when it gave one
   LLMTimeoutError             → 504  (the upstream was reached but did not answer)
+  TokenBudgetExhaustedError   → 429, Retry-After until the budget resets at UTC midnight
 
 Handlers for specific exception types are resolved inside the router, so these
 responses travel back through the full middleware stack.
@@ -31,6 +32,7 @@ from aegis.domain.ports.llm_client import (
     LLMTimeoutError,
     LLMUnavailableError,
 )
+from aegis.domain.ports.token_ledger import TokenBudgetExhaustedError
 from aegis.domain.ports.vector_store import VectorStoreUnavailableError
 
 logger = structlog.get_logger(__name__)
@@ -44,10 +46,22 @@ _MAX_RETRY_AFTER_SECONDS = 60
 
 DEPENDENCY_UNAVAILABLE_DETAIL = "A backend dependency is temporarily unavailable. Retry shortly."
 DEPENDENCY_TIMEOUT_DETAIL = "The language model did not respond in time."
+BUDGET_EXHAUSTED_DETAIL = "Daily token budget exhausted for this tenant."
 
 
 def register_dependency_error_handlers(app: FastAPI) -> None:
     """Installs the handlers on ``app``. Called once from the application factory."""
+
+    @app.exception_handler(TokenBudgetExhaustedError)
+    async def token_budget_exhausted(request: Request, exc: Exception) -> JSONResponse:
+        assert isinstance(exc, TokenBudgetExhaustedError)
+        # Unlike a provider's quota, this one resets at a known time, so the
+        # client is told exactly when rather than to poll.
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": BUDGET_EXHAUSTED_DETAIL},
+            headers={"Retry-After": str(max(1, math.ceil(exc.retry_after)))},
+        )
 
     @app.exception_handler(VectorStoreUnavailableError)
     @app.exception_handler(LLMUnavailableError)

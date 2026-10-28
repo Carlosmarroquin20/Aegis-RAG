@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/v1", tags=["rag"])
             "description": "Query blocked by security policy.",
         },
         403: {"description": "Forbidden: missing or invalid API key."},
-        429: {"description": "Rate limit exceeded."},
+        429: {"description": "Rate limit exceeded, or the tenant's daily token budget is used."},
     },
     summary="Submit a query to the RAG pipeline",
     description=(
@@ -49,8 +49,9 @@ async def query_rag(
     # Set by APIKeyMiddleware: a truncated digest of the key, safe to use as a
     # metric label. Absent only when the route is mounted without that middleware.
     client = getattr(http_request.state, "client_id", "unknown")
+    tenant = getattr(http_request.state, "tenant", None)
     try:
-        return await use_case.execute(request, client=client)
+        return await use_case.execute(request, client=client, tenant=tenant)
     except SecurityViolationError as exc:
         # Return a structured 400 instead of 500 to communicate the rejection cause.
         # The detail is intentionally vague to avoid revealing detection logic.

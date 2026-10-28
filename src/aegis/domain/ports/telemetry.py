@@ -35,3 +35,11 @@ class QueryMetricsPort(ABC):
         an API key, never the key itself. Pricing the tokens is the recorder's
         concern: it depends on deployment configuration, not on the pipeline.
         """
+
+    @abstractmethod
+    def token_budget_exhausted(self, tenant_id: str) -> None:
+        """A query was refused because ``tenant_id`` has used its daily token budget."""
+
+    @abstractmethod
+    def token_ledger_unavailable(self) -> None:
+        """The token ledger could not be read or charged; the query was served anyway."""

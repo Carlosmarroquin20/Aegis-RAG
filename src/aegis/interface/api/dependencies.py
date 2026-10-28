@@ -22,6 +22,7 @@ from aegis.application.use_cases.query_rag import QueryRAGUseCase
 from aegis.config import get_settings
 from aegis.domain.models.tenant import Tenant
 from aegis.domain.ports.llm_client import LLMClientPort
+from aegis.domain.ports.token_ledger import TokenLedgerPort
 from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.llm.fallback import Backend, FallbackLLMClient
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
@@ -38,6 +39,7 @@ from aegis.infrastructure.security.rate_limiter import (
 )
 from aegis.infrastructure.security.security_gateway import SecurityGateway
 from aegis.infrastructure.tenancy.registry import TenantRegistry
+from aegis.infrastructure.tenancy.token_ledger import InMemoryTokenLedger, RedisTokenLedger
 from aegis.infrastructure.vector_stores.chromadb_adapter import ChromaDBAdapter
 
 
@@ -86,6 +88,18 @@ def get_rate_limit_store() -> RateLimitStore:
     if cfg.rate_limit_backend == "redis":
         return RedisRateLimitStore(cfg.redis_url)
     return InMemoryRateLimitStore()
+
+
+@lru_cache(maxsize=1)
+def get_token_ledger() -> TokenLedgerPort:
+    """
+    Today's token counts per tenant, on the same backend as the rate limiter:
+    Redis when the window is shared across replicas, so budgets are too.
+    """
+    cfg = get_settings()
+    if cfg.rate_limit_backend == "redis":
+        return RedisTokenLedger(cfg.redis_url)
+    return InMemoryTokenLedger()
 
 
 @lru_cache(maxsize=1)
@@ -259,6 +273,7 @@ def get_query_use_case(request: Request) -> QueryRAGUseCase:
         security_gateway=get_security_gateway(),
         output_sanitizer=get_output_sanitizer(),
         metrics=PrometheusQueryMetrics(_hosted_llm_prices()),
+        token_ledger=get_token_ledger(),
     )
 
 

@@ -98,6 +98,32 @@ groups:
             echoed an injection payload. Investigate the indexed documents
             for indirect prompt injection.
 
+      - alert: AegisTenantTokenBudgetExhausted
+        # Not an incident: the budget is doing its job. It tells the platform
+        # team a tenant is being refused, before the tenant files a ticket.
+        expr: sum by (tenant) (increase(aegis_token_budget_rejections_total[15m])) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "Tenant {{ $labels.tenant }} has used its daily token budget"
+          description: >
+            Queries from {{ $labels.tenant }} are answered 429 until 00:00 UTC.
+            Raise daily_token_budget in the tenants file if the usage is
+            expected; check aegis_llm_tokens_total{client="{{ $labels.tenant }}"}
+            if it is not.
+
+      - alert: AegisTokenLedgerUnavailable
+        expr: increase(aegis_token_ledger_errors_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Token ledger unreachable"
+          description: >
+            Daily token budgets are not being checked or charged, so queries
+            are served without a cost limit. The ledger uses the rate-limit
+            Redis; see AegisRateLimitBackendDown.
+
       - alert: AegisRateLimitBackendDown
         expr: increase(aegis_rate_limit_backend_errors_total[5m]) > 0
         for: 2m

@@ -19,6 +19,7 @@ from aegis.domain.models.document import Document
 from aegis.domain.models.generation import Generation
 from aegis.infrastructure.security.rate_limiter import RateLimiter, RateLimitPolicy
 from aegis.infrastructure.tenancy.registry import TenantRegistry, key_digest
+from aegis.infrastructure.tenancy.token_ledger import InMemoryTokenLedger
 from aegis.interface.api import dependencies, main
 from tests.conftest import FakeLLMClient, FakeVectorStore
 
@@ -69,6 +70,7 @@ def client(
                     "id": "support",
                     "collection": "support-docs",
                     "api_key_sha256": [key_digest(_SUPPORT_KEY).hex()],
+                    "daily_token_budget": 200,
                 },
                 {
                     "id": "billing",
@@ -85,6 +87,8 @@ def client(
     monkeypatch.setattr(main, "get_rate_limiter", lambda: RateLimiter(RateLimitPolicy(1000, 60)))
     monkeypatch.setattr(dependencies, "get_collection_store", lambda name: stores[name])
     monkeypatch.setattr(dependencies, "get_llm_client", lambda: llm)
+    ledger = InMemoryTokenLedger()
+    monkeypatch.setattr(dependencies, "get_token_ledger", lambda: ledger)
     return TestClient(main.create_app())
 
 
@@ -149,6 +153,29 @@ class TestTenantIsolation:
         assert [d["id"] for d in _list(client, _BILLING_KEY)] == [billing_id]
         assert stores["support-docs"].deleted_ids == [billing_id]
         assert stores["billing-docs"].deleted_ids == []
+
+
+class TestDailyTokenBudget:
+    def _ask(self, client: TestClient, key: str) -> Any:
+        return client.post(
+            "/api/v1/query",
+            json={"query": "How are returns handled?"},
+            headers={"X-API-Key": key},
+        )
+
+    def test_a_spent_budget_answers_429_until_midnight(self, client: TestClient) -> None:
+        # support may use 200 tokens a day; every answer here costs 150.
+        assert [self._ask(client, _SUPPORT_KEY).status_code for _ in range(2)] == [200, 200]
+        refused = self._ask(client, _SUPPORT_KEY)
+
+        assert refused.status_code == 429
+        assert 1 <= int(refused.headers["Retry-After"]) <= 24 * 3600
+        assert refused.json() == {"detail": "Daily token budget exhausted for this tenant."}
+
+    def test_one_tenants_budget_does_not_limit_another(self, client: TestClient) -> None:
+        for _ in range(3):
+            self._ask(client, _SUPPORT_KEY)
+        assert self._ask(client, _BILLING_KEY).status_code == 200
 
 
 class TestNoTenantNoStore:

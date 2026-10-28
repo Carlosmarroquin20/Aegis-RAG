@@ -11,6 +11,8 @@ all infrastructure (LLM, vector store, security gateway). Tests cover:
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -29,7 +31,9 @@ _QUERY_HASH_64 = "a" * 64  # valid SHA-256 hex length
 
 
 class _SuccessUseCase:
-    async def execute(self, request: QueryRequest, *, client: str = "") -> QueryResponse:
+    async def execute(
+        self, request: QueryRequest, *, client: str = "", tenant: Any = None
+    ) -> QueryResponse:
         return QueryResponse(
             answer="Aegis is a security-first RAG system.",
             sources=[],
@@ -42,7 +46,9 @@ _BLOCKED_HASH = "deadbeef" * 8  # 64 chars; first 16 = "deadbeefdeadbeef"
 
 
 class _BlockedUseCase:
-    async def execute(self, request: QueryRequest, *, client: str = "") -> QueryResponse:
+    async def execute(
+        self, request: QueryRequest, *, client: str = "", tenant: Any = None
+    ) -> QueryResponse:
         raise SecurityViolationError(
             reason="Injection attempt detected.",
             query_hash=_BLOCKED_HASH,
@@ -179,7 +185,9 @@ class _RecordingUseCase(_SuccessUseCase):
     def __init__(self) -> None:
         self.clients: list[str] = []
 
-    async def execute(self, request: QueryRequest, *, client: str = "") -> QueryResponse:
+    async def execute(
+        self, request: QueryRequest, *, client: str = "", tenant: Any = None
+    ) -> QueryResponse:
         self.clients.append(client)
         return await super().execute(request)
 

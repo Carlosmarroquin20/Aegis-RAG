@@ -3,9 +3,10 @@ QueryRAG use case — orchestrates the full RAG pipeline.
 
 Execution order is intentional:
   1. SecurityGateway evaluation (no I/O, fast fail)     — LLM01
-  2. Vector store retrieval (network I/O)
-  3. LLM generation (network I/O, slow)
-  4. OutputSanitizer post-processing                    — LLM05
+  2. Tenant token budget check, when the tenant has one — LLM10
+  3. Vector store retrieval (network I/O)
+  4. LLM generation (network I/O, slow), then the tokens are charged
+  5. OutputSanitizer post-processing                    — LLM05
 
 The use case owns no state; all dependencies are injected at construction time,
 and every one of them is a domain port. Nothing here imports from the
@@ -19,9 +20,11 @@ from opentelemetry import trace
 
 from aegis.application.dtos.rag_dtos import QueryRequest, QueryResponse, SourceDocument
 from aegis.domain.models.query import RawQuery
+from aegis.domain.models.tenant import Tenant
 from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.security import OutputGuardPort, QueryGuardPort
 from aegis.domain.ports.telemetry import QueryMetricsPort
+from aegis.domain.ports.token_ledger import TokenBudgetExhaustedError, TokenLedgerPort
 from aegis.domain.ports.vector_store import VectorStorePort
 
 logger = structlog.get_logger(__name__)
@@ -49,17 +52,22 @@ class QueryRAGUseCase:
         security_gateway: QueryGuardPort,
         output_sanitizer: OutputGuardPort,
         metrics: QueryMetricsPort,
+        token_ledger: TokenLedgerPort | None = None,
     ) -> None:
         self._vector_store = vector_store
         self._llm_client = llm_client
         self._gateway = security_gateway
         self._output_sanitizer = output_sanitizer
         self._metrics = metrics
+        self._ledger = token_ledger
 
-    async def execute(self, request: QueryRequest, *, client: str = "unknown") -> QueryResponse:
+    async def execute(
+        self, request: QueryRequest, *, client: str = "unknown", tenant: Tenant | None = None
+    ) -> QueryResponse:
         """
         Runs the pipeline for one query. ``client`` attributes the LLM usage to
-        the caller; it comes from authentication, never from the request body.
+        the caller and ``tenant`` carries its budget; both come from
+        authentication, never from the request body.
         """
         log = logger.bind(top_k=request.top_k)
 
@@ -90,6 +98,11 @@ class QueryRAGUseCase:
 
         log = log.bind(query_hash=query_hash[:16])
 
+        # ── Token budget (LLM10): before anything that costs ───────────────────
+        budget = tenant.daily_token_budget if tenant is not None else None
+        if budget is not None:
+            await self._check_budget(tenant, budget)  # type: ignore[arg-type]
+
         # ── Retrieval ──────────────────────────────────────────────────────────
         self._metrics.query_reached_retrieval()
         with tracer.start_as_current_span("rag.retrieve") as span:
@@ -110,6 +123,8 @@ class QueryRAGUseCase:
                 span.set_attribute("gen_ai.usage.input_tokens", generation.usage.input_tokens)
                 span.set_attribute("gen_ai.usage.output_tokens", generation.usage.output_tokens)
         self._metrics.llm_generation(client, generation)
+        if budget is not None and generation.usage is not None:
+            await self._charge(tenant, generation.usage.total_tokens)  # type: ignore[arg-type]
 
         # ── Output sanitization (LLM05) ────────────────────────────────────────
         # OutputReflectionError is intentionally NOT caught here: it propagates
@@ -140,3 +155,35 @@ class QueryRAGUseCase:
             query_hash=query_hash,
             threat_level=gateway_result.assessment.level.name,
         )
+
+    async def _check_budget(self, tenant: Tenant, budget: int) -> None:
+        if self._ledger is None:
+            return
+        try:
+            usage = await self._ledger.used_today(tenant.id)
+        except Exception as exc:
+            # A cost control, like the rate limiter: an unreachable ledger must
+            # not take queries down. Counted and logged, never silent.
+            self._metrics.token_ledger_unavailable()
+            logger.error("token_ledger.unavailable", operation="check", error=repr(exc))
+            return
+        if usage.tokens >= budget:
+            self._metrics.token_budget_exhausted(tenant.id)
+            logger.warning(
+                "use_case.token_budget_exhausted",
+                tenant=tenant.id,
+                used=usage.tokens,
+                budget=budget,
+            )
+            raise TokenBudgetExhaustedError(tenant.id, budget, usage.seconds_to_reset)
+
+    async def _charge(self, tenant: Tenant, tokens: int) -> None:
+        if self._ledger is None:
+            return
+        try:
+            await self._ledger.charge(tenant.id, tokens)
+        except Exception as exc:
+            # The answer is already generated; refusing it now would waste the
+            # tokens and still not record them.
+            self._metrics.token_ledger_unavailable()
+            logger.error("token_ledger.unavailable", operation="charge", error=repr(exc))
