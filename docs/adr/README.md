@@ -18,6 +18,7 @@ supersedes the old one, so the history of *why* stays intact.
 | [0007](0007-local-llm-by-default-hosted-opt-in.md) | Local LLM by default; hosted providers are opt-in through one adapter | Accepted |
 | [0008](0008-output-reflection-fails-the-request.md) | A reflected injection fails the request instead of being cleaned up | Accepted |
 | [0009](0009-llm-fallback-behind-circuit-breakers.md) | Fall back between LLM backends behind per-backend circuit breakers | Accepted |
+| [0010](0010-tenants-isolated-by-collection.md) | Tenants are isolated by collection, identified by key, and budgeted in tokens | Accepted |
 
 The first three were made when the system was designed and are recorded here retrospectively;
 the rest were made during the security hardening pass and are recorded as they were decided.

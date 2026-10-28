@@ -94,11 +94,12 @@ the 2025 edition of the OWASP Top 10 for LLM Applications.
 | T-08 | **Unauthenticated access.** | API key on every non-public path, enforced in middleware so unknown routes are covered too. Fails closed when no key is configured. | `interface/api/middleware/security_middleware.py` | `TestAPIKeyMiddleware` |
 | T-09 | **Key recovery by timing.** | Keys are compared as SHA-256 digests with `hmac.compare_digest`, against every configured key, without an early exit. | same | `test_near_miss_keys_are_forbidden` |
 | T-10 | **Online key guessing.** | Per-address lockout after repeated rejected keys. It applies to valid keys too during the lockout, so the response is not a right/wrong oracle. The address is taken from `X-Forwarded-For` only at an explicitly trusted proxy depth (default: never). | same | `TestFailedAuthLockout`, `TestLockoutIsPerClientAddress`, `TestResolveClientIp` |
-| T-11 | **Resource exhaustion by an authenticated client** (LLM10). | Per-key sliding-window rate limit; rejected requests do not occupy the window, so it cannot grow under a retry storm. Request bodies are capped at the ASGI layer as they stream, including chunked uploads. | `infrastructure/security/rate_limiter.py`, `middleware/body_limit.py` | `TestRejectedRequestsAreNotRetained`, `TestStreamedBodyWithoutLength`, `TestFrameworkParsedBodies` |
+| T-11 | **Resource exhaustion by an authenticated client** (LLM10). | Per-tenant sliding-window rate limit, shared by all of a tenant's keys, and an optional daily LLM token budget per tenant, checked before retrieval; rejected requests do not occupy the window, so it cannot grow under a retry storm. Request bodies are capped at the ASGI layer as they stream, including chunked uploads. | `infrastructure/security/rate_limiter.py`, `infrastructure/tenancy/token_ledger.py`, `middleware/body_limit.py` | `TestRejectedRequestsAreNotRetained`, `TestPerTenantRateLimits`, `TestBudgetEnforcement`, `TestStreamedBodyWithoutLength`, `TestFrameworkParsedBodies` |
 | T-12 | **Lateral access to backing services** from the local network. | Every published compose port is bound to loopback; only the API and Grafana can be exposed, by explicit setting. On AWS the security group opens the API port only. | `docker-compose.yml`, `infra/terraform/modules/compute` | manual: `docker compose ps` shows `127.0.0.1:` bindings |
 | T-13 | **Credential exposure through the service itself.** | The client key never leaves the auth layer: downstream sees a truncated digest. The hosted-LLM key is a `SecretStr`, sent only as a header, and absent from logs and error text. | `security_middleware.py`, `infrastructure/llm/openai_compatible_adapter.py` | `test_rate_limit_bucket_is_keyed_by_a_digest_not_the_api_key`, `TestCredentialDoesNotLeak` |
 | T-14 | **Log and header injection.** | A caller-supplied `X-Request-ID` is reused only if it looks like an identifier; uploaded filenames are reduced to a single-line display name. | `security_middleware.py`, `interface/api/routes/documents.py` | `test_malformed_caller_id_is_replaced`, `TestUploadedFilename` |
 | T-15 | **Information disclosure.** | The OpenAPI schema and docs exist only in debug. Errors return a generic body; dependency outages are a 503/504 that name no host. Security headers are set on every response, including unhandled 500s. | `interface/api/main.py`, `error_handlers.py` | `TestApiDocsExposure`, `TestDependencyFailures`, `TestUnhandledRouteErrors` |
+| T-25 | **Cross-tenant data access** (LLM02, LLM08). One tenant lists, retrieves, deletes, or is answered from, another tenant's documents. | The tenant is resolved from the API key alone, before any route; each tenant has its own collection and every route reaches only that one, with no fallback to a default. The tenants file is rejected at startup if two tenants share a key or a collection, and holds key digests rather than keys. | `infrastructure/tenancy/registry.py`, `interface/api/dependencies.py` | `TestTenantIsolation`, `TestTenantResolution`, `TestTheFileIsStrict` |
 
 ### Ingestion path
 
@@ -152,9 +153,12 @@ not trust to send your users an email.
 personal data reliably, and silently altering answers would be worse than flagging them. A
 deployment with a redaction requirement needs a dedicated classifier in the output path.
 
-**There is no per-user authorization or tenancy.** Any valid API key can read, ingest into
-and delete from the single collection. Keys identify clients for rate limiting, not for
-access control. Multi-tenant use requires a different design.
+**Tenants are isolated from each other, not users within a tenant.** With a tenants file each
+team has its own collection (T-25), but every key of a tenant can read, ingest into and delete
+from all of that tenant's documents; there are no roles or per-document permissions. Without a
+file, all keys share one collection, as before. The daily token budget is a soft limit:
+requests in flight when a tenant crosses it can each still be answered
+([ADR 0010](adr/0010-tenants-isolated-by-collection.md)).
 
 **Three endpoints are unauthenticated by design**: `/health`, `/ready` and `/metrics`. They are
 meant for orchestrators and scrapers, and must be restricted at the network layer.

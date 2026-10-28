@@ -137,7 +137,8 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 | Prompt injection | Regex signatures in English and Spanish (voseo included) + staged-reasoning (CoT) check + Shannon entropy, matched after Unicode NFKC normalization, invisible-character stripping, accent removal and homoglyph folding | LLM01 |
 | Improper output handling | Length cap · HTML strip · reflection detection · PII flagging | LLM05 |
 | System-prompt leakage | Signature rules block probing queries (*"show me your prompt"*) | LLM07 |
-| API abuse | Per-key sliding-window rate limiter with burst allowance · rejected requests never occupy the window · explicit fail-open/fail-closed policy if the store is down | LLM10 |
+| API abuse | Per-tenant sliding-window rate limiter with burst allowance · rejected requests never occupy the window · optional daily LLM token budget per tenant · explicit fail-open/fail-closed policy if the store is down | LLM10 |
+| Cross-tenant access | Tenant resolved from the API key alone · one collection per tenant, no fallback to a default · a tenants file that shares a key or a collection stops startup | LLM02, LLM08 |
 | Credential guessing | Client address locked out (429) after repeated rejected keys — valid keys included, so the response is no oracle · address taken from `X-Forwarded-For` only at an explicitly trusted proxy depth (`TRUSTED_PROXY_HOPS`, default 0) · short keys reported at startup | General |
 | Sensitive data exposure | API key auth at ASGI level (constant-time digest comparison; the key never reaches logs or the rate-limit store) · non-root container · `Cache-Control: no-store` · OpenAPI schema and docs disabled outside debug | LLM02 |
 | File-upload attacks | Magic-byte MIME detection · request body capped at the ASGI layer as it streams in (no reliance on a proxy; chunked uploads included) · 50 MB file cap enforced before the upload is buffered · uncompressed-size budget for DOCX archives (decompression bombs) | General |
@@ -297,6 +298,41 @@ The *LLM usage and cost* row of the Production Overview dashboard shows spend, t
 answered query and spend by client and model. A backend that reports no usage is counted
 separately (`aegis_llm_usage_unreported_total`), so missing data shows up instead of reading as
 free. The `llm.generate` span carries the OpenTelemetry GenAI attributes (`gen_ai.usage.*`).
+
+---
+
+## Multi-tenancy
+
+One deployment can serve several teams, each with its own documents, request limit and daily
+LLM token budget. Declare them in a TOML file and point `TENANTS_FILE` at it:
+
+```toml
+[[tenant]]
+id = "support"
+collection = "support-docs"
+api_key_sha256 = ["<digest from scripts/tenant_key.py>"]
+rate_limit_requests = 120
+daily_token_budget = 2_000_000
+```
+
+- **The key decides the tenant.** It is resolved before any route runs; nothing a caller sends
+  can name another tenant.
+- **Each tenant has its own collection,** and every route reaches only that one: a tenant cannot
+  list, retrieve, delete or be answered from another's documents.
+- **The file holds key digests, not keys,** so it is configuration, not a secret. A tenant can
+  hold several keys, which makes rotation a config change.
+- **Limits are per tenant.** All of a tenant's keys share one rate-limit bucket. A spent token
+  budget answers `429` with a `Retry-After` until 00:00 UTC; budgets live in Redis, so they hold
+  across replicas.
+- **Cost per team is a query:** the usage and cost metrics are labelled by tenant, and
+  `AegisTenantTokenBudgetExhausted` tells the platform team when one is being refused.
+
+`scripts/tenant_key.py` generates a key and its digest; `examples/tenants.example.toml` is a
+commented template; `scripts/seed_documents.py --tenant support` indexes into one tenant's
+collection. A file that would leak data (two tenants on one key or one collection) or lift a
+limit by accident (a misspelt field) stops the API at startup. Without `TENANTS_FILE`, every key
+in `VALID_API_KEYS` behaves exactly as before. The design and its trade-offs are in
+[ADR 0010](docs/adr/0010-tenants-isolated-by-collection.md).
 
 ---
 

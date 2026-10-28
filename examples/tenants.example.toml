@@ -1,0 +1,32 @@
+# Tenants for a shared deployment. Point TENANTS_FILE at a copy of this file.
+#
+# Each tenant gets its own collection, its own request limit and, optionally, a
+# daily LLM token budget. Keys are listed as SHA-256 digests, never in clear, so
+# this file is configuration rather than a secret. Generate a key and its digest
+# with:
+#
+#   uv run python scripts/tenant_key.py
+#
+# give the key to the team, and paste the digest below. A tenant may list several
+# digests, which is how a key is rotated without downtime: add the new one, move
+# the clients over, then remove the old one.
+#
+# The API refuses to start if two tenants share a key or a collection, if an id
+# is repeated, or if a field is misspelt. See docs/adr/0010.
+
+[[tenant]]
+id = "support"                       # lowercase letters, digits, dashes; a metric label
+collection = "support-docs"          # only this tenant's documents live here
+api_key_sha256 = [
+  "REPLACE-WITH-THE-DIGEST-FROM-scripts/tenant_key.py",
+]
+rate_limit_requests = 120            # per RATE_LIMIT_WINDOW_SECONDS; default RATE_LIMIT_REQUESTS
+daily_token_budget = 2_000_000       # LLM tokens per UTC day; omit for unlimited
+
+[[tenant]]
+id = "billing"
+collection = "billing-docs"
+api_key_sha256 = [
+  "REPLACE-WITH-THE-DIGEST-FROM-scripts/tenant_key.py",
+]
+# No limits set: the deployment's rate limit, and no token budget.
