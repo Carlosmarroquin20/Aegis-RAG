@@ -99,7 +99,6 @@ the 2025 edition of the OWASP Top 10 for LLM Applications.
 | T-13 | **Credential exposure through the service itself.** | The client key never leaves the auth layer: downstream sees a truncated digest. The hosted-LLM key is a `SecretStr`, sent only as a header, and absent from logs and error text. | `security_middleware.py`, `infrastructure/llm/openai_compatible_adapter.py` | `test_rate_limit_bucket_is_keyed_by_a_digest_not_the_api_key`, `TestCredentialDoesNotLeak` |
 | T-14 | **Log and header injection.** | A caller-supplied `X-Request-ID` is reused only if it looks like an identifier; uploaded filenames are reduced to a single-line display name. | `security_middleware.py`, `interface/api/routes/documents.py` | `test_malformed_caller_id_is_replaced`, `TestUploadedFilename` |
 | T-15 | **Information disclosure.** | The OpenAPI schema and docs exist only in debug. Errors return a generic body; dependency outages are a 503/504 that name no host. Security headers are set on every response, including unhandled 500s. | `interface/api/main.py`, `error_handlers.py` | `TestApiDocsExposure`, `TestDependencyFailures`, `TestUnhandledRouteErrors` |
-| T-25 | **Cross-tenant data access** (LLM02, LLM08). One tenant lists, retrieves, deletes, or is answered from, another tenant's documents. | The tenant is resolved from the API key alone, before any route; each tenant has its own collection and every route reaches only that one, with no fallback to a default. The tenants file is rejected at startup if two tenants share a key or a collection, and holds key digests rather than keys. | `infrastructure/tenancy/registry.py`, `interface/api/dependencies.py` | `TestTenantIsolation`, `TestTenantResolution`, `TestTheFileIsStrict` |
 
 ### Ingestion path
 
@@ -115,10 +114,16 @@ the 2025 edition of the OWASP Top 10 for LLM Applications.
 | ID | Threat | Control | Enforced in | Verified by |
 |---|---|---|---|---|
 | T-20 | **Vulnerable dependency** (LLM03). | `pip-audit` on every push fails on any advisory with a fix; the image is scanned by Trivy; installs are locked. Unfixable advisories are recorded with a rationale and a review date. | `.github/workflows/ci.yml`, `uv.lock`, `SECURITY.md` | CI |
-| T-21 | **Compromised CI action** (LLM03). | The actions with the most reach (image scanner, toolchain installer) are pinned to a commit SHA; the job token is read-only. | `.github/workflows/ci.yml` | review of the workflow |
+| T-21 | **Compromised CI action or base image** (LLM03). | Every action is pinned to a commit SHA and every base image to a digest; job tokens are read-only by default. Released images are signed keylessly and carry build provenance and an SBOM, so a consumer can verify where an image came from ([ADR 0011](adr/0011-immutable-supply-chain-references-and-keyless-signing.md)). CodeQL analyses the workflows themselves. | `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `.github/workflows/codeql.yml` | CodeQL `actions/unpinned-tag`, OpenSSF Scorecard |
 | T-22 | **Silent degradation of a control.** | A rate-limit store outage, authentication-failure spikes, output reflections and 5xx rates each have a metric and an alert. Failing open is a logged, counted decision, never a default nobody chose. | `infrastructure/observability/metrics.py`, `infra/prometheus/alerts.yml` | `TestRateLimitBackendFailure`, `TestThrottleStoreOutage` |
 | T-23 | **Architectural erosion** that would let a control be bypassed in a later change. | The layer dependency rule is enforced by a test that parses every module's imports. | `tests/unit/test_architecture.py` | itself |
 | T-24 | **Silently wrong retrieval after an embedding-model change** (LLM08). Two models of the same dimension are accepted by ChromaDB, so queries are compared with vectors from another model and answers come from the wrong documents, with no error. | Each collection records the model that built it; the API refuses to start on a collection recorded with a different model and says how to recover. A collection that predates the record is served with a warning. | `infrastructure/vector_stores/chromadb_adapter.py` | `TestEmbeddingModelGuard` |
+
+### Tenancy
+
+| ID | Threat | Control | Enforced in | Verified by |
+|---|---|---|---|---|
+| T-25 | **Cross-tenant data access** (LLM02, LLM08). One tenant lists, retrieves, deletes, or is answered from, another tenant's documents. | The tenant is resolved from the API key alone, before any route; each tenant has its own collection and every route reaches only that one, with no fallback to a default. The tenants file is rejected at startup if two tenants share a key or a collection, and holds key digests rather than keys. | `infrastructure/tenancy/registry.py`, `interface/api/dependencies.py` | `TestTenantIsolation`, `TestTenantResolution`, `TestTheFileIsStrict` |
 
 ## 6. Residual risks and non-goals
 
