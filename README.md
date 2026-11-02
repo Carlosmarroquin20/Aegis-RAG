@@ -51,7 +51,7 @@ The project also covers what running such a service involves: a hexagonal archit
 │                APIKey → RateLimit → ErrorBoundary → BodyLimit →      │
 │                Routes                                                │
 ├──────────────────────────────────────────────────────────────────────┤
-│  Application   Use cases (QueryRAG, IngestDocuments) · Retriever · DTOs│
+│  Application   Use cases (QueryRAG, IngestDocuments) · Retriever     │
 ├──────────────────────────────────────────────────────────────────────┤
 │  Domain        Models · Ports · ChunkingService · RankFusion         │
 ├──────────────────────────────────────────────────────────────────────┤
