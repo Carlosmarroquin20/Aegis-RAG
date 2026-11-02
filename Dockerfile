@@ -39,7 +39,7 @@ WORKDIR /app
 # recent enough to read the committed uv.lock format (lockfile version 1 /
 # revision 3) and match UV_VERSION in the CI workflow; an older uv rejects the
 # lockfile under --frozen.
-FROM ghcr.io/astral-sh/uv:0.12.9@sha256:8b940d3a9d65bed080436972241af2e21c84b5e8c9193f7014ed71479ee795ff AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
 # ── Stage 2: Builder ──────────────────────────────────────────────────────────
 FROM base AS builder
