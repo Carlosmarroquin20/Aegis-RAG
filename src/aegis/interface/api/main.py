@@ -40,6 +40,7 @@ from aegis.infrastructure.observability.tracing import (
 from aegis.interface.api.dependencies import (
     get_auth_failure_limiter,
     get_llm_client,
+    get_nli_model,
     get_parser_registry,
     get_rate_limiter,
     get_reranker,
@@ -177,6 +178,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     reranker = get_reranker()
     if reranker is not None:
         await reranker.load()
+
+    # Same for the faithfulness check's NLI model, when it is on.
+    nli_model = get_nli_model()
+    if nli_model is not None:
+        logger.info("startup.faithfulness_check", model=nli_model.model_name)
+        await nli_model.load()
 
     # Last, so everything startup built is frozen: full collections that walked
     # it were the API's p99 latency under load (see observability/runtime.py).

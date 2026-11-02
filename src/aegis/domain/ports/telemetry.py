@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from aegis.domain.models.faithfulness import FaithfulnessAssessment
 from aegis.domain.models.generation import Generation
 from aegis.domain.models.security import ThreatAssessment
 
@@ -43,3 +44,11 @@ class QueryMetricsPort(ABC):
     @abstractmethod
     def token_ledger_unavailable(self) -> None:
         """The token ledger could not be read or charged; the query was served anyway."""
+
+    @abstractmethod
+    def answer_faithfulness(self, assessment: FaithfulnessAssessment) -> None:
+        """An answer was judged against its retrieved context."""
+
+    @abstractmethod
+    def faithfulness_check_failed(self) -> None:
+        """The faithfulness judge failed; the answer was served without a score."""

@@ -26,6 +26,16 @@ class SourceDocument(BaseModel):
     relevance_score: float
 
 
+class FaithfulnessReport(BaseModel):
+    """How well the answer is supported by the retrieved context (FAITHFULNESS_CHECK)."""
+
+    score: float = Field(description="Share of the answer's claims the context supports, 0 to 1.")
+    abstained: bool = Field(description="The answer declined for lack of context; not scored.")
+    unsupported: list[str] = Field(
+        description="Sentences of the answer the context does not support."
+    )
+
+
 class QueryResponse(BaseModel):
     """Outbound DTO returned to the API consumer."""
 
@@ -34,6 +44,8 @@ class QueryResponse(BaseModel):
     # The query hash enables audit trail linkage without echoing the raw query.
     query_hash: str
     threat_level: str  # "CLEAN" | "SUSPICIOUS" — always CLEAN in non-strict mode reach here
+    # Present only when the deployment runs the faithfulness check.
+    faithfulness: FaithfulnessReport | None = None
 
 
 class SecurityRejectionDetail(BaseModel):

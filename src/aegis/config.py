@@ -242,6 +242,16 @@ class Settings(BaseSettings):
     lexical_index_max_age_seconds: float = Field(default=300.0, gt=0)
     reranker_model: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
 
+    # ── Answer faithfulness ────────────────────────────────────────────────────
+    # When on, every answer is checked claim by claim against the chunks it was
+    # generated from by a local NLI model, and the response carries the score and
+    # the unsupported sentences (ADR 0017). Off by default: the model is about
+    # 470 MB, baked into the image only on request, and adds its inference time.
+    faithfulness_check: bool = False
+    faithfulness_model: str = "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli"
+    # Entailment probability at or above which a claim counts as supported.
+    faithfulness_threshold: float = Field(default=0.5, gt=0.0, le=1.0)
+
     @field_validator("retrieval_mode")
     @classmethod
     def validate_retrieval_mode(cls, v: str) -> str:
