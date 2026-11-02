@@ -81,6 +81,16 @@ ENV HF_HOME=/app/hf-cache \
     HF_HUB_DISABLE_XET=1
 RUN /app/.venv/bin/python -c "from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction as F; F(model_name='${EMBEDDING_MODEL}', device='cpu')"
 
+# The cross-encoder for the RETRIEVAL_MODE=*+rerank modes, baked for the same
+# reason when one is named. Off by default, so the image stays about 470 MB
+# smaller: build with
+#   --build-arg RERANKER_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
+# to rerank (docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md).
+ARG RERANKER_MODEL=
+RUN if [ -n "${RERANKER_MODEL}" ]; then \
+      /app/.venv/bin/python -c "from sentence_transformers import CrossEncoder; CrossEncoder('${RERANKER_MODEL}', device='cpu')"; \
+    fi
+
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 FROM base AS runtime
 

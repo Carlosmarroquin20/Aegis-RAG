@@ -56,6 +56,10 @@ class _FakeCollection:
         self._record("get", kwargs)
         return self.get_result
 
+    def count(self) -> int:
+        self._record("count", {})
+        return len(self.get_result["ids"])
+
 
 class _FakeClient:
     def __init__(self, *, alive: bool = True) -> None:
@@ -149,6 +153,13 @@ class TestWritesAndLookups:
         assert found == {"1"}
         assert collection.calls == [("get", {"ids": ["1", "2"], "include": []})]
 
+    async def test_count_reports_the_collections_size(self) -> None:
+        collection = _FakeCollection()
+        collection.get_result = {"ids": ["1", "2", "3"]}
+
+        assert await _adapter(collection).count() == 3
+        assert collection.calls == [("count", {})]
+
     async def test_list_documents_maps_page_and_skips_empty_records(self) -> None:
         collection = _FakeCollection()
         collection.get_result = {
@@ -175,8 +186,9 @@ class TestNotInitialized:
             lambda a: a.delete_documents(["1"]),
             lambda a: a.existing_ids(["1"]),
             lambda a: a.list_documents(),
+            lambda a: a.count(),
         ],
-        ids=["search", "add", "delete", "existing_ids", "list"],
+        ids=["search", "add", "delete", "existing_ids", "list", "count"],
     )
     async def test_operations_raise_the_domain_error(self, operation: Any) -> None:
         with pytest.raises(VectorStoreUnavailableError):

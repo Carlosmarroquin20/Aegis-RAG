@@ -17,11 +17,13 @@ from urllib.parse import urlsplit
 
 from starlette.requests import Request
 
+from aegis.application.services.retrieval import Retriever
 from aegis.application.use_cases.ingest_documents import IngestDocumentsUseCase
 from aegis.application.use_cases.query_rag import QueryRAGUseCase
 from aegis.config import get_settings
 from aegis.domain.models.tenant import Tenant
 from aegis.domain.ports.llm_client import LLMClientPort
+from aegis.domain.ports.retrieval import RetrieverPort
 from aegis.domain.ports.token_ledger import TokenLedgerPort
 from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.llm.fallback import Backend, FallbackLLMClient
@@ -29,6 +31,8 @@ from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.llm.openai_compatible_adapter import OpenAICompatibleAdapter
 from aegis.infrastructure.observability.metrics import LLMPricing, PrometheusQueryMetrics
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
+from aegis.infrastructure.retrieval.bm25 import StoreBackedLexicalIndex
+from aegis.infrastructure.retrieval.cross_encoder import CrossEncoderReranker
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
 from aegis.infrastructure.security.rate_limiter import (
     InMemoryRateLimitStore,
@@ -251,6 +255,44 @@ def get_vector_store(request: Request) -> VectorStorePort:
     return get_collection_store(request_tenant(request).collection)
 
 
+@cache
+def get_lexical_index(collection: str) -> StoreBackedLexicalIndex:
+    """
+    The keyword index for one collection, built from that collection's store
+    only, so a tenant's keyword search cannot surface another tenant's chunks.
+    """
+    return StoreBackedLexicalIndex(
+        get_collection_store(collection),
+        max_age_seconds=get_settings().lexical_index_max_age_seconds,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_reranker() -> CrossEncoderReranker | None:
+    """The cross-encoder, shared by every tenant like the embedding model. None when off."""
+    cfg = get_settings()
+    if not cfg.reranker_enabled:
+        return None
+    return CrossEncoderReranker(cfg.reranker_model, device=cfg.embedding_device)
+
+
+def build_retriever(collection: str) -> Retriever:
+    """The retrieval stages RETRIEVAL_MODE selects, over one collection."""
+    cfg = get_settings()
+    return Retriever(
+        get_collection_store(collection),
+        lexical_index=get_lexical_index(collection) if cfg.lexical_search_enabled else None,
+        reranker=get_reranker(),
+        candidates=cfg.retrieval_candidates,
+        rrf_k=cfg.retrieval_rrf_k,
+    )
+
+
+def get_retriever(request: Request) -> RetrieverPort:
+    """The calling tenant's retriever, over its own collection only."""
+    return build_retriever(request_tenant(request).collection)
+
+
 def _hosted_llm_prices() -> dict[str, LLMPricing]:
     """Prices for the hosted provider, keyed the way its adapter names itself."""
     cfg = get_settings()
@@ -269,6 +311,7 @@ def get_query_use_case(request: Request) -> QueryRAGUseCase:
     """FastAPI dependency factory for the query pipeline, bound to the caller's tenant."""
     return QueryRAGUseCase(
         vector_store=get_vector_store(request),
+        retriever=get_retriever(request),
         llm_client=get_llm_client(),
         security_gateway=get_security_gateway(),
         output_sanitizer=get_output_sanitizer(),

@@ -42,6 +42,7 @@ from aegis.interface.api.dependencies import (
     get_llm_client,
     get_parser_registry,
     get_rate_limiter,
+    get_reranker,
     get_security_gateway,
     get_tenant_rate_limiter,
     get_tenant_registry,
@@ -169,6 +170,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # process here rather than failing its first query.
     for vector_store in get_tenant_vector_stores():
         await vector_store.initialize()
+
+    # Load the reranker now, so the first query does not wait for it and a
+    # missing model fails startup instead of that query.
+    logger.info("startup.retrieval", mode=cfg.retrieval_mode, candidates=cfg.retrieval_candidates)
+    reranker = get_reranker()
+    if reranker is not None:
+        await reranker.load()
 
     # Last, so everything startup built is frozen: full collections that walked
     # it were the API's p99 latency under load (see observability/runtime.py).

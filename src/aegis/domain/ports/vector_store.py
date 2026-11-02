@@ -44,6 +44,13 @@ class VectorStorePort(ABC):
         """Returns the subset of ``ids`` that is already indexed."""
 
     @abstractmethod
+    async def count(self) -> int:
+        """
+        Returns how many chunks the collection holds. Cheap enough to call per
+        query: indexes derived from the store compare it to notice changes.
+        """
+
+    @abstractmethod
     async def list_documents(self, limit: int = 20, offset: int = 0) -> list[Document]:
         """
         Returns one page of indexed documents in a stable, store-defined order.

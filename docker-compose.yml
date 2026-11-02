@@ -24,6 +24,8 @@ services:
       # the container must name the same one.
       args:
         EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+        # Baked only when set: needed for the rerank retrieval modes. See .env.example.
+        RERANKER_MODEL: ${RERANKER_MODEL:-}
     ports:
       - "${AEGIS_PUBLIC_BIND:-127.0.0.1}:8000:8000"
     environment:
@@ -35,6 +37,9 @@ services:
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      # Retrieval stages (dense | hybrid | dense+rerank | hybrid+rerank); see .env.example.
+      - RETRIEVAL_MODE=${RETRIEVAL_MODE:-hybrid}
+      - RERANKER_MODEL=${RERANKER_MODEL:-cross-encoder/mmarco-mMiniLMv2-L12-H384-v1}
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.2
       # LLM backend. Defaults to the local Ollama service above. To use a hosted,

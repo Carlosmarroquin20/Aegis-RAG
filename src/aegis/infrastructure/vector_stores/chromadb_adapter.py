@@ -173,6 +173,11 @@ class ChromaDBAdapter(VectorStorePort):
         result = await self._call(collection.get, ids=ids, include=[])
         return set(result.get("ids") or [])
 
+    async def count(self) -> int:
+        collection = self._require_collection()
+        result: int = await self._call(collection.count)
+        return result
+
     async def list_documents(self, limit: int = 20, offset: int = 0) -> list[Document]:
         collection = self._require_collection()
         result = await self._call(

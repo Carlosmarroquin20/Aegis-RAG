@@ -85,3 +85,11 @@ multilingüe, registrado en cada colección.** El modelo en inglés fallaba dema
 el multilingüe subió el hit@5 en español del 88 % al 97 %. Además, cada colección guarda qué
 modelo la creó, y la API no arranca si no coincide: ChromaDB lo aceptaría en silencio y las
 respuestas saldrían mal sin ningún error.
+
+**[0016](0016-hybrid-retrieval-by-default-reranker-opt-in.md) — Búsqueda híbrida por defecto; el
+reranker es opcional.** La búsqueda densa sola confunde términos exactos. Ahora se combina con BM25
+(palabras clave) mediante *reciprocal rank fusion*: en las mismas 38 preguntas el MRR subió de
+0,863 a 0,908 y el hit@5 de 97 % a 100 %, por unos 3 ms más por consulta. Un cross-encoder
+multilingüe llega a 0,925, pero cuesta casi un segundo por consulta en CPU y 470 MB de imagen por
+dos preguntas más, así que queda como opción. El índice BM25 vive en memoria, uno por colección, y
+se reconstruye cuando cambia el número de fragmentos.

@@ -32,6 +32,7 @@ The project also covers what running such a service involves: a hexagonal archit
 - **Detection that does not become the attack surface.** The gateway inspects attacker-controlled text on the event loop, so every signature is kept linear on non-matching input and a regression suite feeds each rule its worst-case 8 KB payload. Obfuscation that leaves a payload readable — zero-width characters, fullwidth forms, bidi overrides, Cyrillic/Greek homoglyphs — is normalized or folded before matching.
 - **Measured, not asserted.** The gateway is scored against a [labelled corpus of 326 queries](docs/GATEWAY_EVALUATION.md) that includes the attack classes it does *not* claim to stop. In its default mode it blocks **78%** of the attacks it targets — in English and Spanish — and **60%** of the whole corpus, at a **6%** false-positive rate that falls entirely on deliberately adversarial queries — no everyday question is blocked. The report is generated, lists every miss, and a test fails if it goes stale. The first run found two real defects, both fixed.
 - **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
+- **Hybrid retrieval, chosen by measurement.** Dense similarity is fused with BM25 keyword search (reciprocal rank fusion), which raised MRR on the example corpus from 0.863 to 0.908 and hit@5 from 97% to 100% for about 3 ms per query. A multilingual cross-encoder reranker reached 0.925 but costs close to a second per query on CPU, so it is [opt-in](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md). The same evaluation runs in CI against the application's own retrieval code and fails the build if quality drops.
 - **Magic-byte file detection.** Document uploads are dispatched to parsers based on actual file content, not the attacker-controllable `Content-Type` header.
 - **Hexagonal for real.** The `LLMClientPort`, `VectorStorePort` and `RateLimitStore` interfaces mean swapping Ollama for OpenAI, ChromaDB for pgvector, or the in-memory rate limiter for the shared **Redis** backend is a one-file change — and there are fakes in the test suite that prove it. The dependency rule itself (`interface → application → domain ← infrastructure`) is enforced by a test that parses every module's imports. Adapters translate vendor failures at the boundary, so a vector-store or LLM outage reaches the client as a retryable **503/504**, never as a leaked client-library exception.
 - **Load-tested, with the findings fixed.** [k6 scenarios](loadtest/README.md) against the compose stack found three defects the unit tests could not: a rate-limit check whose cost grew with the limit (56% of CPU), garbage-collection pauses of 1.3 s that were the p99, and a synchronous Redis call that let a Redis stall freeze `/health`. Fixed, each with a regression test: the ceiling on one worker went from 37 to about 70 requests per second and the p99 at a steady 40/s from 974 ms to under 75 ms.
@@ -50,11 +51,12 @@ The project also covers what running such a service involves: a hexagonal archit
 │                APIKey → RateLimit → ErrorBoundary → BodyLimit →      │
 │                Routes                                                │
 ├──────────────────────────────────────────────────────────────────────┤
-│  Application   Use cases (QueryRAG, IngestDocuments) · DTOs          │
+│  Application   Use cases (QueryRAG, IngestDocuments) · Retriever     │
 ├──────────────────────────────────────────────────────────────────────┤
-│  Domain        Models · Ports (abstract) · ChunkingService           │
+│  Domain        Models · Ports · ChunkingService · RankFusion         │
 ├──────────────────────────────────────────────────────────────────────┤
-│  Infrastructure  ChromaDB · Ollama · Parsers · SecurityGateway       │
+│  Infrastructure  ChromaDB · BM25 · Reranker · Ollama · Parsers       │
+│                  SecurityGateway                                     │
 │                  OutputSanitizer · RateLimiter (memory/Redis)        │
 │                  Prometheus metrics · OpenTelemetry tracing          │
 └──────────────────────────────────────────────────────────────────────┘
@@ -164,7 +166,7 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 Logs are single-line JSON via `structlog` with an auto-bound `request_id` for end-to-end correlation between logs, metrics, traces, and the `X-Request-ID` response header.
 
-**Distributed tracing (OpenTelemetry)** is opt-in (`TRACING_ENABLED`). When on, the FastAPI server span and the HTTPX call to Ollama are auto-instrumented, the query use case emits a child span per pipeline stage (`security.evaluate` → `rag.retrieve` → `llm.generate` → `output.sanitize`), and every log line carries the active `trace_id`/`span_id` so logs pivot to their trace. Spans export over OTLP/HTTP to an **OpenTelemetry Collector**, which fans them out two ways: the raw traces to a Jaeger backend at `http://localhost:16686`, and — via the **spanmetrics connector** — trace-derived RED metrics to Prometheus. The SDK lives in the optional `otel` extra, so the base image stays lean when tracing is off.
+**Distributed tracing (OpenTelemetry)** is opt-in (`TRACING_ENABLED`). When on, the FastAPI server span and the HTTPX call to Ollama are auto-instrumented, the query use case emits a child span per pipeline stage (`security.evaluate` → `rag.retrieve` → `llm.generate` → `output.sanitize`, with `rag.retrieve` split into `retrieve.dense`, `retrieve.lexical`, `retrieve.fuse` and `retrieve.rerank`), and every log line carries the active `trace_id`/`span_id` so logs pivot to their trace. Spans export over OTLP/HTTP to an **OpenTelemetry Collector**, which fans them out two ways: the raw traces to a Jaeger backend at `http://localhost:16686`, and — via the **spanmetrics connector** — trace-derived RED metrics to Prometheus. The SDK lives in the optional `otel` extra, so the base image stays lean when tracing is off.
 
 Two pre-provisioned Grafana dashboards ship with the stack. **Production Overview** surfaces request rate, error rate, p95 latency, and blocked queries as headline tiles, then breaks down HTTP and Security into full-resolution time series. **Trace Analytics** turns the pipeline spans into per-stage RED charts (call rate, errors, and p50/p95/p99 latency for `security.evaluate` / `rag.retrieve` / `llm.generate` / `output.sanitize`), plus a SecurityGateway breakdown by threat level — and each latency exemplar links straight to its trace in Jaeger. Alert rules under `infra/prometheus/alerts.yml` fire on 5xx spikes, p95 regressions, security-violation floods, any output-reflection event, sustained authentication failures, an unreachable rate-limit store, and an LLM backend whose circuit breaker stays open.
 
@@ -181,7 +183,7 @@ Two pre-provisioned Grafana dashboards ship with the stack. **Production Overvie
 ## Tech Stack
 
 - **API & runtime** — FastAPI 0.115+, Uvicorn, Pydantic v2 (strict), `uv` package manager
-- **RAG core** — ChromaDB · Ollama (local) or any OpenAI-compatible hosted LLM · `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (multilingual) · pypdf · python-docx · markdown-it-py
+- **RAG core** — ChromaDB · Ollama (local) or any OpenAI-compatible hosted LLM · `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (multilingual) · BM25 + reciprocal rank fusion · optional `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` reranker · pypdf · python-docx · markdown-it-py
 - **Rate limiting** — in-process sliding window, or a shared **Redis** backend (same port, one config flag)
 - **Security & quality** — Ruff (lint + format) · Mypy strict · `pip-audit` · Trivy · ~90% test coverage
 - **Observability** — `structlog` (JSON) · `prometheus-client` + Grafana dashboards · **OpenTelemetry** traces via an OTel Collector (spanmetrics → Prometheus) to Jaeger
@@ -243,6 +245,42 @@ uv run python scripts/seed_documents.py --source-dir examples/atencion-cliente
 `ghcr.io/carlosmarroquin20/aegis-rag-api` and `ghcr.io/carlosmarroquin20/aegis-rag-frontend`,
 signed with Sigstore and shipped with build provenance and an SPDX SBOM. See
 [Supply Chain](SECURITY.md#supply-chain) for how to verify one before running it.
+
+---
+
+## Retrieval
+
+Retrieval finds the chunks the LLM answers from, and it decides whether the model ever sees the
+answer. `RETRIEVAL_MODE` picks the stages:
+
+| `RETRIEVAL_MODE` | Stages | MRR | hit@5 | Per query (CPU) |
+|---|---|---|---|---|
+| `dense` | Vector similarity | 0.863 | 97.4% | 18 ms |
+| `hybrid` *(default)* | Vector similarity + BM25, fused by reciprocal rank fusion | 0.908 | 100% | 21 ms |
+| `dense+rerank` / `hybrid+rerank` | The above, re-scored by a multilingual cross-encoder | 0.925 | 100% | ~0.9 s |
+
+Figures are for the 38 labelled questions over [`examples/atencion-cliente`](examples/README.md),
+measured in CI. Dense embeddings match meaning but blur exact terms (a product, a figure, a rare
+word); BM25 matches exactly those and misses paraphrases and other languages, so the fused ranking
+recovers what either alone drops. The keyword index is kept in memory per collection and rebuilt
+from the vector store when its contents change, so it never becomes a second source of truth.
+
+The reranker is off by default: two more questions answered from the first chunk is not worth
+close to a second per query on CPU. To turn it on, set both in `.env` and rebuild, so the model is
+baked into the image and loads offline:
+
+```bash
+RETRIEVAL_MODE=hybrid+rerank
+RERANKER_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
+```
+
+Compare the modes on your own corpus and questions:
+
+```bash
+uv run python scripts/evaluate_retrieval.py --compare --corpus <dir> --questions <file.jsonl>
+```
+
+The reasoning and the trade-offs are in [ADR 0016](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md).
 
 ---
 
