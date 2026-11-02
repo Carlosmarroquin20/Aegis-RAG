@@ -1,6 +1,6 @@
 # Aegis-RAG
 
-> **A production-grade RAG system where security is the architecture, not a checklist.**
+> **A RAG API in which security is part of the architecture, not a checklist.**
 
 [![Python](https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -15,7 +15,7 @@
 
 Aegis-RAG is a Retrieval-Augmented Generation API designed for environments where you cannot afford to ship "best effort" security. Every query is evaluated by a domain-level **Security Gateway** before any retrieval or generation happens, every LLM response is post-processed by an **Output Sanitizer**, and the whole pipeline is wrapped in a defence-in-depth middleware stack with first-class observability.
 
-The codebase deliberately demonstrates senior-level practices that recruiters and tech leads care about: hexagonal architecture with swappable adapters, strict-typed Python, OWASP LLM Top 10 mitigations, logs + metrics + distributed traces out of the box, a hardened multi-stage Docker build, a layered test suite (unit, integration, end-to-end), AWS Terraform, and a React demo console.
+The project also covers what running such a service involves: a hexagonal architecture with swappable adapters, strictly typed Python, mitigations mapped to the OWASP LLM Top 10, logs, metrics and distributed traces, a hardened multi-stage Docker build, unit, integration and end-to-end tests, AWS Terraform, and a React demo console.
 
 <p align="center">
   <img src="docs/security-demo.gif" alt="Aegis-RAG web console — prompt-injection probes blocked by the live gateway" width="720">
@@ -28,7 +28,7 @@ The codebase deliberately demonstrates senior-level practices that recruiters an
 ## Engineering Highlights
 
 - **Defence in depth, by design.** The ASGI middleware chain (RequestID → AccessLog → SecurityHeaders → CORS → APIKey → RateLimit → ErrorBoundary → BodyLimit) executes *before* any route handler, so 404s and 405s receive the same hardening as authenticated traffic. RequestID sits outermost, so every log line and span carries the same correlation ID; ErrorBoundary sits innermost, so even an unhandled 500 is logged, counted and returned with security headers instead of bypassing the stack.
-- **Bounded label cardinality.** Prometheus path labels collapse to the matched FastAPI route template (`/api/v1/documents/{doc_id}`), never the raw URL — a subtle but production-critical decision.
+- **Bounded label cardinality.** Prometheus path labels collapse to the matched FastAPI route template (`/api/v1/documents/{doc_id}`), never the raw URL, so the number of time series stays bounded however many distinct URLs are requested.
 - **Detection that does not become the attack surface.** The gateway inspects attacker-controlled text on the event loop, so every signature is kept linear on non-matching input and a regression suite feeds each rule its worst-case 8 KB payload. Obfuscation that leaves a payload readable — zero-width characters, fullwidth forms, bidi overrides, Cyrillic/Greek homoglyphs — is normalized or folded before matching.
 - **Measured, not asserted.** The gateway is scored against a [labelled corpus of 326 queries](docs/GATEWAY_EVALUATION.md) that includes the attack classes it does *not* claim to stop. In its default mode it blocks **78%** of the attacks it targets — in English and Spanish — and **60%** of the whole corpus, at a **6%** false-positive rate that falls entirely on deliberately adversarial queries — no everyday question is blocked. The report is generated, lists every miss, and a test fails if it goes stale. The first run found two real defects, both fixed.
 - **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
