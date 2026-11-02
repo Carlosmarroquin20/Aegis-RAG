@@ -77,7 +77,7 @@ MODES = ("dense", "hybrid", "dense+rerank", "hybrid+rerank")
 LEXICAL_ONLY = "bm25"
 
 
-class _MemoryStore(VectorStorePort):
+class MemoryStore(VectorStorePort):
     """
     Collects the chunks the ingest use case produces, then serves dense search
     over them with the given model: normalized vectors, so the dot product is the
@@ -134,8 +134,8 @@ class Question:
     expected_source: str
 
 
-async def _chunk_corpus(corpus: Path) -> _MemoryStore:
-    store = _MemoryStore()
+async def chunk_corpus(corpus: Path) -> MemoryStore:
+    store = MemoryStore()
     use_case = IngestDocumentsUseCase(
         vector_store=store, parser_registry=ParserRegistry(), collection="retrieval-eval"
     )
@@ -172,7 +172,7 @@ def _rank(results: Sequence[Document], expected_source: str) -> float:
 
 async def _ranks(
     mode: str,
-    store: _MemoryStore,
+    store: MemoryStore,
     questions: Sequence[Question],
     *,
     reranker: CrossEncoderReranker | None,
@@ -238,7 +238,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     models = args.model or [settings.embedding_model]
     # One event loop for the whole run: the reranker's lock belongs to a loop.
     runner = asyncio.Runner()
-    store = runner.run(_chunk_corpus(args.corpus))
+    store = runner.run(chunk_corpus(args.corpus))
     questions = _load_questions(args.questions)
     print(f"{len(store.chunks)} chunks from {args.corpus.name}, {len(questions)} questions")
 

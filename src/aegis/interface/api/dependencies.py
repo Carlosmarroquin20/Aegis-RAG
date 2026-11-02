@@ -17,15 +17,18 @@ from urllib.parse import urlsplit
 
 from starlette.requests import Request
 
+from aegis.application.services.faithfulness import NLIFaithfulnessJudge
 from aegis.application.services.retrieval import Retriever
 from aegis.application.use_cases.ingest_documents import IngestDocumentsUseCase
 from aegis.application.use_cases.query_rag import QueryRAGUseCase
 from aegis.config import get_settings
 from aegis.domain.models.tenant import Tenant
+from aegis.domain.ports.faithfulness import FaithfulnessJudgePort
 from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.retrieval import RetrieverPort
 from aegis.domain.ports.token_ledger import TokenLedgerPort
 from aegis.domain.ports.vector_store import VectorStorePort
+from aegis.infrastructure.faithfulness.nli_model import TransformersNLIModel
 from aegis.infrastructure.llm.fallback import Backend, FallbackLLMClient
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.llm.openai_compatible_adapter import OpenAICompatibleAdapter
@@ -276,6 +279,22 @@ def get_reranker() -> CrossEncoderReranker | None:
     return CrossEncoderReranker(cfg.reranker_model, device=cfg.embedding_device)
 
 
+@lru_cache(maxsize=1)
+def get_nli_model() -> TransformersNLIModel | None:
+    """The entailment model behind the faithfulness check, shared by every tenant. None when off."""
+    cfg = get_settings()
+    if not cfg.faithfulness_check:
+        return None
+    return TransformersNLIModel(cfg.faithfulness_model, device=cfg.embedding_device)
+
+
+def get_faithfulness_judge() -> FaithfulnessJudgePort | None:
+    model = get_nli_model()
+    if model is None:
+        return None
+    return NLIFaithfulnessJudge(model, threshold=get_settings().faithfulness_threshold)
+
+
 def build_retriever(collection: str) -> Retriever:
     """The retrieval stages RETRIEVAL_MODE selects, over one collection."""
     cfg = get_settings()
@@ -317,6 +336,7 @@ def get_query_use_case(request: Request) -> QueryRAGUseCase:
         output_sanitizer=get_output_sanitizer(),
         metrics=PrometheusQueryMetrics(_hosted_llm_prices()),
         token_ledger=get_token_ledger(),
+        faithfulness_judge=get_faithfulness_judge(),
     )
 
 

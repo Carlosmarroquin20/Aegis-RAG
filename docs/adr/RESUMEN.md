@@ -93,3 +93,12 @@ reranker es opcional.** La búsqueda densa sola confunde términos exactos. Ahor
 multilingüe llega a 0,925, pero cuesta casi un segundo por consulta en CPU y 470 MB de imagen por
 dos preguntas más, así que queda como opción. El índice BM25 vive en memoria, uno por colección, y
 se reconstruye cuando cambia el número de fragmentos.
+
+**[0017](0017-answer-faithfulness-judged-by-nli.md) — La fidelidad de las respuestas la juzga un
+modelo NLI local, frase por frase.** Cada respuesta se divide en afirmaciones y cada una se compara
+con las frases del contexto recuperado: está respaldada si alguna la implica (menos su
+probabilidad de contradicción). Un LLM como juez se descartó por lento, de pago y no determinista
+(0012). Sobre 80 respuestas etiquetadas detecta el 65 % de las infieles y marca por error el 7 % de
+las fieles; con fragmentos enteros como premisa detectaba el 43 %. Los datos equivocados (un número
+cambiado) son su punto débil: atrapa menos de la mitad. Es un control del CI y, opcionalmente, una
+métrica en producción.

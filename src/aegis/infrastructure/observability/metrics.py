@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
+from aegis.domain.models.faithfulness import FaithfulnessAssessment
 from aegis.domain.models.generation import Generation, TokenUsage
 from aegis.domain.models.security import ThreatAssessment
 from aegis.domain.ports.telemetry import QueryMetricsPort
@@ -81,6 +82,28 @@ auth_failures_total = Counter(
 rate_limit_backend_errors_total = Counter(
     "aegis_rate_limit_backend_errors_total",
     "Requests for which the rate-limit store could not be consulted.",
+    registry=registry,
+)
+
+# ── Answer faithfulness (opt-in, FAITHFULNESS_CHECK) ─────────────────────────
+
+answer_faithfulness = Histogram(
+    "aegis_answer_faithfulness",
+    "Share of an answer's claims supported by its retrieved context (abstentions excluded).",
+    buckets=(0.0, 0.25, 0.5, 0.75, 0.9, 0.99, 1.0),
+    registry=registry,
+)
+
+answers_judged_total = Counter(
+    "aegis_answers_judged_total",
+    "Answers judged for faithfulness, by outcome (supported, unsupported, abstained).",
+    labelnames=("outcome",),
+    registry=registry,
+)
+
+faithfulness_errors_total = Counter(
+    "aegis_faithfulness_errors_total",
+    "Answers served without a faithfulness score because the judge failed.",
     registry=registry,
 )
 
@@ -219,3 +242,14 @@ class PrometheusQueryMetrics(QueryMetricsPort):
 
     def token_ledger_unavailable(self) -> None:
         token_ledger_errors_total.inc()
+
+    def answer_faithfulness(self, assessment: FaithfulnessAssessment) -> None:
+        if assessment.abstained:
+            answers_judged_total.labels(outcome="abstained").inc()
+            return
+        answer_faithfulness.observe(assessment.score)
+        outcome = "supported" if assessment.fully_supported else "unsupported"
+        answers_judged_total.labels(outcome=outcome).inc()
+
+    def faithfulness_check_failed(self) -> None:
+        faithfulness_errors_total.inc()

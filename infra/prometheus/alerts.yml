@@ -98,6 +98,28 @@ groups:
             echoed an injection payload. Investigate the indexed documents
             for indirect prompt injection.
 
+      - alert: AegisUnsupportedAnswersHigh
+        # Only fires where FAITHFULNESS_CHECK is on. A sustained share of answers
+        # with claims the retrieved context does not support usually means
+        # retrieval is missing the right documents, the corpus is out of date,
+        # or the LLM changed; the judge itself misses about a third (ADR 0017).
+        expr: |
+          (
+            sum(rate(aegis_answers_judged_total{outcome="unsupported"}[30m]))
+            /
+            sum(rate(aegis_answers_judged_total{outcome=~"supported|unsupported"}[30m]))
+          ) > 0.25
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 25% of answers have claims their context does not support"
+          description: >
+            The faithfulness check has flagged over a quarter of scored answers
+            for 15 minutes. Check retrieval (aegis_rag_queries_total, the
+            retrieval mode), recent ingestion, and the LLM backend; the
+            unsupported sentences are logged as use_case.answer_unsupported.
+
       - alert: AegisTenantTokenBudgetExhausted
         # Not an incident: the budget is doing its job. It tells the platform
         # team a tenant is being refused, before the tenant files a ticket.

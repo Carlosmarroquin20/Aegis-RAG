@@ -7,6 +7,7 @@ Execution order is intentional:
   3. Retrieval: dense, optionally fused with keyword search and reranked
   4. LLM generation (network I/O, slow), then the tokens are charged
   5. OutputSanitizer post-processing                    — LLM05
+  6. Faithfulness of the answer to its context, when a judge is configured
 
 The use case owns no state; all dependencies are injected at construction time,
 and every one of them is a domain port. Nothing here imports from the
@@ -18,10 +19,17 @@ from __future__ import annotations
 import structlog
 from opentelemetry import trace
 
-from aegis.application.dtos.rag_dtos import QueryRequest, QueryResponse, SourceDocument
+from aegis.application.dtos.rag_dtos import (
+    FaithfulnessReport,
+    QueryRequest,
+    QueryResponse,
+    SourceDocument,
+)
 from aegis.application.services.retrieval import Retriever
+from aegis.domain.models.document import Document
 from aegis.domain.models.query import RawQuery
 from aegis.domain.models.tenant import Tenant
+from aegis.domain.ports.faithfulness import FaithfulnessJudgePort
 from aegis.domain.ports.llm_client import LLMClientPort
 from aegis.domain.ports.retrieval import RetrieverPort
 from aegis.domain.ports.security import OutputGuardPort, QueryGuardPort
@@ -56,6 +64,7 @@ class QueryRAGUseCase:
         metrics: QueryMetricsPort,
         token_ledger: TokenLedgerPort | None = None,
         retriever: RetrieverPort | None = None,
+        faithfulness_judge: FaithfulnessJudgePort | None = None,
     ) -> None:
         # Without a retriever, retrieval is dense similarity from vector_store.
         self._retriever = retriever if retriever is not None else Retriever(vector_store)
@@ -64,6 +73,7 @@ class QueryRAGUseCase:
         self._output_sanitizer = output_sanitizer
         self._metrics = metrics
         self._ledger = token_ledger
+        self._judge = faithfulness_judge
 
     async def execute(
         self, request: QueryRequest, *, client: str = "unknown", tenant: Tenant | None = None
@@ -144,6 +154,8 @@ class QueryRAGUseCase:
                 pii_types=sanitized.pii_types_detected,
             )
 
+        faithfulness = await self._judge_faithfulness(sanitized.text, documents, query_hash)
+
         sources = [
             SourceDocument(
                 content_preview=doc.content[:200],
@@ -158,6 +170,41 @@ class QueryRAGUseCase:
             sources=sources,
             query_hash=query_hash,
             threat_level=gateway_result.assessment.level.name,
+            faithfulness=faithfulness,
+        )
+
+    async def _judge_faithfulness(
+        self, answer: str, documents: list[Document], query_hash: str
+    ) -> FaithfulnessReport | None:
+        """
+        Scores the answer against the chunks it was generated from. A monitoring
+        signal, not a gate: an unsupported answer is still returned (with the
+        sentences that lack support), and a failing judge costs the score, not
+        the answer.
+        """
+        if self._judge is None:
+            return None
+        log = logger.bind(query_hash=query_hash[:16])
+        with tracer.start_as_current_span("output.faithfulness") as span:
+            try:
+                assessment = await self._judge.assess(answer, documents)
+            except Exception as exc:
+                self._metrics.faithfulness_check_failed()
+                log.error("use_case.faithfulness_check_failed", error=repr(exc))
+                return None
+            span.set_attribute("aegis.faithfulness", assessment.score)
+            span.set_attribute("aegis.abstained", assessment.abstained)
+        self._metrics.answer_faithfulness(assessment)
+        if not assessment.fully_supported:
+            log.warning(
+                "use_case.answer_unsupported",
+                score=round(assessment.score, 3),
+                unsupported_claims=len(assessment.unsupported),
+            )
+        return FaithfulnessReport(
+            score=round(assessment.score, 4),
+            abstained=assessment.abstained,
+            unsupported=list(assessment.unsupported),
         )
 
     async def _check_budget(self, tenant: Tenant, budget: int) -> None:
