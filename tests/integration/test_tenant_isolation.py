@@ -9,6 +9,7 @@ reaches only the collection its key resolves to, so none of them can.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -62,7 +63,7 @@ def client(
     stores: dict[str, _SearchableStore],
     llm: _ContextRecordingLLM,
     reset_prometheus_registry: None,
-) -> TestClient:
+) -> Iterator[TestClient]:
     tenants = TenantRegistry.from_mapping(
         {
             "tenant": [
@@ -86,10 +87,14 @@ def client(
     monkeypatch.setattr(main, "get_auth_failure_limiter", lambda: None)
     monkeypatch.setattr(main, "get_rate_limiter", lambda: RateLimiter(RateLimitPolicy(1000, 60)))
     monkeypatch.setattr(dependencies, "get_collection_store", lambda name: stores[name])
+    # Keyword indexes are cached per collection name for the process's life; this
+    # test's stores are new, so the indexes must be too.
+    dependencies.get_lexical_index.cache_clear()
     monkeypatch.setattr(dependencies, "get_llm_client", lambda: llm)
     ledger = InMemoryTokenLedger()
     monkeypatch.setattr(dependencies, "get_token_ledger", lambda: ledger)
-    return TestClient(main.create_app())
+    yield TestClient(main.create_app())
+    dependencies.get_lexical_index.cache_clear()
 
 
 def _upload(client: TestClient, key: str, name: str, text: str) -> None:
@@ -133,6 +138,23 @@ class TestTenantIsolation:
             "/api/v1/query",
             json={"query": "How are invoices issued?"},
             headers={"X-API-Key": _SUPPORT_KEY},
+        )
+
+        assert response.status_code == 200
+        assert llm.contexts == [["returns.txt"]]
+
+    def test_keyword_search_reads_only_the_callers_collection(
+        self, client: TestClient, llm: _ContextRecordingLLM
+    ) -> None:
+        """
+        Hybrid retrieval adds a keyword index per collection. "NIT" appears only in
+        the other tenant's document; matching it must not bring that document in.
+        """
+        _upload(client, _SUPPORT_KEY, "returns.txt", "Returns are accepted within 30 days.")
+        _upload(client, _BILLING_KEY, "invoices.txt", "Invoices are issued with your NIT.")
+
+        response = client.post(
+            "/api/v1/query", json={"query": "NIT"}, headers={"X-API-Key": _SUPPORT_KEY}
         )
 
         assert response.status_code == 200

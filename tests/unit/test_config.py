@@ -33,6 +33,8 @@ class TestValidation:
             ("rate_limit_backend", "memcached"),
             ("log_level", "VERBOSE"),
             ("otel_exporter", "zipkin"),
+            ("retrieval_mode", "sparse"),
+            ("retrieval_mode", "rerank"),
         ],
     )
     def test_unknown_choice_is_rejected_at_startup(self, field: str, value: str) -> None:
@@ -44,6 +46,22 @@ class TestValidation:
         assert settings.rate_limit_backend == "redis"
         assert settings.log_level == "DEBUG"
         assert settings.otel_exporter == "otlp"
+
+    @pytest.mark.parametrize(
+        ("mode", "lexical", "rerank"),
+        [
+            ("dense", False, False),
+            ("hybrid", True, False),
+            ("dense+rerank", False, True),
+            (" Hybrid+Rerank ", True, True),
+        ],
+    )
+    def test_retrieval_mode_selects_the_stages(
+        self, mode: str, lexical: bool, rerank: bool
+    ) -> None:
+        settings = Settings(retrieval_mode=mode)
+        assert settings.lexical_search_enabled is lexical
+        assert settings.reranker_enabled is rerank
 
 
 class TestSecureDefaults:

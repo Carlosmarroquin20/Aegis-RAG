@@ -88,6 +88,9 @@ class FakeVectorStore(VectorStorePort):
     async def existing_ids(self, ids: list[str]) -> set[str]:
         return {d.id for d in self.stored} & set(ids)
 
+    async def count(self) -> int:
+        return len(self.stored)
+
     async def list_documents(self, limit: int = 20, offset: int = 0) -> list[Document]:
         return self.stored[offset : offset + limit]
 

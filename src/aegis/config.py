@@ -223,6 +223,41 @@ class Settings(BaseSettings):
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_device: str = "cpu"  # "cuda" for GPU inference
 
+    # ── Retrieval ──────────────────────────────────────────────────────────────
+    # Which stages find the chunks sent to the LLM (application/services/retrieval.py):
+    #   dense          vector similarity only
+    #   hybrid         vector similarity fused with BM25 keyword search (no model)
+    #   dense+rerank   vector similarity, re-scored by a cross-encoder
+    #   hybrid+rerank  both first stages, fused, then re-scored
+    # The rerank modes load RERANKER_MODEL (about 470 MB) and add its inference
+    # time to every query. Measured on the example corpus by
+    # scripts/evaluate_retrieval.py --compare; see ADR 0016.
+    retrieval_mode: str = "hybrid"
+    # How deep each first stage looks, and how many fused chunks the reranker reads.
+    retrieval_candidates: int = Field(default=20, ge=1, le=200)
+    retrieval_rrf_k: int = Field(default=60, ge=1)
+    # Longest a keyword index is served without a rebuild when the collection's
+    # chunk count has not changed; a changed count rebuilds it on the next query.
+    lexical_index_max_age_seconds: float = Field(default=300.0, gt=0)
+    reranker_model: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+
+    @field_validator("retrieval_mode")
+    @classmethod
+    def validate_retrieval_mode(cls, v: str) -> str:
+        allowed = {"dense", "hybrid", "dense+rerank", "hybrid+rerank"}
+        lowered = v.strip().lower()
+        if lowered not in allowed:
+            raise ValueError(f"retrieval_mode must be one of {sorted(allowed)}")
+        return lowered
+
+    @property
+    def lexical_search_enabled(self) -> bool:
+        return self.retrieval_mode.startswith("hybrid")
+
+    @property
+    def reranker_enabled(self) -> bool:
+        return self.retrieval_mode.endswith("+rerank")
+
     # ── Observability ──────────────────────────────────────────────────────────
     log_level: str = "INFO"
     log_format: str = "json"  # "json" | "console"

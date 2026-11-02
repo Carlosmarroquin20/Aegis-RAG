@@ -315,8 +315,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      - name: Cache the embedding model
-        # About 470 MB. Keyed on the configured default, so changing the model
+      - name: Cache the embedding and reranker models
+        # About 470 MB each. Keyed on the configured defaults, so changing a model
         # downloads the new one instead of measuring a stale cache.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -331,7 +331,7 @@ jobs:
         env:
           HF_HUB_DISABLE_XET: "1"
         run: >-
-          uv run python scripts/evaluate_retrieval.py --show-misses
+          uv run python scripts/evaluate_retrieval.py --compare --show-misses
           --min-hit5 0.94 --min-mrr 0.82
 
   docker-build:

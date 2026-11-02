@@ -4,7 +4,7 @@ QueryRAG use case — orchestrates the full RAG pipeline.
 Execution order is intentional:
   1. SecurityGateway evaluation (no I/O, fast fail)     — LLM01
   2. Tenant token budget check, when the tenant has one — LLM10
-  3. Vector store retrieval (network I/O)
+  3. Retrieval: dense, optionally fused with keyword search and reranked
   4. LLM generation (network I/O, slow), then the tokens are charged
   5. OutputSanitizer post-processing                    — LLM05
 
@@ -19,9 +19,11 @@ import structlog
 from opentelemetry import trace
 
 from aegis.application.dtos.rag_dtos import QueryRequest, QueryResponse, SourceDocument
+from aegis.application.services.retrieval import Retriever
 from aegis.domain.models.query import RawQuery
 from aegis.domain.models.tenant import Tenant
 from aegis.domain.ports.llm_client import LLMClientPort
+from aegis.domain.ports.retrieval import RetrieverPort
 from aegis.domain.ports.security import OutputGuardPort, QueryGuardPort
 from aegis.domain.ports.telemetry import QueryMetricsPort
 from aegis.domain.ports.token_ledger import TokenBudgetExhaustedError, TokenLedgerPort
@@ -53,8 +55,10 @@ class QueryRAGUseCase:
         output_sanitizer: OutputGuardPort,
         metrics: QueryMetricsPort,
         token_ledger: TokenLedgerPort | None = None,
+        retriever: RetrieverPort | None = None,
     ) -> None:
-        self._vector_store = vector_store
+        # Without a retriever, retrieval is dense similarity from vector_store.
+        self._retriever = retriever if retriever is not None else Retriever(vector_store)
         self._llm_client = llm_client
         self._gateway = security_gateway
         self._output_sanitizer = output_sanitizer
@@ -107,7 +111,7 @@ class QueryRAGUseCase:
         self._metrics.query_reached_retrieval()
         with tracer.start_as_current_span("rag.retrieve") as span:
             span.set_attribute("aegis.top_k", request.top_k)
-            documents = await self._vector_store.similarity_search(sanitized_text, k=request.top_k)
+            documents = await self._retriever.retrieve(sanitized_text, k=request.top_k)
             span.set_attribute("aegis.doc_count", len(documents))
         log.info("use_case.retrieved", doc_count=len(documents))
 

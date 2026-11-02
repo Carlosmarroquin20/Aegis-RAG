@@ -11,8 +11,14 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 from types import ModuleType
+
+import numpy as np
+import pytest
+
+from aegis.domain.models.document import Document
 
 _ROOT = Path(__file__).resolve().parents[2]
 _SCRIPT = _ROOT / "scripts" / "evaluate_retrieval.py"
@@ -60,3 +66,85 @@ class TestQuestionSet:
         for line in ev.DEFAULT_QUESTIONS.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 assert json.loads(line)["expected_source"] in corpus
+
+
+class TestRanking:
+    def _doc(self, source: str) -> Document:
+        return Document(id=source, content="text", metadata={"source": source})
+
+    def test_rank_is_the_first_chunk_of_the_expected_document(self) -> None:
+        results = [self._doc("a.md"), self._doc("b.md"), self._doc("b.md")]
+        assert ev._rank(results, "b.md") == 2
+
+    def test_absent_document_is_a_miss(self) -> None:
+        assert ev._rank([self._doc("a.md")], "b.md") == ev.MISS
+
+    def test_a_miss_counts_against_both_metrics(self) -> None:
+        problems = ev.shortfalls([1, ev.MISS], min_hit5=0.6, min_mrr=0.6)
+        assert problems == [
+            "hit@5 0.500 is below the required 0.600",
+            "MRR 0.500 is below the required 0.600",
+        ]
+
+
+class _BagOfWordsEncoder:
+    """Stands in for SentenceTransformer: hashed word counts, normalized."""
+
+    def __init__(self, *_: object, **__: object) -> None:
+        pass
+
+    def encode(self, texts: list[str], normalize_embeddings: bool = True) -> np.ndarray:
+        vectors = np.zeros((len(texts), 256))
+        for row, text in enumerate(texts):
+            for word in text.lower().split():
+                vectors[row, sum(map(ord, word)) % 256] += 1.0
+        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        return np.divide(vectors, norms, out=np.zeros_like(vectors), where=norms > 0)
+
+
+class _LengthCrossEncoder:
+    """Stands in for CrossEncoder: prefers shorter chunks, deterministically."""
+
+    def __init__(self, *_: object, **__: object) -> None:
+        pass
+
+    def predict(self, pairs: list[tuple[str, str]], **_: object) -> list[float]:
+        return [1.0 / (1.0 + len(text)) for _, text in pairs]
+
+
+class TestEndToEnd:
+    def test_compare_runs_every_mode_over_the_real_corpus(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """
+        The models are stubs, so the figures mean nothing; what is checked is that
+        every mode runs through the application's own retrieval code end to end.
+        """
+        monkeypatch.setitem(
+            sys.modules,
+            "sentence_transformers",
+            types.SimpleNamespace(
+                SentenceTransformer=_BagOfWordsEncoder, CrossEncoder=_LengthCrossEncoder
+            ),
+        )
+
+        assert ev.main(["--compare", "--mode", "hybrid"]) == 0
+
+        out = capsys.readouterr().out
+        assert "hybrid  (gated)" in out
+        for mode in ("dense", "dense+rerank", "hybrid+rerank", "bm25"):
+            assert f"\n  {mode}  " in out
+
+    def test_the_gate_applies_to_the_gated_mode_only(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setitem(
+            sys.modules,
+            "sentence_transformers",
+            types.SimpleNamespace(
+                SentenceTransformer=_BagOfWordsEncoder, CrossEncoder=_LengthCrossEncoder
+            ),
+        )
+
+        assert ev.main(["--compare", "--mode", "hybrid", "--min-hit5", "1.01"]) == 1
+        assert capsys.readouterr().out.count("FAIL: hit@5") == 1
