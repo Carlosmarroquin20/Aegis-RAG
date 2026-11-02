@@ -370,9 +370,11 @@ jobs:
         # the model or the labels do (ADR 0017).
         env:
           HF_HUB_DISABLE_XET: "1"
-        run: >-
-          uv run python scripts/evaluate_faithfulness.py --show-errors
-          --compare-model MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
+        run: |
+          L12=MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli
+          uv run python scripts/evaluate_faithfulness.py --show-errors --compare-model "$L12"
+          uv run python scripts/evaluate_faithfulness.py --no-contradiction --compare-model "$L12"
+          uv run python scripts/evaluate_faithfulness.py --granularity chunk --no-contradiction --compare-model "$L12"
 
   docker-build:
     name: Docker Build Validation

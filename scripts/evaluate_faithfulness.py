@@ -265,6 +265,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--compare-model", action="append", default=[], help="also report this model; repeatable"
     )
     parser.add_argument("--threshold", type=float, help="default: FAITHFULNESS_THRESHOLD")
+    parser.add_argument(
+        "--granularity",
+        choices=("sentence", "chunk"),
+        default="sentence",
+        help="premises: context sentences (default) or whole chunks",
+    )
+    parser.add_argument(
+        "--no-contradiction",
+        action="store_true",
+        help="support is entailment alone, not entailment minus contradiction",
+    )
     parser.add_argument("--answers", type=Path, default=DEFAULT_ANSWERS)
     parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
     parser.add_argument("--show-errors", action="store_true", help="list every misjudged answer")
@@ -302,13 +313,18 @@ def _main_labelled(
     answers = load_answers(args.answers)
     print(
         f"{len(answers)} labelled answers over {args.corpus.name} "
-        f"({len(store.chunks)} chunks), threshold {settings.faithfulness_threshold}"
+        f"({len(store.chunks)} chunks), threshold {settings.faithfulness_threshold}, "
+        f"{args.granularity} premises, "
+        f"{'entailment only' if args.no_contradiction else 'entailment minus contradiction'}"
     )
     failed = False
     gated = settings.faithfulness_model
     for model_name in [gated, *args.compare_model]:
         judge = NLIFaithfulnessJudge(
-            TransformersNLIModel(model_name), threshold=settings.faithfulness_threshold
+            TransformersNLIModel(model_name),
+            threshold=settings.faithfulness_threshold,
+            granularity=args.granularity,
+            contradiction_aware=not args.no_contradiction,
         )
         started = time.perf_counter()
         try:

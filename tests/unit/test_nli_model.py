@@ -20,6 +20,7 @@ from aegis.infrastructure.faithfulness.nli_model import (
     DEFAULT_NLI_MODEL,
     EntailmentLabelError,
     TransformersNLIModel,
+    contradiction_index,
     entailment_index,
 )
 
@@ -41,6 +42,10 @@ class TestEntailmentIndex:
     def test_a_model_without_entailment_is_refused(self) -> None:
         with pytest.raises(EntailmentLabelError):
             entailment_index({0: "LABEL_0", 1: "LABEL_1"})
+
+    def test_finds_contradiction_or_reports_a_two_way_model(self) -> None:
+        assert contradiction_index({0: "entailment", 1: "neutral", 2: "contradiction"}) == 2
+        assert contradiction_index({0: "entailment", 1: "not_entailment"}) is None
 
 
 class TestLoading:
@@ -81,9 +86,9 @@ class TestLoading:
             ),
         )
 
-        _, _, entail = TransformersNLIModel("org/nli", device="cpu")._build()
+        _, _, entail, contradict = TransformersNLIModel("org/nli", device="cpu")._build()
 
-        assert entail == 2
+        assert (entail, contradict) == (2, 0)
         assert ("tokenizer", "org/nli", {"trust_remote_code": False}) in seen
         assert ("model", "org/nli", {"trust_remote_code": False}) in seen
         assert ("eval", "", {}) in seen
@@ -91,9 +96,9 @@ class TestLoading:
     async def test_loads_once_however_many_callers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         builds: list[str] = []
 
-        def build(self: TransformersNLIModel) -> tuple[Any, Any, int]:
+        def build(self: TransformersNLIModel) -> tuple[Any, Any, int, int | None]:
             builds.append(self.model_name)
-            return object(), object(), 0
+            return object(), object(), 0, None
 
         monkeypatch.setattr(TransformersNLIModel, "_build", build)
         model = TransformersNLIModel("org/nli")
@@ -105,7 +110,7 @@ class TestLoading:
     async def test_no_pairs_does_not_load_the_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(TransformersNLIModel, "_build", lambda self: pytest.fail("loaded"))
 
-        assert await TransformersNLIModel().entailment([]) == []
+        assert await TransformersNLIModel().infer([]) == []
 
     def test_the_default_is_a_multilingual_model(self) -> None:
         assert "multilingual" in DEFAULT_NLI_MODEL
@@ -113,7 +118,7 @@ class TestLoading:
 
 
 class TestPredict:
-    async def test_returns_the_entailment_probability_per_pair_in_order(self) -> None:
+    async def test_returns_probabilities_per_pair_in_the_callers_order(self) -> None:
         torch = pytest.importorskip("torch")
 
         class _Encoded(dict[str, Any]):
@@ -136,14 +141,17 @@ class TestPredict:
 
         tokenizer = _Tokenizer()
         model = TransformersNLIModel(batch_size=2, max_length=128)
-        model._loaded = (tokenizer, _Model(), 2)
+        model._loaded = (tokenizer, _Model(), 2, 0)
 
-        probabilities = await model.entailment(
-            [("p", "yes one"), ("p", "no two"), ("p", "yes three")]
+        # Lengths differ, so batches are formed by length, not by position.
+        results = await model.infer(
+            [("a long premise here", "yes one"), ("p", "no two"), ("p", "yes three")]
         )
 
-        assert probabilities[0] > 0.98 and probabilities[2] > 0.98
-        assert probabilities[1] < 0.02
+        assert results[0].entailment > 0.98 and results[2].entailment > 0.98
+        assert results[1].entailment < 0.02 and results[1].contradiction > 0.98
+        assert results[0].contradiction < 0.02
         assert len(tokenizer.calls) == 2  # batches of two
+        assert tokenizer.calls[0]["premises"] == ["p", "p"]  # the two shortest first
         assert tokenizer.calls[0]["truncation"] == "only_first"
         assert tokenizer.calls[0]["max_length"] == 128

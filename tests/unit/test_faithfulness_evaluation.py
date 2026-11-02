@@ -19,7 +19,7 @@ from types import ModuleType
 import numpy as np
 import pytest
 
-from aegis.domain.models.faithfulness import FaithfulnessAssessment, SentenceSupport
+from aegis.domain.models.faithfulness import FaithfulnessAssessment, Inference, SentenceSupport
 from aegis.infrastructure.faithfulness.nli_model import TransformersNLIModel
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -121,13 +121,13 @@ _WORDS = re.compile(r"\w{3,}")
 
 async def _overlap_entailment(
     self: TransformersNLIModel, pairs: list[tuple[str, str]]
-) -> list[float]:
-    """Stand-in NLI: entailed when most of the claim's words are in the premise."""
+) -> list[Inference]:
+    """Stand-in NLI: entailed by the share of the claim's words found in the premise."""
     scores = []
     for premise, claim in pairs:
         words = set(_WORDS.findall(claim.lower()))
         shared = words & set(_WORDS.findall(premise.lower()))
-        scores.append(len(shared) / len(words) if words else 0.0)
+        scores.append(Inference(len(shared) / len(words) if words else 0.0, 0.0))
     return scores
 
 
@@ -135,9 +135,10 @@ class TestEndToEnd:
     def test_runs_over_the_real_dataset_and_corpus(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        monkeypatch.setattr(TransformersNLIModel, "entailment", _overlap_entailment)
+        monkeypatch.setattr(TransformersNLIModel, "infer", _overlap_entailment)
 
         assert ev.main(["--show-errors"]) == 0
+        assert ev.main(["--granularity", "chunk", "--no-contradiction"]) == 0
 
         out = capsys.readouterr().out
         assert f"{len(_RECORDS)} labelled answers" in out
@@ -147,7 +148,7 @@ class TestEndToEnd:
     def test_the_gate_applies_to_the_gated_model_only(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        monkeypatch.setattr(TransformersNLIModel, "entailment", _overlap_entailment)
+        monkeypatch.setattr(TransformersNLIModel, "infer", _overlap_entailment)
 
         assert ev.main(["--compare-model", "org/other", "--min-recall", "1.01"]) == 1
 
@@ -181,7 +182,7 @@ class TestLive:
             "sentence_transformers",
             types.SimpleNamespace(SentenceTransformer=_BagOfWordsEncoder),
         )
-        monkeypatch.setattr(TransformersNLIModel, "entailment", _overlap_entailment)
+        monkeypatch.setattr(TransformersNLIModel, "infer", _overlap_entailment)
         llm = FakeLLMClient(fixed_response="Los domingos no hay entregas a domicilio.")
         monkeypatch.setattr(dependencies, "get_llm_client", lambda: llm)
 

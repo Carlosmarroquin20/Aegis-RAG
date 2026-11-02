@@ -1,5 +1,6 @@
 """
-Splits an answer into the claims a faithfulness judge checks one by one.
+Splits an answer into the claims a faithfulness judge checks one by one, and
+the context into the premises it checks them against.
 
 A sentence is the unit: small enough that one invented detail does not hide
 behind a true one, large enough to carry its own subject and verb. Splitting is
@@ -68,6 +69,34 @@ def split_claims(text: str) -> list[str]:
         else:
             claims.append(pending)
     return claims
+
+
+def _sentences(text: str) -> list[str]:
+    return [s.strip() for s in _SENTENCE_END.split(text) if _HAS_WORD.search(s)]
+
+
+def split_premises(text: str) -> list[str]:
+    """
+    The context as NLI premises: sentences, and table rows on their own.
+
+    NLI models are trained on premises of a sentence or two; a whole chunk, with
+    several figures and exceptions, is where they confuse "30 días" for the
+    general rule with "15 días" for mattresses. Stored chunks keep the source's
+    hard line breaks inside sentences, so lines are rejoined before splitting,
+    except table rows ("Domingo | 10:00 a 19:00"), which are facts by themselves.
+    """
+    segments: list[str] = []
+    prose: list[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if " | " in line:
+            segments.extend(_sentences(" ".join(prose)))
+            prose.clear()
+            segments.append(line.replace(" | ", ": "))
+        elif line:
+            prose.append(line)
+    segments.extend(_sentences(" ".join(prose)))
+    return segments
 
 
 def _fold(text: str) -> str:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from aegis.domain.services.claims import is_abstention, split_claims
+from aegis.domain.services.claims import is_abstention, split_claims, split_premises
 
 
 class TestSplitClaims:
@@ -85,3 +85,30 @@ class TestIsAbstention:
         )
 
         assert not is_abstention(text)
+
+
+class TestSplitPremises:
+    def test_hard_line_breaks_inside_a_sentence_are_rejoined(self) -> None:
+        text = (
+            "El plazo es de 30 días calendario siguientes\na la fecha de compra. Sin excepciones."
+        )
+
+        assert split_premises(text) == [
+            "El plazo es de 30 días calendario siguientes a la fecha de compra.",
+            "Sin excepciones.",
+        ]
+
+    def test_table_rows_are_premises_of_their_own(self) -> None:
+        text = "Horario de las tiendas\nLunes a sábado | 9:00 a 20:00\nDomingo | 10:00 a 19:00"
+
+        assert split_premises(text) == [
+            "Horario de las tiendas",
+            "Lunes a sábado: 9:00 a 20:00",
+            "Domingo: 10:00 a 19:00",
+        ]
+
+    def test_short_sentences_are_kept_whole_and_separate(self) -> None:
+        assert split_premises("Sí. No hay entregas los domingos.") == [
+            "Sí.",
+            "No hay entregas los domingos.",
+        ]

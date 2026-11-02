@@ -2,18 +2,18 @@
 Natural-language-inference model run locally with Hugging Face Transformers.
 
 The model is a sequence classifier over (premise, hypothesis) pairs with the
-usual three labels: entailment, neutral, contradiction. Only the entailment
-probability is used: a claim is supported when the context entails it, and
-"neutral" (the context does not say) is exactly the hallucination the judge
-exists to catch.
+usual three labels: entailment, neutral, contradiction. The entailment and
+contradiction probabilities are returned; "neutral" (the context does not say)
+is exactly the hallucination the judge exists to catch, and needs no score.
 
-Label order differs between models, so the entailment index is read from the
-model's own configuration rather than assumed. Weights load without
+Label order differs between models, so both indices are read from the model's
+own configuration rather than assumed. Weights load without
 ``trust_remote_code``, as with the reranker.
 
 Inference is CPU-bound and runs on a worker thread so it never blocks the event
-loop. Premises are truncated to the model's maximum length from the end; the
-hypothesis (the claim) is never truncated.
+loop. Pairs are batched by length, so short sentences are not padded to the
+length of the longest premise in the request. Premises are truncated to the
+model's maximum length; the hypothesis (the claim) is never truncated.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from typing import Any
 
 import structlog
 
+from aegis.domain.models.faithfulness import Inference
 from aegis.domain.ports.faithfulness import EntailmentModelPort
 
 logger = structlog.get_logger(__name__)
@@ -47,7 +48,8 @@ class TransformersNLIModel(EntailmentModelPort):
         self._device = device
         self._max_length = max_length
         self._batch_size = batch_size
-        self._loaded: tuple[Any, Any, int] | None = None  # tokenizer, model, entailment index
+        # tokenizer, model, entailment index, contradiction index (None if absent)
+        self._loaded: tuple[Any, Any, int, int | None] | None = None
         self._load_lock = asyncio.Lock()
 
     @property
@@ -61,7 +63,7 @@ class TransformersNLIModel(EntailmentModelPort):
                 self._loaded = await asyncio.to_thread(self._build)
                 logger.info("nli_model.loaded", model=self._model_name, device=self._device)
 
-    def _build(self) -> tuple[Any, Any, int]:
+    def _build(self) -> tuple[Any, Any, int, int | None]:
         # Deferred: importing transformers' model classes imports torch.
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -71,23 +73,26 @@ class TransformersNLIModel(EntailmentModelPort):
         )
         model.to(self._device)
         model.eval()
-        return tokenizer, model, entailment_index(model.config.id2label)
+        labels = model.config.id2label
+        return tokenizer, model, entailment_index(labels), contradiction_index(labels)
 
-    async def entailment(self, pairs: list[tuple[str, str]]) -> list[float]:
+    async def infer(self, pairs: list[tuple[str, str]]) -> list[Inference]:
         if not pairs:
             return []
         await self.load()
         return await asyncio.to_thread(self._predict, pairs)
 
-    def _predict(self, pairs: list[tuple[str, str]]) -> list[float]:
+    def _predict(self, pairs: list[tuple[str, str]]) -> list[Inference]:
         import torch
 
         assert self._loaded is not None
-        tokenizer, model, entail = self._loaded
-        probabilities: list[float] = []
+        tokenizer, model, entail, contradict = self._loaded
+        results: list[Inference | None] = [None] * len(pairs)
+        order = sorted(range(len(pairs)), key=lambda i: len(pairs[i][0]) + len(pairs[i][1]))
         with torch.no_grad():
-            for start in range(0, len(pairs), self._batch_size):
-                batch = pairs[start : start + self._batch_size]
+            for start in range(0, len(order), self._batch_size):
+                indices = order[start : start + self._batch_size]
+                batch = [pairs[i] for i in indices]
                 encoded = tokenizer(
                     [premise for premise, _ in batch],
                     [hypothesis for _, hypothesis in batch],
@@ -96,9 +101,13 @@ class TransformersNLIModel(EntailmentModelPort):
                     padding=True,
                     return_tensors="pt",
                 ).to(self._device)
-                logits = model(**encoded).logits
-                probabilities.extend(torch.softmax(logits, dim=-1)[:, entail].tolist())
-        return probabilities
+                probabilities = torch.softmax(model(**encoded).logits, dim=-1).tolist()
+                for index, row in zip(indices, probabilities, strict=True):
+                    results[index] = Inference(
+                        entailment=row[entail],
+                        contradiction=row[contradict] if contradict is not None else 0.0,
+                    )
+        return [r for r in results if r is not None]
 
 
 def entailment_index(id2label: dict[int, str]) -> int:
@@ -107,3 +116,11 @@ def entailment_index(id2label: dict[int, str]) -> int:
         if str(label).lower().startswith("entail"):
             return int(index)
     raise EntailmentLabelError(f"no entailment label in {id2label!r}")
+
+
+def contradiction_index(id2label: dict[int, str]) -> int | None:
+    """The class index whose label is contradiction; None for a two-way model."""
+    for index, label in id2label.items():
+        if str(label).lower().startswith("contradict"):
+            return int(index)
+    return None

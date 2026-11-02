@@ -18,9 +18,17 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
+class Inference:
+    """An NLI model's verdict on one (premise, hypothesis) pair, as probabilities."""
+
+    entailment: float
+    contradiction: float
+
+
+@dataclass(frozen=True, slots=True)
 class SentenceSupport:
     text: str
-    # Highest probability, over the context, that the context entails the sentence.
+    # Best support any premise of the context gives the sentence, in [0, 1].
     support: float
     supported: bool
 

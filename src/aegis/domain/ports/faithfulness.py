@@ -13,17 +13,17 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from aegis.domain.models.document import Document
-from aegis.domain.models.faithfulness import FaithfulnessAssessment
+from aegis.domain.models.faithfulness import FaithfulnessAssessment, Inference
 
 
 class EntailmentModelPort(ABC):
     """Natural-language inference: does a premise entail a hypothesis?"""
 
     @abstractmethod
-    async def entailment(self, pairs: list[tuple[str, str]]) -> list[float]:
+    async def infer(self, pairs: list[tuple[str, str]]) -> list[Inference]:
         """
-        For each ``(premise, hypothesis)`` pair, the probability in [0, 1] that the
-        premise entails the hypothesis, in the same order.
+        For each ``(premise, hypothesis)`` pair, the probabilities that the premise
+        entails and that it contradicts the hypothesis, in the same order.
         """
 
 
