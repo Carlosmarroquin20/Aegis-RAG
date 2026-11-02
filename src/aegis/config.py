@@ -248,7 +248,7 @@ class Settings(BaseSettings):
     # the unsupported sentences (ADR 0017). Off by default: the model is about
     # 470 MB, baked into the image only on request, and adds its inference time.
     faithfulness_check: bool = False
-    faithfulness_model: str = "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli"
+    faithfulness_model: str = "MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli"
     # Entailment probability at or above which a claim counts as supported.
     faithfulness_threshold: float = Field(default=0.5, gt=0.0, le=1.0)
 

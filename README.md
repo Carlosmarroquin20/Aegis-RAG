@@ -33,6 +33,7 @@ The project also covers what running such a service involves: a hexagonal archit
 - **Measured, not asserted.** The gateway is scored against a [labelled corpus of 326 queries](docs/GATEWAY_EVALUATION.md) that includes the attack classes it does *not* claim to stop. In its default mode it blocks **78%** of the attacks it targets — in English and Spanish — and **60%** of the whole corpus, at a **6%** false-positive rate that falls entirely on deliberately adversarial queries — no everyday question is blocked. The report is generated, lists every miss, and a test fails if it goes stale. The first run found two real defects, both fixed.
 - **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
 - **Hybrid retrieval, chosen by measurement.** Dense similarity is fused with BM25 keyword search (reciprocal rank fusion), which raised MRR on the example corpus from 0.863 to 0.908 and hit@5 from 97% to 100% for about 3 ms per query. A multilingual cross-encoder reranker reached 0.925 but costs close to a second per query on CPU, so it is [opt-in](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md). The same evaluation runs in CI against the application's own retrieval code and fails the build if quality drops.
+- **Answers checked against their sources.** A local multilingual NLI model checks each sentence of an answer against the retrieved context and names the ones it does not support: no LLM judge, no API calls, the same verdict every run. On 80 labelled answers it catches 65% of unfaithful ones at a 7% false-flag rate, up from 43% before premises were split into sentences. Its weak spot, changed figures, is [measured and stated](docs/adr/0017-answer-faithfulness-judged-by-nli.md). CI gates on it; in production it is an opt-in score and alert.
 - **Magic-byte file detection.** Document uploads are dispatched to parsers based on actual file content, not the attacker-controllable `Content-Type` header.
 - **Hexagonal for real.** The `LLMClientPort`, `VectorStorePort` and `RateLimitStore` interfaces mean swapping Ollama for OpenAI, ChromaDB for pgvector, or the in-memory rate limiter for the shared **Redis** backend is a one-file change — and there are fakes in the test suite that prove it. The dependency rule itself (`interface → application → domain ← infrastructure`) is enforced by a test that parses every module's imports. Adapters translate vendor failures at the boundary, so a vector-store or LLM outage reaches the client as a retryable **503/504**, never as a leaked client-library exception.
 - **Load-tested, with the findings fixed.** [k6 scenarios](loadtest/README.md) against the compose stack found three defects the unit tests could not: a rate-limit check whose cost grew with the limit (56% of CPU), garbage-collection pauses of 1.3 s that were the p99, and a synchronous Redis call that let a Redis stall freeze `/health`. Fixed, each with a regression test: the ceiling on one worker went from 37 to about 70 requests per second and the p99 at a steady 40/s from 974 ms to under 75 ms.
@@ -163,6 +164,8 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 | `aegis_rag_queries_total` | Counter | Queries that reached the retrieval stage |
 | `aegis_auth_failures_total` | Counter | Requests refused at authentication, by outcome (`rejected` / `throttled`) |
 | `aegis_rate_limit_backend_errors_total` | Counter | Requests served or refused while the rate-limit store was unreachable |
+| `aegis_answer_faithfulness` | Histogram | Share of an answer's claims its context supports (`FAITHFULNESS_CHECK`) |
+| `aegis_answers_judged_total` | Counter | Judged answers by outcome: `supported`, `unsupported`, `abstained` |
 
 Logs are single-line JSON via `structlog` with an auto-bound `request_id` for end-to-end correlation between logs, metrics, traces, and the `X-Request-ID` response header.
 
@@ -281,6 +284,46 @@ uv run python scripts/evaluate_retrieval.py --compare --corpus <dir> --questions
 ```
 
 The reasoning and the trade-offs are in [ADR 0016](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md).
+
+---
+
+## Answer faithfulness
+
+Retrieval decides whether the model sees the answer; faithfulness is whether it then sticks to it.
+Each answer is split into sentences, and each sentence is checked against the sentences of the
+retrieved context by a local, multilingual NLI model
+(`MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli`). A sentence is supported when some part of
+the context entails it, net of contradiction. An answer that declines for lack of context is
+counted as an abstention, not a failure.
+
+Measured on 80 labelled answers over the example corpus (`scripts/evaluate_faithfulness.py`):
+
+| Judge | Unfaithful caught | Faithful flagged |
+|---|---|---|
+| Word overlap (reference) | 35% | 12% |
+| NLI over whole chunks | 43% | 16% |
+| **NLI over context sentences** *(shipped)* | **65%** | **7%** |
+
+It catches every invented addition and most contradictions. Changed figures are its weak spot:
+it catches 8 of 18. CI fails if recall drops below 0.62 or false flags rise above 0.10. To measure
+your own deployment's LLM end to end, run the live mode against a running stack:
+
+```bash
+uv run python scripts/evaluate_faithfulness.py --live
+```
+
+In production the check is opt-in. Set `FAITHFULNESS_CHECK=true` and `FAITHFULNESS_MODEL` in
+`.env`, then rebuild so the model is baked into the image. Every response then carries a
+`faithfulness` field:
+
+```json
+"faithfulness": {"score": 0.5, "abstained": false, "unsupported": ["La tienda paga el flete."]}
+```
+
+The scores feed `aegis_answer_faithfulness`, and `AegisUnsupportedAnswersHigh` fires when over a
+quarter of answers are flagged. The answer itself is never withheld. Why NLI rather than an LLM
+judge, and what the measurements showed along the way, is in
+[ADR 0017](docs/adr/0017-answer-faithfulness-judged-by-nli.md).
 
 ---
 

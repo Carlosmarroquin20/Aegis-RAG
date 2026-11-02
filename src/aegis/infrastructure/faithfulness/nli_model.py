@@ -28,7 +28,7 @@ from aegis.domain.ports.faithfulness import EntailmentModelPort
 
 logger = structlog.get_logger(__name__)
 
-DEFAULT_NLI_MODEL = "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli"
+DEFAULT_NLI_MODEL = "MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli"
 
 
 class EntailmentLabelError(RuntimeError):

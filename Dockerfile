@@ -93,7 +93,7 @@ RUN if [ -n "${RERANKER_MODEL}" ]; then \
 
 # The NLI model behind FAITHFULNESS_CHECK, likewise baked only when named
 # (docs/adr/0017-answer-faithfulness-judged-by-nli.md):
-#   --build-arg FAITHFULNESS_MODEL=MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli
+#   --build-arg FAITHFULNESS_MODEL=MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli
 ARG FAITHFULNESS_MODEL=
 RUN if [ -n "${FAITHFULNESS_MODEL}" ]; then \
       /app/.venv/bin/python -c "from transformers import AutoModelForSequenceClassification as M, AutoTokenizer as T; T.from_pretrained('${FAITHFULNESS_MODEL}'); M.from_pretrained('${FAITHFULNESS_MODEL}')"; \

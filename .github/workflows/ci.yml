@@ -367,14 +367,16 @@ jobs:
 
       - name: Measure the faithfulness judge against labelled answers
         # The judge is deterministic, so the figures move only when the code,
-        # the model or the labels do (ADR 0017).
+        # the model or the labels do (ADR 0017). The thresholds sit just under
+        # the measured recall 0.649 (24 of 37 unfaithful answers caught) and
+        # false-flag rate 0.070 (3 of 43 faithful answers flagged): one more
+        # miss or one more false flag passes, two fail. Raise them when the
+        # judge improves; lowering them is a decision to record in the PR.
         env:
           HF_HUB_DISABLE_XET: "1"
-        run: |
-          L12=MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli
-          uv run python scripts/evaluate_faithfulness.py --show-errors --compare-model "$L12"
-          uv run python scripts/evaluate_faithfulness.py --no-contradiction --compare-model "$L12"
-          uv run python scripts/evaluate_faithfulness.py --granularity chunk --no-contradiction --compare-model "$L12"
+        run: >-
+          uv run python scripts/evaluate_faithfulness.py --show-errors
+          --min-recall 0.62 --max-false-flags 0.10
 
   docker-build:
     name: Docker Build Validation

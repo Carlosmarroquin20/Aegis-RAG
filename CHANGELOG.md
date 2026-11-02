@@ -11,6 +11,21 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- Answer faithfulness, judged claim by claim against the retrieved context by a local,
+  multilingual NLI model (`MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli`); see
+  [ADR 0017](docs/adr/0017-answer-faithfulness-judged-by-nli.md).
+  - `scripts/evaluate_faithfulness.py` measures the judge on 80 labelled answers over the example
+    corpus. It catches 65% of unfaithful answers and flags 7% of faithful ones, against 35% and
+    12% for a word-overlap baseline. CI fails below recall 0.62 or above a 0.10 false-flag rate.
+  - `--live` runs the API's own pipeline against the configured LLM with the check on and reports
+    how faithful its answers are.
+  - `FAITHFULNESS_CHECK` (off by default) judges every answer: the response gains a
+    `faithfulness` field (score, abstention, unsupported sentences), Prometheus gains
+    `aegis_answer_faithfulness`, `aegis_answers_judged_total` and
+    `aegis_faithfulness_errors_total`, and `AegisUnsupportedAnswersHigh` alerts when over a
+    quarter of answers are flagged. A failing judge costs the score, never the answer.
+  - Build the image with `--build-arg FAITHFULNESS_MODEL=...` to bake the model in.
+
 - Hybrid retrieval, now the default: dense similarity fused with BM25 keyword search by
   reciprocal rank fusion. On the example corpus MRR rose from 0.863 to 0.908 and hit@5 from 0.974
   to 1.000, for about 3 ms per query; see
