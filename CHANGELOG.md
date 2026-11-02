@@ -34,6 +34,11 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 - `/ready` checks every tenant's collection, and is degraded if any of them is unreachable.
 
+### Security
+
+- pypdf upgraded from 6.21.2 to 6.21.4 for CVE-2026-119203 to CVE-2026-119209, advisories in
+  the PDF parser that every uploaded PDF passes through.
+
 ## [1.3.0] — 2026-10-27
 
 Supply-chain hardening and measured performance. Released images are now signed, attested and
