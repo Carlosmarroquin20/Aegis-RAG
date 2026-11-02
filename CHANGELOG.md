@@ -11,6 +11,21 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- Hybrid retrieval, now the default: dense similarity fused with BM25 keyword search by
+  reciprocal rank fusion. On the example corpus MRR rose from 0.863 to 0.908 and hit@5 from 0.974
+  to 1.000, for about 3 ms per query; see
+  [ADR 0016](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md).
+  - `RETRIEVAL_MODE` selects `dense`, `hybrid`, `dense+rerank` or `hybrid+rerank`;
+    `RETRIEVAL_CANDIDATES` sets how deep each first stage looks.
+  - An optional multilingual cross-encoder reranker (`RERANKER_MODEL`, default
+    `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`), off by default: it reached MRR 0.925 at about
+    0.9 s per query on CPU. Build the image with `--build-arg RERANKER_MODEL=...` to bake it in.
+  - The keyword index is kept per collection in memory, built from the vector store, and
+    rebuilt when the collection's chunk count changes or after `LEXICAL_INDEX_MAX_AGE_SECONDS`.
+    A tenant's keyword search reads only its own collection.
+  - Each retrieval stage gets its own trace span (`retrieve.dense`, `retrieve.lexical`,
+    `retrieve.fuse`, `retrieve.rerank`) under `rag.retrieve`.
+
 - Multi-tenancy for running one deployment for several teams. Tenants are declared in a TOML
   file (`TENANTS_FILE`), each with its own collection, API keys stored as SHA-256 digests, an
   optional request limit and an optional daily LLM token budget; see
@@ -33,6 +48,11 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 ### Changed
 
 - `/ready` checks every tenant's collection, and is degraded if any of them is unreachable.
+- `scripts/evaluate_retrieval.py` retrieves through the application's own retrieval stages and
+  gates the configured mode; `--compare` prints every mode side by side. The CI gate rises to
+  hit@5 0.97 and MRR 0.87, just under the hybrid figures.
+- A source's `relevance_score` is the score of the last stage that ranked it: cosine similarity
+  in `dense` mode, the fused score in `hybrid`, the reranker's probability when reranking.
 
 ### Security
 

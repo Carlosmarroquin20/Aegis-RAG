@@ -24,11 +24,13 @@ supersedes the old one, so the history of *why* stays intact.
 | [0013](0013-one-worker-per-container.md) | One worker per container; scale out with replicas | Accepted |
 | [0014](0014-freeze-the-startup-heap.md) | Freeze the startup heap so garbage collection stays out of the tail | Accepted |
 | [0015](0015-multilingual-embeddings-recorded-per-collection.md) | A multilingual embedding model, recorded in every collection | Accepted |
+| [0016](0016-hybrid-retrieval-by-default-reranker-opt-in.md) | Hybrid retrieval by default; the reranker is opt-in | Accepted |
 
 The first three were made when the system was designed and are recorded here retrospectively;
 the rest were recorded as they were decided: 0004 to 0008 during the security hardening pass,
 0009 to 0014 while running the service as a shared platform and putting it under load.
-0015 records the embedding-model change of release 1.1.0 after the fact. A summary of all of
+0015 records the embedding-model change of release 1.1.0 after the fact, and 0016 the move to
+hybrid retrieval. A summary of all of
 them in Spanish is in [RESUMEN.md](RESUMEN.md).
 For what the system defends against and where it stops, see the
 [threat model](../THREAT_MODEL.md).

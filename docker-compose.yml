@@ -24,7 +24,8 @@ services:
       # the container must name the same one.
       args:
         EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
-        RERANKER_MODEL: ${RERANKER_MODEL:-cross-encoder/mmarco-mMiniLMv2-L12-H384-v1}
+        # Baked only when set: needed for the rerank retrieval modes. See .env.example.
+        RERANKER_MODEL: ${RERANKER_MODEL:-}
     ports:
       - "${AEGIS_PUBLIC_BIND:-127.0.0.1}:8000:8000"
     environment:

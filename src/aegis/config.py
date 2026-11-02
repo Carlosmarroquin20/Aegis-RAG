@@ -229,9 +229,10 @@ class Settings(BaseSettings):
     #   hybrid         vector similarity fused with BM25 keyword search (no model)
     #   dense+rerank   vector similarity, re-scored by a cross-encoder
     #   hybrid+rerank  both first stages, fused, then re-scored
-    # The rerank modes load RERANKER_MODEL (about 470 MB) and add its inference
-    # time to every query. Measured on the example corpus by
-    # scripts/evaluate_retrieval.py --compare; see ADR 0016.
+    # Measured on the example corpus (scripts/evaluate_retrieval.py --compare,
+    # ADR 0016): hybrid raised MRR from 0.863 to 0.908 for ~3 ms per query, so it
+    # is the default. The rerank modes reached 0.925 but load RERANKER_MODEL (about
+    # 470 MB, baked into the image only on request) and add ~0.9 s per query on CPU.
     retrieval_mode: str = "hybrid"
     # How deep each first stage looks, and how many fused chunks the reranker reads.
     retrieval_candidates: int = Field(default=20, ge=1, le=200)

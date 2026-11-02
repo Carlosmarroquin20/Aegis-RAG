@@ -316,7 +316,8 @@ jobs:
         run: uv sync --dev
 
       - name: Cache the embedding and reranker models
-        # About 470 MB each. Keyed on the configured defaults, so changing a model
+        # About 470 MB each; the reranker is measured by --compare even though it
+        # is off by default. Keyed on the configured defaults, so changing a model
         # downloads the new one instead of measuring a stale cache.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -324,15 +325,17 @@ jobs:
           key: hf-${{ hashFiles('src/aegis/config.py') }}
 
       - name: Measure retrieval against the example corpus
-        # The thresholds sit just under the measured hit@5 0.974 (37 of 38
-        # questions) and MRR 0.863: one more miss still passes, two fail, and so
-        # does a ranking that drifts down without losing a hit. Raise them when
-        # retrieval improves; lowering them is a decision to record in the PR.
+        # The thresholds apply to the configured RETRIEVAL_MODE (hybrid) and sit
+        # just under its measured hit@5 1.000 (38 of 38 questions) and MRR 0.908:
+        # one miss still passes, two fail, and so does a ranking that drifts down
+        # without losing a hit. --compare also prints the other modes for
+        # reference (ADR 0016). Raise them when retrieval improves; lowering them
+        # is a decision to record in the PR.
         env:
           HF_HUB_DISABLE_XET: "1"
         run: >-
           uv run python scripts/evaluate_retrieval.py --compare --show-misses
-          --min-hit5 0.94 --min-mrr 0.82
+          --min-hit5 0.97 --min-mrr 0.87
 
   docker-build:
     name: Docker Build Validation
