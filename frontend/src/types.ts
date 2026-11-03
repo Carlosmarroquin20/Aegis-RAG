@@ -8,11 +8,37 @@ export interface SourceDocument {
   relevance_score: number;
 }
 
+export interface FaithfulnessReport {
+  score: number;
+  abstained: boolean;
+  unsupported: string[];
+}
+
 export interface QueryResponse {
   answer: string;
   sources: SourceDocument[];
   query_hash: string;
   threat_level: ThreatLevel;
+  faithfulness?: FaithfulnessReport | null;
+}
+
+// Events of POST /api/v1/query/stream (server-sent events).
+export interface StreamStart {
+  query_hash: string;
+  threat_level: ThreatLevel;
+  sources: SourceDocument[];
+}
+
+export interface StreamEnd {
+  answer: string;
+  truncated: boolean;
+  faithfulness?: FaithfulnessReport | null;
+}
+
+export interface StreamHandlers {
+  onStart: (start: StreamStart) => void;
+  onDelta: (text: string) => void;
+  onEnd: (end: StreamEnd) => void;
 }
 
 export interface IngestResponse {

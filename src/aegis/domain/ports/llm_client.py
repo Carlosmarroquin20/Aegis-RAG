@@ -9,9 +9,10 @@ OpenAICompatibleAdapter (any hosted provider speaking the OpenAI wire format).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 
 from aegis.domain.models.document import Document
-from aegis.domain.models.generation import Generation
+from aegis.domain.models.generation import Generation, GenerationEvent, TextDelta
 
 
 class LLMUnavailableError(Exception):
@@ -62,6 +63,33 @@ class LLMClientPort(ABC):
                                  their client library's exceptions into these so no
                                  vendor type crosses the port.
         """
+
+    async def stream(
+        self,
+        query: str,
+        context: list[Document],
+        *,
+        max_tokens: int = 1024,
+        temperature: float = 0.1,
+    ) -> AsyncGenerator[GenerationEvent, None]:
+        """
+        Generates the same answer as ``generate``, delivered as it is produced:
+        ``TextDelta`` items in order, then exactly one ``Generation`` carrying the
+        whole text and the usage.
+
+        Errors are those of ``generate``. A failure can arrive after some deltas
+        have been yielded; callers decide what that means for text already sent.
+
+        The default generates in one piece and yields it as a single delta, so a
+        backend without streaming still works with streaming callers. Adapters
+        that can stream override it. Closing the iterator early (a client that
+        disconnects) must release the upstream request.
+        """
+        generation = await self.generate(
+            query, context, max_tokens=max_tokens, temperature=temperature
+        )
+        yield TextDelta(generation.text)
+        yield generation
 
     @abstractmethod
     async def health_check(self) -> bool:

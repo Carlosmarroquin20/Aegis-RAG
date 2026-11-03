@@ -102,3 +102,12 @@ probabilidad de contradicción). Un LLM como juez se descartó por lento, de pag
 las fieles; con fragmentos enteros como premisa detectaba el 43 %. Los datos equivocados (un número
 cambiado) son su punto débil: atrapa menos de la mitad. Es un control del CI y, opcionalmente, una
 métrica en producción.
+
+**[0018](0018-stream-whole-sanitized-sentences.md) — Las respuestas se transmiten como frases
+completas y ya sanitizadas.** `POST /api/v1/query/stream` envía la respuesta mientras se genera
+(server-sent events). El texto solo sale en frases completas, después de pasar por el
+sanitizador, y con un margen de 80 caracteres revisado antes de soltar cada frase: una inyección
+reflejada nunca llega al cliente, ni siquiera en parte. Todo lo que puede rechazar la consulta
+corre antes del primer byte, así que un bloqueo sigue siendo 400, un presupuesto agotado 429 y
+una caída del modelo 503. Si algo falla después del primer texto, un evento `error` le pide al
+cliente descartar lo mostrado, y el evento final trae la respuesta completa, que es la que vale.

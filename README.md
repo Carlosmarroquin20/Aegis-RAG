@@ -34,6 +34,7 @@ The project also covers what running such a service involves: a hexagonal archit
 - **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
 - **Hybrid retrieval, chosen by measurement.** Dense similarity is fused with BM25 keyword search (reciprocal rank fusion), which raised MRR on the example corpus from 0.863 to 0.908 and hit@5 from 97% to 100% for about 3 ms per query. A multilingual cross-encoder reranker reached 0.925 but costs close to a second per query on CPU, so it is [opt-in](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md). The same evaluation runs in CI against the application's own retrieval code and fails the build if quality drops.
 - **Answers checked against their sources.** A local multilingual NLI model checks each sentence of an answer against the retrieved context and names the ones it does not support: no LLM judge, no API calls, the same verdict every run. On 80 labelled answers it catches 65% of unfaithful ones at a 7% false-flag rate, up from 43% before premises were split into sentences. Its weak spot, changed figures, is [measured and stated](docs/adr/0017-answer-faithfulness-judged-by-nli.md). CI gates on it; in production it is an opt-in score and alert.
+- **Streaming without bypassing the output guard.** `POST /api/v1/query/stream` sends the answer as it is generated, but only in whole sentences that have already passed the sanitizer, with an 80-character margin scanned before each one is released. A reflected injection is never sent, even in part. Refusals before the first text keep their status codes; failures after it end the stream with an `error` event the client must honour ([ADR 0018](docs/adr/0018-stream-whole-sanitized-sentences.md)).
 - **Magic-byte file detection.** Document uploads are dispatched to parsers based on actual file content, not the attacker-controllable `Content-Type` header.
 - **Hexagonal for real.** The `LLMClientPort`, `VectorStorePort` and `RateLimitStore` interfaces mean swapping Ollama for OpenAI, ChromaDB for pgvector, or the in-memory rate limiter for the shared **Redis** backend is a one-file change — and there are fakes in the test suite that prove it. The dependency rule itself (`interface → application → domain ← infrastructure`) is enforced by a test that parses every module's imports. Adapters translate vendor failures at the boundary, so a vector-store or LLM outage reaches the client as a retryable **503/504**, never as a leaked client-library exception.
 - **Load-tested, with the findings fixed.** [k6 scenarios](loadtest/README.md) against the compose stack found three defects the unit tests could not: a rate-limit check whose cost grew with the limit (56% of CPU), garbage-collection pauses of 1.3 s that were the p99, and a synchronous Redis call that let a Redis stall freeze `/health`. Fixed, each with a regression test: the ceiling on one worker went from 37 to about 70 requests per second and the p99 at a steady 40/s from 974 ms to under 75 ms.
@@ -129,7 +130,7 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 ## Security Controls — OWASP LLM Top 10 (2025)
 
-> The full **[threat model](docs/THREAT_MODEL.md)** lists 25 threats across the query, transport, ingestion, supply-chain and tenancy surfaces — each with the module that enforces the control and the test that verifies it — and states the residual risks plainly, including what the input gateway does *not* catch.
+> The full **[threat model](docs/THREAT_MODEL.md)** lists 26 threats across the query, transport, ingestion, supply-chain and tenancy surfaces — each with the module that enforces the control and the test that verifies it — and states the residual risks plainly, including what the input gateway does *not* catch.
 >
 > How much the input gateway actually catches is **[measured](docs/GATEWAY_EVALUATION.md)**, per attack category, with the individual misses and false positives listed.
 >
@@ -164,6 +165,8 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 | `aegis_rag_queries_total` | Counter | Queries that reached the retrieval stage |
 | `aegis_auth_failures_total` | Counter | Requests refused at authentication, by outcome (`rejected` / `throttled`) |
 | `aegis_rate_limit_backend_errors_total` | Counter | Requests served or refused while the rate-limit store was unreachable |
+| `aegis_stream_first_delta_seconds` | Histogram | Time to the first sanitized text of a streamed answer |
+| `aegis_streams_total` | Counter | Streamed answers by outcome: `completed`, `blocked`, `failed`, `disconnected` |
 | `aegis_answer_faithfulness` | Histogram | Share of an answer's claims its context supports (`FAITHFULNESS_CHECK`) |
 | `aegis_answers_judged_total` | Counter | Judged answers by outcome: `supported`, `unsupported`, `abstained` |
 
@@ -230,6 +233,16 @@ curl -X POST http://localhost:8000/api/v1/query \
   -H "Content-Type: application/json" \
   -H "X-API-Key: dev-key-change-in-production" \
   -d '{"query": "What is the security model?", "top_k": 5}'
+```
+
+Or stream the answer as it is generated (server-sent events: `start`, `delta`, then `end` with
+the complete answer):
+
+```bash
+curl -N -X POST http://localhost:8000/api/v1/query/stream \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: dev-key-change-in-production" \
+  -d '{"query": "What is the security model?"}'
 ```
 
 Or run the same flow as a single test: `uv run pytest -m e2e --no-cov`.

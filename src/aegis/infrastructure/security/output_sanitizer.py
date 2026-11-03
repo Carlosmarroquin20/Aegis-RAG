@@ -106,10 +106,18 @@ class OutputSanitizer(OutputGuardPort):
         self._flatten_markdown = flatten_markdown
         self._block_reflection = block_reflection
 
-    def sanitize(self, raw_output: str, query_hash: str = "") -> SanitizedOutput:
+    @property
+    def max_chars(self) -> int:
+        return self._max_chars
+
+    def sanitize(
+        self, raw_output: str, query_hash: str = "", *, partial: bool = False
+    ) -> SanitizedOutput:
         """
         Applies the full sanitization pipeline.
         Always returns a SanitizedOutput; callers check `.has_warnings` for alerts.
+        With ``partial`` (a streaming prefix), length enforcement and PII
+        detection are left for the finished answer.
         """
         log = logger.bind(query_hash=query_hash[:16] if query_hash else "unknown")
 
@@ -117,7 +125,7 @@ class OutputSanitizer(OutputGuardPort):
 
         # ── Step 1: Length enforcement ─────────────────────────────────────────
         was_truncated = False
-        if len(text) > self._max_chars:
+        if not partial and len(text) > self._max_chars:
             text = text[: self._max_chars]
             # Truncate at the last sentence boundary to avoid mid-sentence cuts.
             last_period = max(text.rfind("."), text.rfind("!"), text.rfind("?"))
@@ -152,7 +160,9 @@ class OutputSanitizer(OutputGuardPort):
                 )
 
         # ── Step 4: PII detection (log-only, non-blocking) ────────────────────
-        pii_found = [label for label, pattern in _PII_PATTERNS if pattern.search(text)]
+        pii_found = (
+            [] if partial else [label for label, pattern in _PII_PATTERNS if pattern.search(text)]
+        )
         if pii_found:
             log.warning("output_sanitizer.pii_detected", types=pii_found)
 

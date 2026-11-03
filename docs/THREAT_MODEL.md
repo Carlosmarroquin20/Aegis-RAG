@@ -125,6 +125,12 @@ the 2025 edition of the OWASP Top 10 for LLM Applications.
 |---|---|---|---|---|
 | T-25 | **Cross-tenant data access** (LLM02, LLM08). One tenant lists, retrieves, deletes, or is answered from, another tenant's documents. | The tenant is resolved from the API key alone, before any route; each tenant has its own collection and every route reaches only that one, with no fallback to a default. The tenants file is rejected at startup if two tenants share a key or a collection, and holds key digests rather than keys. | `infrastructure/tenancy/registry.py`, `interface/api/dependencies.py` | `TestTenantIsolation`, `TestTenantResolution`, `TestTheFileIsStrict` |
 
+### Streaming
+
+| ID | Threat | Control | Enforced in | Verified by |
+|---|---|---|---|---|
+| T-26 | **A streamed answer outruns the output guard** (LLM05). Text sent as it is generated cannot be taken back, so markup, a hidden link target or a reflected injection could reach the client before the checks that a buffered answer gets. | Only whole sentences are released, each sanitized first; a boundary is released only after an 80-character margin has arrived and been scanned, so a payload straddling it is caught first; open tags and links hold release. Refusals and failures before the first text keep their status codes; later failures end the stream with an `error` event and the client discards what it showed. See [ADR 0018](adr/0018-stream-whole-sanitized-sentences.md). | `application/services/streaming.py`, `interface/api/routes/query.py` | `TestReflection`, `TestFailuresAfterText`, `TestRefusalsBeforeAnyText` |
+
 ## 6. Residual risks and non-goals
 
 These are known, deliberate limits. They are listed because a threat model that claims full

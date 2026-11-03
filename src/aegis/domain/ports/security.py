@@ -41,9 +41,16 @@ class OutputGuardPort(ABC):
     """Post-processes an LLM response before it is returned to the caller."""
 
     @abstractmethod
-    def sanitize(self, raw_output: str, query_hash: str = "") -> SanitizedOutput:
+    def sanitize(
+        self, raw_output: str, query_hash: str = "", *, partial: bool = False
+    ) -> SanitizedOutput:
         """
         Returns the response in a form that is safe to serialize.
+
+        ``partial`` marks a prefix of a response that is still streaming: the
+        same rewriting and the same reflection check apply, but nothing that
+        only makes sense for a finished answer (truncation, PII reporting) runs,
+        so a prefix checked many times is not reported many times.
 
         Raises:
             OutputReflectionError: the response echoes an injection payload and

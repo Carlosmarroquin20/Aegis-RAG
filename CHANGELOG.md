@@ -11,6 +11,20 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- Streamed answers: `POST /api/v1/query/stream` returns server-sent events (`start` with the
+  sources, `delta` text, `end` with the complete answer, or `error`). See
+  [ADR 0018](docs/adr/0018-stream-whole-sanitized-sentences.md).
+  - Only whole sentences that have passed the output sanitizer are sent, with an 80-character
+    margin scanned before each release, so a reflected injection is never sent, even in part.
+  - Everything that can refuse runs before the first byte, so blocked queries, spent budgets and
+    backend failures before any text keep their 400, 429, 503 and 504 status codes. A failure
+    after text arrives as an `error` event, and the client discards what it showed.
+  - Both LLM adapters stream (Ollama NDJSON; OpenAI-compatible SSE with usage), and the fallback
+    switches backends only before the first text. Closing the connection stops the model.
+  - New metrics: `aegis_stream_first_delta_seconds` and `aegis_streams_total`.
+  - The web console streams answers, can stop one, and shows the sentences the faithfulness
+    check could not support.
+
 - Answer faithfulness, judged claim by claim against the retrieved context by a local,
   multilingual NLI model (`MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli`); see
   [ADR 0017](docs/adr/0017-answer-faithfulness-judged-by-nli.md).

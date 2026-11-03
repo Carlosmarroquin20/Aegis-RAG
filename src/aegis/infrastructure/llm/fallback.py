@@ -26,14 +26,15 @@ most ``failure_threshold`` failed calls per worker.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncGenerator, Callable, Sequence
+from contextlib import aclosing
 from dataclasses import dataclass, field
 from enum import StrEnum
 
 import structlog
 
 from aegis.domain.models.document import Document
-from aegis.domain.models.generation import Generation
+from aegis.domain.models.generation import Generation, GenerationEvent, TextDelta
 from aegis.domain.ports.llm_client import (
     LLMClientPort,
     LLMRateLimitedError,
@@ -202,6 +203,96 @@ class FallbackLLMClient(LLMClientPort):
 
         if last_error is not None:
             # The last real failure keeps its type, so a timeout still maps to 504.
+            raise last_error
+        raise LLMUnavailableError("every LLM backend is skipped by an open circuit")
+
+    async def stream(
+        self,
+        query: str,
+        context: list[Document],
+        *,
+        max_tokens: int = 1024,
+        temperature: float = 0.1,
+    ) -> AsyncGenerator[GenerationEvent, None]:
+        """
+        Streams from the first backend that answers. A backend that fails before
+        its first piece of text is skipped exactly as ``generate`` would skip it;
+        once text has been streamed the answer belongs to that backend, so a later
+        failure is raised rather than restarted elsewhere, which would send the
+        caller the start of one answer followed by another.
+        """
+        primary = self._backends[0].name
+        first_problem: str | None = None
+        last_error: LLMUnavailableError | None = None
+
+        for backend in self._backends:
+            breaker = self._breakers[backend.name]
+            if not breaker.allows_call():
+                first_problem = first_problem or "circuit_open"
+                continue
+            started = False
+            settled = False
+            try:
+                # aclosing: if our caller stops early, the backend's stream (and
+                # its HTTP request) is closed now, not whenever it is collected.
+                async with aclosing(
+                    backend.client.stream(
+                        query, context, max_tokens=max_tokens, temperature=temperature
+                    )
+                ) as events:
+                    async for event in events:
+                        if isinstance(event, TextDelta) and event.text:
+                            started = True
+                        yield event
+                settled = True
+            except LLMUnavailableError as exc:
+                settled = True
+                reason = _failure_reason(exc)
+                breaker.record_failure(
+                    retry_after=getattr(exc, "retry_after", None),
+                    rate_limited=reason == "rate_limited",
+                )
+                logger.warning(
+                    "llm.backend_failed",
+                    provider=backend.name,
+                    reason=reason,
+                    error=str(exc),
+                    after_first_delta=started,
+                )
+                if started:
+                    raise
+                first_problem = first_problem or reason
+                last_error = exc
+                continue
+            except Exception:
+                settled = True
+                breaker.record_failure()
+                raise
+            finally:
+                if not settled:
+                    # The caller stopped iterating (a client went away). Text that
+                    # already arrived proves the backend works; none means nothing
+                    # was learned, but a half-open trial must still be closed out
+                    # or the backend would be skipped for good.
+                    if started:
+                        breaker.record_success()
+                    else:
+                        breaker.record_failure()
+
+            breaker.record_success()
+            if backend.name != primary:
+                llm_fallbacks_total.labels(
+                    from_provider=primary, to_provider=backend.name, reason=first_problem
+                ).inc()
+                logger.warning(
+                    "llm.fallback_used",
+                    from_provider=primary,
+                    to_provider=backend.name,
+                    reason=first_problem,
+                )
+            return
+
+        if last_error is not None:
             raise last_error
         raise LLMUnavailableError("every LLM backend is skipped by an open circuit")
 

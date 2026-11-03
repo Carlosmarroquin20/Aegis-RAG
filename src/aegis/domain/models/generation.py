@@ -33,3 +33,16 @@ class Generation:
     # None when the backend did not report usage. Callers count that case
     # instead of guessing, so missing data shows up rather than reading as zero.
     usage: TokenUsage | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TextDelta:
+    """A piece of an answer as the backend streams it; the pieces concatenate to the answer."""
+
+    text: str
+
+
+# What a streaming generation yields: deltas in order, then one Generation with
+# the whole text and the usage, so the caller can bill and audit the answer as if
+# it had arrived in one piece.
+GenerationEvent = TextDelta | Generation
