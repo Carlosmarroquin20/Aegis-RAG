@@ -26,12 +26,14 @@ supersedes the old one, so the history of *why* stays intact.
 | [0015](0015-multilingual-embeddings-recorded-per-collection.md) | A multilingual embedding model, recorded in every collection | Accepted |
 | [0016](0016-hybrid-retrieval-by-default-reranker-opt-in.md) | Hybrid retrieval by default; the reranker is opt-in | Accepted |
 | [0017](0017-answer-faithfulness-judged-by-nli.md) | Answer faithfulness is judged by a local NLI model, sentence by sentence | Accepted |
+| [0018](0018-stream-whole-sanitized-sentences.md) | Stream answers as whole, sanitized sentences | Accepted |
 
 The first three were made when the system was designed and are recorded here retrospectively;
 the rest were recorded as they were decided: 0004 to 0008 during the security hardening pass,
 0009 to 0014 while running the service as a shared platform and putting it under load.
 0015 records the embedding-model change of release 1.1.0 after the fact, 0016 the move to
-hybrid retrieval, and 0017 how answers are checked against their context. A summary of all of
+hybrid retrieval, 0017 how answers are checked against their context, and 0018 how answers
+stream without giving up the output guard. A summary of all of
 them in Spanish is in [RESUMEN.md](RESUMEN.md).
 For what the system defends against and where it stops, see the
 [threat model](../THREAT_MODEL.md).

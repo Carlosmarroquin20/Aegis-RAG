@@ -1,39 +1,89 @@
 """
-RAG query endpoint.
+RAG query endpoints.
 
-The route handler is intentionally thin: validation is handled by Pydantic,
-security by middleware + use case, and errors by the exception handlers in main.py.
+``POST /query`` answers in one JSON body. ``POST /query/stream`` answers with
+server-sent events, so the first words reach the user while the rest is being
+generated. Both run the same pipeline; the route handlers stay thin, with
+validation in Pydantic, security in the middleware and the use case, and errors
+in the exception handlers.
+
+Streaming and status codes: everything that can refuse a query (the security
+gateway, the token budget, retrieval) runs before the stream starts, and so does
+generation up to the first sanitized text. Until then a failure is an ordinary
+HTTP error (400, 429, 503, 504, or 500 for a reflected injection, ADR 0008).
+After it, the status is already 200, so a failure is reported as an ``error``
+event and the client must discard what it showed (ADR 0018).
 """
 
 from __future__ import annotations
 
+import time
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Annotated
 
+import anyio
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from aegis.application.dtos.rag_dtos import (
     QueryRequest,
     QueryResponse,
     SecurityRejectionDetail,
     SecurityRejectionResponse,
+    StreamDelta,
+    StreamEnd,
+    StreamError,
+    StreamStart,
 )
-from aegis.application.use_cases.query_rag import QueryRAGUseCase, SecurityViolationError
+from aegis.application.use_cases.query_rag import (
+    QueryRAGUseCase,
+    QueryStream,
+    SecurityViolationError,
+)
+from aegis.domain.ports.llm_client import LLMTimeoutError, LLMUnavailableError
+from aegis.domain.ports.security import OutputReflectionError
+from aegis.infrastructure.observability.metrics import stream_first_delta_seconds, streams_total
 from aegis.interface.api.dependencies import get_query_use_case
 
+logger = structlog.get_logger(__name__)
+
 router = APIRouter(prefix="/api/v1", tags=["rag"])
+
+_REFUSALS: dict[int | str, dict[str, object]] = {
+    400: {"model": SecurityRejectionResponse, "description": "Query blocked by security policy."},
+    403: {"description": "Forbidden: missing or invalid API key."},
+    429: {"description": "Rate limit exceeded, or the tenant's daily token budget is used."},
+}
+
+# What an ``error`` event says. Generic on purpose, like the HTTP error bodies:
+# the cause is in the server log, keyed by the request ID.
+_STREAM_ERRORS: dict[str, str] = {
+    "output_blocked": "The answer was blocked by the output guard. Discard what was shown.",
+    "llm_timeout": "The language model stopped responding. Discard what was shown.",
+    "llm_unavailable": "The language model failed mid-answer. Discard what was shown.",
+    "internal": "The answer could not be completed. Discard what was shown.",
+}
+
+
+def _rejection(exc: SecurityViolationError) -> HTTPException:
+    # A structured 400 rather than a 500 communicates the rejection cause; the
+    # detail stays vague so it does not reveal which rule matched.
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=SecurityRejectionDetail(
+            message=str(exc),
+            query_hash=exc.query_hash[:16],  # truncated; the audit log has the full hash
+            threat_level=exc.threat_level,
+        ).model_dump(),
+    )
 
 
 @router.post(
     "/query",
     response_model=QueryResponse,
-    responses={
-        400: {
-            "model": SecurityRejectionResponse,
-            "description": "Query blocked by security policy.",
-        },
-        403: {"description": "Forbidden: missing or invalid API key."},
-        429: {"description": "Rate limit exceeded, or the tenant's daily token budget is used."},
-    },
+    responses=_REFUSALS,
     summary="Submit a query to the RAG pipeline",
     description=(
         "Submits a natural-language question through the SecurityGateway, "
@@ -53,13 +103,110 @@ async def query_rag(
     try:
         return await use_case.execute(request, client=client, tenant=tenant)
     except SecurityViolationError as exc:
-        # Return a structured 400 instead of 500 to communicate the rejection cause.
-        # The detail is intentionally vague to avoid revealing detection logic.
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=SecurityRejectionDetail(
-                message=str(exc),
-                query_hash=exc.query_hash[:16],  # truncated; the audit log has the full hash
-                threat_level=exc.threat_level,
-            ).model_dump(),
-        ) from exc
+        raise _rejection(exc) from exc
+
+
+@router.post(
+    "/query/stream",
+    response_class=StreamingResponse,
+    responses={
+        **_REFUSALS,
+        200: {
+            "description": (
+                "Server-sent events: one `start` (sources), `delta` events with sanitized "
+                "text, then `end` with the complete answer, which replaces the deltas. "
+                "An `error` event ends the stream instead; discard what was shown."
+            ),
+            "content": {"text/event-stream": {}},
+        },
+    },
+    summary="Submit a query and stream the answer",
+)
+async def query_rag_stream(
+    request: QueryRequest,
+    http_request: Request,
+    use_case: Annotated[QueryRAGUseCase, Depends(get_query_use_case)],
+) -> StreamingResponse:
+    arrived = time.perf_counter()
+    client = getattr(http_request.state, "client_id", "unknown")
+    tenant = getattr(http_request.state, "tenant", None)
+    try:
+        stream = await use_case.start_stream(request, client=client, tenant=tenant)
+    except SecurityViolationError as exc:
+        raise _rejection(exc) from exc
+
+    primed = await _prime(stream)
+    stream_first_delta_seconds.observe(time.perf_counter() - arrived)
+    return StreamingResponse(
+        _sse(primed, stream.events),
+        media_type="text/event-stream",
+        # nginx and similar proxies buffer responses by default, which would hold
+        # every event until the answer is complete.
+        headers={"X-Accel-Buffering": "no"},
+    )
+
+
+async def _prime(stream: QueryStream) -> list[BaseModel]:
+    """
+    Runs the stream up to its first text, so that a failure before any text is
+    seen raises here and becomes a status code rather than an ``error`` event.
+    """
+    primed: list[BaseModel] = [stream.start]
+    try:
+        async for event in stream.events:
+            primed.append(event)
+            if isinstance(event, StreamDelta | StreamEnd):
+                break
+    except BaseException:
+        await stream.events.aclose()
+        raise
+    return primed
+
+
+async def _sse(
+    primed: list[BaseModel], events: AsyncGenerator[StreamDelta | StreamEnd, None]
+) -> AsyncIterator[str]:
+    outcome = "disconnected"
+    try:
+        for event in primed:
+            yield _event(event)
+        async for event in events:
+            yield _event(event)
+        outcome = "completed"
+    except OutputReflectionError:
+        outcome = "blocked"
+        yield _error("output_blocked")
+    except LLMTimeoutError as exc:
+        outcome = "failed"
+        logger.error("stream.failed", reason="llm_timeout", error=str(exc))
+        yield _error("llm_timeout")
+    except LLMUnavailableError as exc:
+        outcome = "failed"
+        logger.error("stream.failed", reason="llm_unavailable", error=str(exc))
+        yield _error("llm_unavailable")
+    except Exception:
+        outcome = "failed"
+        logger.exception("stream.failed", reason="internal")
+        yield _error("internal")
+    finally:
+        streams_total.labels(outcome=outcome).inc()
+        # On a disconnect this runs under cancellation; shield it so the LLM
+        # request is actually closed rather than left generating.
+        with anyio.CancelScope(shield=True):
+            await events.aclose()
+
+
+_EVENT_NAMES: dict[type[BaseModel], str] = {
+    StreamStart: "start",
+    StreamDelta: "delta",
+    StreamEnd: "end",
+    StreamError: "error",
+}
+
+
+def _event(event: BaseModel) -> str:
+    return f"event: {_EVENT_NAMES[type(event)]}\ndata: {event.model_dump_json()}\n\n"
+
+
+def _error(code: str) -> str:
+    return _event(StreamError(code=code, message=_STREAM_ERRORS[code]))

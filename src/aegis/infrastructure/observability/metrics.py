@@ -85,6 +85,22 @@ rate_limit_backend_errors_total = Counter(
     registry=registry,
 )
 
+# ── Streaming (POST /api/v1/query/stream) ────────────────────────────────────
+
+stream_first_delta_seconds = Histogram(
+    "aegis_stream_first_delta_seconds",
+    "Time from a streamed query's arrival to its first sanitized text (time to first token).",
+    buckets=(0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 60.0, 120.0),
+    registry=registry,
+)
+
+streams_total = Counter(
+    "aegis_streams_total",
+    "Streamed answers by how they ended (completed, blocked, failed, disconnected).",
+    labelnames=("outcome",),
+    registry=registry,
+)
+
 # ── Answer faithfulness (opt-in, FAITHFULNESS_CHECK) ─────────────────────────
 
 answer_faithfulness = Histogram(

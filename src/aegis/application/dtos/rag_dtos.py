@@ -48,6 +48,39 @@ class QueryResponse(BaseModel):
     faithfulness: FaithfulnessReport | None = None
 
 
+class StreamStart(BaseModel):
+    """First event of a streamed answer: what was retrieved, before any text."""
+
+    query_hash: str
+    threat_level: str
+    sources: list[SourceDocument]
+
+
+class StreamDelta(BaseModel):
+    """Sanitized text to append to the answer shown so far."""
+
+    text: str
+
+
+class StreamEnd(BaseModel):
+    """
+    Last event of a streamed answer. ``answer`` is the complete, sanitized text
+    and is authoritative: a client replaces what it assembled from the deltas
+    with it.
+    """
+
+    answer: str
+    truncated: bool
+    faithfulness: FaithfulnessReport | None = None
+
+
+class StreamError(BaseModel):
+    """Ends a stream that failed after text was sent. The client discards what it showed."""
+
+    code: str
+    message: str
+
+
 class SecurityRejectionDetail(BaseModel):
     """Why a query was refused, without disclosing which rule matched."""
 
