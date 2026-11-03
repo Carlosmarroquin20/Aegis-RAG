@@ -409,9 +409,8 @@ jobs:
         # signature gateway, and what it would cost in false positives.
         env:
           HF_HUB_DISABLE_XET: "1"
-        run: |
-          uv run python scripts/compare_injection_classifier.py --show-misses
-          uv run python scripts/compare_injection_classifier.py --model deepset/deberta-v3-base-injection
+        # ADR 0019 records the result: not enabled, because of false positives.
+        run: uv run python scripts/compare_injection_classifier.py --show-misses
 
   docker-build:
     name: Docker Build Validation

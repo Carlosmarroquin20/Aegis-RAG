@@ -111,3 +111,11 @@ reflejada nunca llega al cliente, ni siquiera en parte. Todo lo que puede rechaz
 corre antes del primer byte, así que un bloqueo sigue siendo 400, un presupuesto agotado 429 y
 una caída del modelo 503. Si algo falla después del primer texto, un evento `error` le pide al
 cliente descartar lo mostrado, y el evento final trae la respuesta completa, que es la que vale.
+
+**[0019](0019-ml-injection-classifier-measured-not-enabled.md) — Un clasificador de inyección con
+ML se mide, pero no se activa.** Sobre las mismas 326 consultas, un clasificador DeBERTa abierto
+bloquea el 93 % de los ataques (el gateway, el 60 %) y cierra casi por completo sus huecos:
+paráfrasis, otros idiomas, sustitución de caracteres. Pero rechaza el 17 % de las consultas
+legítimas (el gateway, el 6 %), entre ellas 18 de 24 preguntas en español que solo suenan
+sospechosas, con puntuaciones de 1,00 que ningún umbral separa. Queda como medición en el CI y
+adaptador listo; un modo que solo registre sin bloquear sería el siguiente paso.
