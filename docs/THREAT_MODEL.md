@@ -147,7 +147,10 @@ with a threat score of 0:
 
 The size of that gap is measured in [`docs/GATEWAY_EVALUATION.md`](GATEWAY_EVALUATION.md): on a
 labelled corpus the gateway blocks roughly three quarters of the attacks in the categories it
-targets and none of the paraphrased, translated or character-substituted ones.
+targets and none of the paraphrased, translated or character-substituted ones. An ML classifier
+would close most of that gap, but at nearly three times the false-positive rate on legitimate
+Spanish queries, so it is measured rather than enabled
+([ADR 0019](adr/0019-ml-injection-classifier-measured-not-enabled.md)).
 
 The gateway therefore raises the cost of a naive attack and produces a signal; it is not the
 control that the system's safety depends on. That role belongs to the layers behind it —

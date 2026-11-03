@@ -11,11 +11,25 @@
 [![CI](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/codeql.yml/badge.svg)](https://github.com/Carlosmarroquin20/Aegis-RAG/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Carlosmarroquin20/Aegis-RAG/badge)](https://scorecard.dev/viewer/?uri=github.com/Carlosmarroquin20/Aegis-RAG)
-[![Coverage](https://img.shields.io/badge/coverage-~90%25-brightgreen)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-~94%25-brightgreen)](#testing)
 
 Aegis-RAG is a Retrieval-Augmented Generation API designed for environments where you cannot afford to ship "best effort" security. Every query is evaluated by a domain-level **Security Gateway** before any retrieval or generation happens, every LLM response is post-processed by an **Output Sanitizer**, and the whole pipeline is wrapped in a defence-in-depth middleware stack with first-class observability.
 
 The project also covers what running such a service involves: a hexagonal architecture with swappable adapters, strictly typed Python, mitigations mapped to the OWASP LLM Top 10, logs, metrics and distributed traces, a hardened multi-stage Docker build, unit, integration and end-to-end tests, AWS Terraform, and a React demo console.
+
+## Results
+
+Every figure below is measured, most of them in CI on every pull request, and each links to
+how it was measured and what it misses.
+
+| What | Measured on | Result |
+|---|---|---|
+| **Retrieval** (hybrid BM25 + dense, the default) | 38 labelled questions, Spanish corpus | MRR **0.908** (dense alone: 0.863); right document in the top 5 for **100%** of questions. A CI gate. [ADR 0016](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md) |
+| **Answer faithfulness** (local NLI judge) | 80 labelled answers | Catches **65%** of unfaithful answers at a **7%** false-flag rate; weak on changed figures (8 of 18). A CI gate. [ADR 0017](docs/adr/0017-answer-faithfulness-judged-by-nli.md) |
+| **Input gateway** (signatures, English and Spanish) | 326 labelled queries | Blocks **77.5%** of the attacks it targets and **60.4%** of all attacks, at **6.4%** false positives. [Report](docs/GATEWAY_EVALUATION.md) |
+| **ML injection classifier** (not enabled) | the same 326 queries | Would block **92.9%** of attacks, but **17.4%** of legitimate queries. [ADR 0019](docs/adr/0019-ml-injection-classifier-measured-not-enabled.md) |
+| **Throughput** (one worker, k6) | compose stack | About **70 requests/s**; p99 under **75 ms** at a steady 40/s. [Load tests](loadtest/README.md) |
+| **Tests** | unit, integration, end-to-end | About 1,000 tests, ~94% coverage, `mypy --strict` |
 
 <p align="center">
   <img src="docs/security-demo.gif" alt="Aegis-RAG web console — prompt-injection probes blocked by the live gateway" width="720">

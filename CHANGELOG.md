@@ -11,6 +11,13 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- `scripts/compare_injection_classifier.py` compares the SecurityGateway with an ML
+  prompt-injection classifier (`protectai/deberta-v3-base-prompt-injection-v2`), and both combined,
+  on the 326-query gateway corpus; CI runs it as a measurement. The classifier blocks 92.9% of
+  attacks against the gateway's 60.4%, but 17.4% of legitimate queries against 6.4%, so it is not
+  enabled ([ADR 0019](docs/adr/0019-ml-injection-classifier-measured-not-enabled.md)).
+- A "Results" section at the top of the README with every measured figure and where it comes from.
+
 - Streamed answers: `POST /api/v1/query/stream` returns server-sent events (`start` with the
   sources, `delta` text, `end` with the complete answer, or `error`). See
   [ADR 0018](docs/adr/0018-stream-whole-sanitized-sentences.md).
