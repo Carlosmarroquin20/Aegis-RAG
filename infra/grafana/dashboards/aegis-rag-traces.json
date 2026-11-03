@@ -325,7 +325,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum by (span_name) (rate(traces_span_metrics_calls_total{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize\"}[1m]))",
+          "expr": "sum by (span_name) (rate(traces_span_metrics_calls_total{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize|output.faithfulness\"}[1m]))",
           "legendFormat": "{{span_name}}",
           "refId": "A",
           "exemplar": false
@@ -385,7 +385,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (span_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (span_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize|output.faithfulness\"}[5m])))",
           "legendFormat": "{{span_name}}",
           "refId": "A",
           "exemplar": true
@@ -445,7 +445,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum by (span_name)(rate(traces_span_metrics_duration_milliseconds_sum{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize\"}[5m])) / sum by (span_name)(rate(traces_span_metrics_duration_milliseconds_count{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize\"}[5m]))",
+          "expr": "sum by (span_name)(rate(traces_span_metrics_duration_milliseconds_sum{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize|output.faithfulness\"}[5m])) / sum by (span_name)(rate(traces_span_metrics_duration_milliseconds_count{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize|output.faithfulness\"}[5m]))",
           "legendFormat": "{{span_name}}",
           "refId": "A",
           "exemplar": false
@@ -505,7 +505,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum by (span_name)(rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\",span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize\"}[5m]))",
+          "expr": "sum by (span_name)(rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\",span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize|output.faithfulness\"}[5m]))",
           "legendFormat": "{{span_name}}",
           "refId": "A",
           "exemplar": false
@@ -770,7 +770,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum by (span_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (span_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_name=~\"security.evaluate|rag.retrieve|llm.generate|output.sanitize|output.faithfulness\"}[5m])))",
           "legendFormat": "{{span_name}}",
           "refId": "A",
           "format": "table",
@@ -829,6 +829,139 @@
       "options": {
         "showHeader": true,
         "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 17,
+      "type": "row",
+      "title": "Retrieval stages (inside rag.retrieve)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "panels": []
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "p95 latency by retrieval stage",
+      "description": "Dense search, BM25 keyword search, rank fusion and (when RETRIEVAL_MODE reranks) the cross-encoder. A rebuilt keyword index shows as a spike in retrieve.lexical.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 41
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (span_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_name=~\"retrieve.dense|retrieve.lexical|retrieve.fuse|retrieve.rerank\"}[5m])))",
+          "legendFormat": "{{span_name}}",
+          "refId": "A",
+          "exemplar": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "axisPlacement": "auto",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Call rate by retrieval stage",
+      "description": "Which stages run: retrieve.lexical and retrieve.fuse only in hybrid modes, retrieve.rerank only in rerank modes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 41
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "sum by (span_name) (rate(traces_span_metrics_calls_total{span_name=~\"retrieve.dense|retrieve.lexical|retrieve.fuse|retrieve.rerank\"}[1m]))",
+          "legendFormat": "{{span_name}}",
+          "refId": "A",
+          "exemplar": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "axisPlacement": "auto",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     }
   ]

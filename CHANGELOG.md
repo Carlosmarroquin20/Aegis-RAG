@@ -11,6 +11,15 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- Grafana panels for the features added since 1.3.0. Production Overview gains a **Streaming**
+  row (time to first text p50/p95/p99, streams by outcome, blocked mid-answer, abandoned) and an
+  **Answer faithfulness** row (unsupported share against the alert threshold, mean score,
+  abstentions, judge failures, score distribution). Trace Analytics adds `output.faithfulness` to
+  the per-stage charts and a row for the retrieval stages (`retrieve.dense`, `retrieve.lexical`,
+  `retrieve.fuse`, `retrieve.rerank`).
+- `tests/unit/test_dashboards.py` fails if a dashboard or alert queries a metric nobody exports,
+  or the trace dashboard filters on a span the code never opens.
+
 - `scripts/compare_injection_classifier.py` compares the SecurityGateway with an ML
   prompt-injection classifier (`protectai/deberta-v3-base-prompt-injection-v2`), and both combined,
   on the 326-query gateway corpus; CI runs it as a measurement. The classifier blocks 92.9% of
