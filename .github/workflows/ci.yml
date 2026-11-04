@@ -378,6 +378,19 @@ jobs:
           uv run python scripts/evaluate_faithfulness.py --show-errors
           --min-recall 0.535 --max-false-flags 0.135
 
+      # TEMPORARY (measurement for ADR 0022, removed before merge): each fix alone.
+      - name: "Measure: reply words kept"
+        if: always()
+        env:
+          HF_HUB_DISABLE_XET: "1"
+        run: uv run python scripts/evaluate_faithfulness.py --keep-reply-words
+
+      - name: "Measure: figure check off"
+        if: always()
+        env:
+          HF_HUB_DISABLE_XET: "1"
+        run: uv run python scripts/evaluate_faithfulness.py --no-figure-check
+
   injection-classifier-eval:
     name: Injection Classifier Comparison
     runs-on: ubuntu-latest

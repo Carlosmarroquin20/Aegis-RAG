@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from aegis.domain.services.claims import is_abstention, split_claims, split_premises
+from aegis.domain.services.claims import (
+    grounding_figures,
+    is_abstention,
+    split_claims,
+    split_premises,
+    strip_reply_word,
+    ungrounded_figures,
+)
 
 
 class TestSplitClaims:
@@ -112,3 +119,84 @@ class TestSplitPremises:
             "Sí.",
             "No hay entregas los domingos.",
         ]
+
+
+class TestStripReplyWord:
+    @pytest.mark.parametrize(
+        ("claim", "expected"),
+        [
+            ("No, the stores are closed on 25 December.", "The stores are closed on 25 December."),
+            ("Sí, se aceptan transferencias bancarias.", "Se aceptan transferencias bancarias."),
+            ("Si, se aceptan transferencias bancarias.", "Se aceptan transferencias bancarias."),
+            ("No. Seasonal products have 7 days.", "Seasonal products have 7 days."),
+            ("YES: points expire after 12 months.", "Points expire after 12 months."),
+        ],
+    )
+    def test_a_leading_reply_word_is_dropped(self, claim: str, expected: str) -> None:
+        assert strip_reply_word(claim) == expected
+
+    @pytest.mark.parametrize(
+        "claim",
+        [
+            "No hay entregas los domingos.",
+            "Nothing is delivered on Sundays.",
+            "Siempre hay entregas los lunes.",
+            "Las tiendas cierran a las 20:00.",
+        ],
+    )
+    def test_a_negation_or_an_ordinary_word_is_kept(self, claim: str) -> None:
+        assert strip_reply_word(claim) == claim
+
+    def test_a_claim_is_kept_when_too_little_would_remain(self) -> None:
+        assert strip_reply_word("No, gracias.") == "No, gracias."
+
+
+class TestFigures:
+    def _ungrounded(self, claim: str, *context: str) -> list[str]:
+        return ungrounded_figures(claim, grounding_figures(context))
+
+    def test_a_figure_the_context_states_is_grounded(self) -> None:
+        assert (
+            self._ungrounded("El plazo es de 15 días.", "Para colchones el plazo es de 15 días.")
+            == []
+        )
+
+    def test_a_figure_the_context_never_states_is_named(self) -> None:
+        assert self._ungrounded("El plazo es de 60 días.", "El plazo es de 30 días.") == ["60"]
+
+    def test_a_figure_from_another_case_is_left_to_the_nli_model(self) -> None:
+        """30 is in the context, for another case; only an absent figure is caught here."""
+        context = "El plazo general es de 30 días; para colchones, 15 días."
+        assert self._ungrounded("Para colchones el plazo es de 30 días.", context) == []
+
+    @pytest.mark.parametrize(
+        ("claim", "context"),
+        [
+            ("Compras de Q1.000 o más.", "Compras de Q1,000 o más."),
+            ("Cada punto vale Q0,10.", "Cada punto vale Q0.10."),
+            ("Each point is worth Q0.1.", "Cada punto vale Q0.10."),
+            ("Hasta el 50% del valor.", "Hasta el 50 % del valor."),
+            ("Pedidos de más de Q20000.", "Pedidos de más de Q20,000."),
+            ("Requires two references: 2 of them.", "dos referencias comerciales"),
+            ("Phone support closes at 8:00 p.m.", "de 8:00 a 20:00"),
+            ("Stores close at 8 pm on weekdays.", "Lunes a sábado: 9:00 a 20:00"),
+            ("Stores close at 20:00 on weekdays.", "Lunes a sábado: 9:00 a 20:00"),
+            ("A warranty of 12-month duration.", "12 meses de garantía"),
+        ],
+    )
+    def test_the_same_value_written_another_way_is_grounded(self, claim: str, context: str) -> None:
+        assert self._ungrounded(claim, context) == []
+
+    def test_a_thousands_separator_is_not_read_as_a_decimal(self) -> None:
+        """Q2,000 is two thousand, so it does not ground a claim of 2 days."""
+        assert self._ungrounded("Takes 2 business days.", "Pedidos mayores de Q2,000.") == ["2"]
+
+    def test_a_number_word_in_the_claim_is_not_checked(self) -> None:
+        assert self._ungrounded("Coverage grows by five years.", "uno, dos o tres años") == []
+
+    def test_a_claim_without_figures_has_none_to_ground(self) -> None:
+        assert self._ungrounded("Las plantas no se devuelven.", "Nada aquí.") == []
+
+    def test_every_text_given_grounds_figures(self) -> None:
+        grounded = grounding_figures(["El envío cuesta Q55.", "¿Cuánto cuesta un pedido de Q300?"])
+        assert ungrounded_figures("Su pedido de Q300 paga Q55.", grounded) == []

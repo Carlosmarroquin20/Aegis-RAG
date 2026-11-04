@@ -31,6 +31,9 @@ class SentenceSupport:
     # Best support any premise of the context gives the sentence, in [0, 1].
     support: float
     supported: bool
+    # Figures the sentence states that appear nowhere in the context; any one of
+    # them makes the sentence unsupported, whatever its support.
+    ungrounded_figures: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
