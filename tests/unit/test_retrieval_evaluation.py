@@ -112,6 +112,37 @@ class TestRanking:
         ]
 
 
+class _RecordingEncoder:
+    def __init__(self) -> None:
+        self.texts: list[str] = []
+
+    def encode(self, texts: list[str], normalize_embeddings: bool = True) -> np.ndarray:
+        self.texts.extend(texts)
+        return np.ones((len(texts), 4)) / 2
+
+
+class TestMemoryStore:
+    async def test_an_e5_model_sees_its_query_and_passage_markers(self) -> None:
+        store = ev.MemoryStore()
+        await store.add_documents([Document(id="c", content="Texto del fragmento.")])
+        encoder = _RecordingEncoder()
+
+        store.embed_with(encoder, "intfloat/multilingual-e5-small")
+        await store.similarity_search("¿Una pregunta?")
+
+        assert encoder.texts == ["passage: Texto del fragmento.", "query: ¿Una pregunta?"]
+
+    async def test_a_symmetric_model_sees_the_text_as_it_is(self) -> None:
+        store = ev.MemoryStore()
+        await store.add_documents([Document(id="c", content="Texto del fragmento.")])
+        encoder = _RecordingEncoder()
+
+        store.embed_with(encoder, "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+        await store.similarity_search("¿Una pregunta?")
+
+        assert encoder.texts == ["Texto del fragmento.", "¿Una pregunta?"]
+
+
 class _BagOfWordsEncoder:
     """Stands in for SentenceTransformer: hashed word counts, normalized."""
 
@@ -173,3 +204,21 @@ class TestEndToEnd:
 
         assert ev.main(["--compare", "--mode", "hybrid", "--min-hit5", "1.01"]) == 1
         assert capsys.readouterr().out.count("FAIL: hit@5") == 1
+
+    def test_the_chunk_size_reaches_the_ingestion_pipeline(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setitem(
+            sys.modules,
+            "sentence_transformers",
+            types.SimpleNamespace(
+                SentenceTransformer=_BagOfWordsEncoder, CrossEncoder=_LengthCrossEncoder
+            ),
+        )
+
+        assert ev.main(["--mode", "dense", "--chunk-size", "256", "--overlap", "32"]) == 0
+        small = int(capsys.readouterr().out.split(" chunks")[0])
+        assert ev.main(["--mode", "dense", "--chunk-size", "1024"]) == 0
+        large = int(capsys.readouterr().out.split(" chunks")[0])
+
+        assert small > large

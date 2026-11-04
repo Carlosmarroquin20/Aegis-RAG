@@ -223,7 +223,9 @@ async def _live(settings: Settings, store: MemoryStore, questions_path: Path) ->
     from aegis.infrastructure.security.security_gateway import SecurityGateway
     from aegis.interface.api.dependencies import get_llm_client
 
-    store.embed_with(SentenceTransformer(settings.embedding_model, device="cpu"))
+    store.embed_with(
+        SentenceTransformer(settings.embedding_model, device="cpu"), settings.embedding_model
+    )
     retriever = Retriever(
         store,
         lexical_index=StoreBackedLexicalIndex(store) if settings.lexical_search_enabled else None,
