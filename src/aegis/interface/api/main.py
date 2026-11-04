@@ -16,6 +16,7 @@ Wiring order matters:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -39,6 +40,8 @@ from aegis.infrastructure.observability.tracing import (
 )
 from aegis.interface.api.dependencies import (
     get_auth_failure_limiter,
+    get_injection_classifier,
+    get_injection_monitor,
     get_llm_client,
     get_nli_model,
     get_parser_registry,
@@ -185,6 +188,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("startup.faithfulness_check", model=nli_model.model_name)
         await nli_model.load()
 
+    # And the shadow-mode injection classifier (ADR 0020).
+    classifier = get_injection_classifier()
+    if classifier is not None:
+        logger.info("startup.injection_classifier_shadow", model=classifier.model_name)
+        await asyncio.to_thread(classifier.load)
+
     # Last, so everything startup built is frozen: full collections that walked
     # it were the API's p99 latency under load (see observability/runtime.py).
     frozen = freeze_startup_heap()
@@ -195,6 +204,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Graceful shutdown: release the LLM HTTP client connection pool.
     logger.info("shutdown.begin")
+    monitor = get_injection_monitor()
+    if monitor is not None:
+        await monitor.drain()  # let scores in flight finish and be counted
     await get_llm_client().aclose()
     if cfg.tracing_enabled:
         shutdown_tracing()  # flush any batched spans before exit

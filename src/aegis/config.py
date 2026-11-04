@@ -252,6 +252,27 @@ class Settings(BaseSettings):
     # Entailment probability at or above which a claim counts as supported.
     faithfulness_threshold: float = Field(default=0.5, gt=0.0, le=1.0)
 
+    # ── Injection classifier in shadow mode ────────────────────────────────────
+    # "shadow" scores every query the gateway allows with an ML prompt-injection
+    # classifier, in the background, and records the result (metrics, and a log
+    # line with the query hash when it flags). It never blocks: measured on the
+    # gateway corpus it refuses ~17% of legitimate queries (ADR 0019, ADR 0020).
+    # "off" loads nothing. The model is ~700 MB, baked into the image on request.
+    injection_classifier_mode: str = "off"
+    injection_classifier_model: str = "protectai/deberta-v3-base-prompt-injection-v2"
+    injection_classifier_threshold: float = Field(default=0.5, gt=0.0, le=1.0)
+    # Scores in flight at once; beyond this a query is skipped and counted "busy".
+    injection_classifier_max_pending: int = Field(default=8, ge=1)
+
+    @field_validator("injection_classifier_mode")
+    @classmethod
+    def validate_injection_classifier_mode(cls, v: str) -> str:
+        allowed = {"off", "shadow"}
+        lowered = v.strip().lower()
+        if lowered not in allowed:
+            raise ValueError(f"injection_classifier_mode must be one of {sorted(allowed)}")
+        return lowered
+
     @field_validator("retrieval_mode")
     @classmethod
     def validate_retrieval_mode(cls, v: str) -> str:

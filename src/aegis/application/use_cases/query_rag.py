@@ -34,6 +34,7 @@ from aegis.application.dtos.rag_dtos import (
     StreamStart,
 )
 from aegis.application.services.retrieval import Retriever
+from aegis.application.services.shadow_injection import ShadowInjectionMonitor
 from aegis.application.services.streaming import StreamingOutputGuard
 from aegis.domain.models.document import Document
 from aegis.domain.models.generation import Generation
@@ -113,6 +114,7 @@ class QueryRAGUseCase:
         token_ledger: TokenLedgerPort | None = None,
         retriever: RetrieverPort | None = None,
         faithfulness_judge: FaithfulnessJudgePort | None = None,
+        injection_monitor: ShadowInjectionMonitor | None = None,
     ) -> None:
         # Without a retriever, retrieval is dense similarity from vector_store.
         self._retriever = retriever if retriever is not None else Retriever(vector_store)
@@ -122,6 +124,7 @@ class QueryRAGUseCase:
         self._metrics = metrics
         self._ledger = token_ledger
         self._judge = faithfulness_judge
+        self._injection_monitor = injection_monitor
 
     async def execute(
         self, request: QueryRequest, *, client: str = "unknown", tenant: Tenant | None = None
@@ -277,6 +280,14 @@ class QueryRAGUseCase:
         query_hash = gateway_result.assessment.query_hash
 
         log = log.bind(query_hash=query_hash[:16])
+
+        # ── Second opinion, recorded only (ADR 0020) ───────────────────────────
+        # The raw text, as the classifier was evaluated on it. Scheduled in the
+        # background: it cannot block or delay this query.
+        if self._injection_monitor is not None:
+            self._injection_monitor.observe(
+                request.query, query_hash=query_hash, gateway_score=gateway_result.assessment.score
+            )
 
         # ── Token budget (LLM10): before anything that costs ───────────────────
         budget = tenant.daily_token_budget if tenant is not None else None

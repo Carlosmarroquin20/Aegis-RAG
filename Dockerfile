@@ -99,6 +99,14 @@ RUN if [ -n "${FAITHFULNESS_MODEL}" ]; then \
       /app/.venv/bin/python -c "from transformers import AutoModelForSequenceClassification as M, AutoTokenizer as T; T.from_pretrained('${FAITHFULNESS_MODEL}'); M.from_pretrained('${FAITHFULNESS_MODEL}')"; \
     fi
 
+# The injection classifier for INJECTION_CLASSIFIER_MODE=shadow, likewise baked
+# only when named (docs/adr/0020-injection-classifier-in-shadow-mode.md):
+#   --build-arg INJECTION_CLASSIFIER_MODEL=protectai/deberta-v3-base-prompt-injection-v2
+ARG INJECTION_CLASSIFIER_MODEL=
+RUN if [ -n "${INJECTION_CLASSIFIER_MODEL}" ]; then \
+      /app/.venv/bin/python -c "from transformers import AutoModelForSequenceClassification as M, AutoTokenizer as T; T.from_pretrained('${INJECTION_CLASSIFIER_MODEL}'); M.from_pretrained('${INJECTION_CLASSIFIER_MODEL}')"; \
+    fi
+
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 FROM base AS runtime
 
