@@ -11,6 +11,18 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- Two corrections to the faithfulness judge
+  ([ADR 0022](docs/adr/0022-faithfulness-reply-words-and-figure-check.md)):
+  - A leading "Yes,"/"No,"/"Sí," is dropped before a sentence is judged.
+  - A sentence stating a figure that neither the context nor the question contains is unsupported.
+    The figures are named in `SentenceSupport.ungrounded_figures`, and the same value written in
+    another format still matches.
+
+  On the 271 labelled answers, recall rises from 54.6% to 67.2% and false flags fall from 12.5% to
+  7.9%. The CI gate moves to recall 0.66 and a 0.09 false-flag rate.
+  `FaithfulnessJudgePort.assess` takes an optional `question`. `scripts/evaluate_faithfulness.py`
+  gains `--keep-reply-words` and `--no-figure-check`.
+
 - Larger evaluation sets ([ADR 0021](docs/adr/0021-larger-evaluation-sets.md)). Retrieval goes
   from 38 to 141 questions, 56 in English. Each question is tagged `direct`, `paraphrase` or
   `scenario`, and `scripts/evaluate_retrieval.py` reports each kind separately. Faithfulness goes

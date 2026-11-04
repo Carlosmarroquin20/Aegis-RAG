@@ -368,28 +368,15 @@ jobs:
       - name: Measure the faithfulness judge against labelled answers
         # The judge is deterministic, so the figures move only when the code,
         # the model or the labels do (ADR 0017). The thresholds sit just under
-        # the measured recall 0.546 (65 of 119 unfaithful answers caught) and
-        # false-flag rate 0.125 (19 of 152 faithful answers flagged): one more
-        # miss or one more false flag passes, two fail (ADR 0021). Raise them
+        # the measured recall 0.672 (80 of 119 unfaithful answers caught) and
+        # false-flag rate 0.079 (12 of 152 faithful answers flagged): one more
+        # miss or one more false flag passes, two fail (ADR 0022). Raise them
         # when the judge improves; lowering them is a decision to record in the PR.
         env:
           HF_HUB_DISABLE_XET: "1"
         run: >-
           uv run python scripts/evaluate_faithfulness.py --show-errors
-          --min-recall 0.535 --max-false-flags 0.135
-
-      # TEMPORARY (measurement for ADR 0022, removed before merge): each fix alone.
-      - name: "Measure: reply words kept"
-        if: always()
-        env:
-          HF_HUB_DISABLE_XET: "1"
-        run: uv run python scripts/evaluate_faithfulness.py --keep-reply-words
-
-      - name: "Measure: figure check off"
-        if: always()
-        env:
-          HF_HUB_DISABLE_XET: "1"
-        run: uv run python scripts/evaluate_faithfulness.py --no-figure-check
+          --min-recall 0.66 --max-false-flags 0.09
 
   injection-classifier-eval:
     name: Injection Classifier Comparison
