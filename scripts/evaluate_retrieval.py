@@ -21,7 +21,10 @@ application's own ``Retriever``, BM25 index and reranker, so the ranking is the
 one the API would produce. Only the vector store is replaced, by an in-memory
 one that embeds with the same model and the same cosine similarity. For each
 question it reports where the first chunk of the expected document ranks among
-the top 20; one ranked lower counts as a miss.
+the top 20; one ranked lower counts as a miss. Figures are broken down by
+language and by kind of question: ``direct`` ones use the document's own terms
+(or their translation), ``paraphrase`` ones ask the same thing in other words,
+and ``scenario`` ones describe a situation the policy has to be inferred from.
 
 ``--mode`` picks the retrieval stages (default: the configured RETRIEVAL_MODE)
 and is the one the thresholds apply to. ``--compare`` also prints every other
@@ -132,6 +135,7 @@ class Question:
     lang: str
     text: str
     expected_source: str
+    kind: str = ""
 
 
 async def chunk_corpus(corpus: Path) -> MemoryStore:
@@ -156,7 +160,11 @@ def _load_questions(path: Path) -> list[Question]:
             record = json.loads(line)
             questions.append(
                 Question(
-                    record["id"], record["lang"], record["question"], record["expected_source"]
+                    record["id"],
+                    record["lang"],
+                    record["question"],
+                    record["expected_source"],
+                    record.get("kind", ""),
                 )
             )
     return questions
@@ -274,6 +282,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 subset = [r for r, q in zip(ranks, questions, strict=True) if q.lang == lang]
                 print(f"    {lang}: {_summary(subset)}")
             print(f"    all: {_summary(ranks)}")
+            for kind in sorted({q.kind for q in questions} - {""}):
+                subset = [r for r, q in zip(ranks, questions, strict=True) if q.kind == kind]
+                print(f"    {kind}: {_summary(subset)}")
             if args.show_misses:
                 for rank, question in zip(ranks, questions, strict=True):
                     if rank > max(CUTOFFS):

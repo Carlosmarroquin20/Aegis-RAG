@@ -24,8 +24,8 @@ how it was measured and what it misses.
 
 | What | Measured on | Result |
 |---|---|---|
-| **Retrieval** (hybrid BM25 + dense, the default) | 38 labelled questions, Spanish corpus | MRR **0.908** (dense alone: 0.863); right document in the top 5 for **100%** of questions. A CI gate. [ADR 0016](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md) |
-| **Answer faithfulness** (local NLI judge) | 80 labelled answers | Catches **65%** of unfaithful answers at a **7%** false-flag rate; weak on changed figures (8 of 18). A CI gate. [ADR 0017](docs/adr/0017-answer-faithfulness-judged-by-nli.md) |
+| **Retrieval** (hybrid BM25 + dense, the default) | 141 labelled questions (56 in English), Spanish corpus | Right document in the top 5 for **96.5%** of questions; MRR **0.850** (dense alone: 0.813). Weakest on paraphrases. A CI gate. [ADR 0016](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md), [ADR 0021](docs/adr/0021-larger-evaluation-sets.md) |
+| **Answer faithfulness** (local NLI judge) | 271 labelled answers (half in English) | Catches **55%** of unfaithful answers at a **12.5%** false-flag rate; weak on changed figures (19 of 51). A CI gate. [ADR 0017](docs/adr/0017-answer-faithfulness-judged-by-nli.md), [ADR 0021](docs/adr/0021-larger-evaluation-sets.md) |
 | **Input gateway** (signatures, English and Spanish) | 326 labelled queries | Blocks **77.5%** of the attacks it targets and **60.4%** of all attacks, at **6.4%** false positives. [Report](docs/GATEWAY_EVALUATION.md) |
 | **ML injection classifier** (not enforcing) | the same 326 queries | Would block **92.9%** of attacks, but **17.4%** of legitimate queries; available in shadow mode, which only records. [ADR 0019](docs/adr/0019-ml-injection-classifier-measured-not-enabled.md), [ADR 0020](docs/adr/0020-injection-classifier-in-shadow-mode.md) |
 | **Throughput** (one worker, k6) | compose stack | About **70 requests/s**; p99 under **75 ms** at a steady 40/s. [Load tests](loadtest/README.md) |
@@ -46,8 +46,8 @@ how it was measured and what it misses.
 - **Detection that does not become the attack surface.** The gateway inspects attacker-controlled text on the event loop, so every signature is kept linear on non-matching input and a regression suite feeds each rule its worst-case 8 KB payload. Obfuscation that leaves a payload readable — zero-width characters, fullwidth forms, bidi overrides, Cyrillic/Greek homoglyphs — is normalized or folded before matching.
 - **Measured, not asserted.** The gateway is scored against a [labelled corpus of 326 queries](docs/GATEWAY_EVALUATION.md) that includes the attack classes it does *not* claim to stop. In its default mode it blocks **78%** of the attacks it targets — in English and Spanish — and **60%** of the whole corpus, at a **6%** false-positive rate that falls entirely on deliberately adversarial queries — no everyday question is blocked. The report is generated, lists every miss, and a test fails if it goes stale. The first run found two real defects, both fixed.
 - **Indirect prompt injection caught at the exit.** The `OutputSanitizer` blocks LLM responses that *echo* injection payloads from poisoned documents. The use case deliberately does not catch the error so it surfaces as a pipeline failure (HTTP 500), not a silent leak.
-- **Hybrid retrieval, chosen by measurement.** Dense similarity is fused with BM25 keyword search (reciprocal rank fusion), which raised MRR on the example corpus from 0.863 to 0.908 and hit@5 from 97% to 100% for about 3 ms per query. A multilingual cross-encoder reranker reached 0.925 but costs close to a second per query on CPU, so it is [opt-in](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md). The same evaluation runs in CI against the application's own retrieval code and fails the build if quality drops.
-- **Answers checked against their sources.** A local multilingual NLI model checks each sentence of an answer against the retrieved context and names the ones it does not support: no LLM judge, no API calls, the same verdict every run. On 80 labelled answers it catches 65% of unfaithful ones at a 7% false-flag rate, up from 43% before premises were split into sentences. Its weak spot, changed figures, is [measured and stated](docs/adr/0017-answer-faithfulness-judged-by-nli.md). CI gates on it; in production it is an opt-in score and alert.
+- **Hybrid retrieval, chosen by measurement.** Dense similarity is fused with BM25 keyword search (reciprocal rank fusion). On 141 labelled questions this raises MRR from 0.813 to 0.850 at no measurable cost per query. The gain is all on Spanish questions; BM25 cannot help English questions over a Spanish corpus, and the evaluation reports that separately. A multilingual cross-encoder reranker reaches 0.905, but on CPU it costs about 0.8 s per query and puts only 2 more questions into the five chunks the model sees, so it is [opt-in](docs/adr/0016-hybrid-retrieval-by-default-reranker-opt-in.md). The same evaluation runs in CI against the application's own retrieval code and fails the build if quality drops.
+- **Answers checked against their sources.** A local multilingual NLI model checks each sentence of an answer against the retrieved context and names the ones it does not support: no LLM judge, no API calls, the same verdict every run. On 271 labelled answers, half of them in English, it catches 55% of unfaithful ones at a 12.5% false-flag rate. Its weak spots are changed figures and answers that open with a bare "No,"; both are [measured and stated](docs/adr/0021-larger-evaluation-sets.md), along with the fixes to measure next. CI gates on it; in production it is an opt-in score and alert.
 - **Streaming without bypassing the output guard.** `POST /api/v1/query/stream` sends the answer as it is generated, but only in whole sentences that have already passed the sanitizer, with an 80-character margin scanned before each one is released. A reflected injection is never sent, even in part. Refusals before the first text keep their status codes; failures after it end the stream with an `error` event the client must honour ([ADR 0018](docs/adr/0018-stream-whole-sanitized-sentences.md)).
 - **Magic-byte file detection.** Document uploads are dispatched to parsers based on actual file content, not the attacker-controllable `Content-Type` header.
 - **Hexagonal for real.** The `LLMClientPort`, `VectorStorePort` and `RateLimitStore` interfaces mean swapping Ollama for OpenAI, ChromaDB for pgvector, or the in-memory rate limiter for the shared **Redis** backend is a one-file change — and there are fakes in the test suite that prove it. The dependency rule itself (`interface → application → domain ← infrastructure`) is enforced by a test that parses every module's imports. Adapters translate vendor failures at the boundary, so a vector-store or LLM outage reaches the client as a retryable **503/504**, never as a leaked client-library exception.
@@ -286,18 +286,21 @@ answer. `RETRIEVAL_MODE` picks the stages:
 
 | `RETRIEVAL_MODE` | Stages | MRR | hit@5 | Per query (CPU) |
 |---|---|---|---|---|
-| `dense` | Vector similarity | 0.863 | 97.4% | 18 ms |
-| `hybrid` *(default)* | Vector similarity + BM25, fused by reciprocal rank fusion | 0.908 | 100% | 21 ms |
-| `dense+rerank` / `hybrid+rerank` | The above, re-scored by a multilingual cross-encoder | 0.925 | 100% | ~0.9 s |
+| `dense` | Vector similarity | 0.813 | 95.7% | 16 ms |
+| `hybrid` *(default)* | Vector similarity + BM25, fused by reciprocal rank fusion | 0.850 | 96.5% | 16 ms |
+| `dense+rerank` / `hybrid+rerank` | The above, re-scored by a multilingual cross-encoder | 0.899 / 0.905 | 97.2% / 97.9% | ~0.8 s |
 
-Figures are for the 38 labelled questions over [`examples/atencion-cliente`](examples/README.md),
-measured in CI. Dense embeddings match meaning but blur exact terms (a product, a figure, a rare
+Figures are for 141 labelled questions over [`examples/atencion-cliente`](examples/README.md),
+measured in CI. 56 of the questions are in English, and each question is tagged as direct,
+paraphrase or scenario. The report breaks the figures down both ways
+([ADR 0021](docs/adr/0021-larger-evaluation-sets.md)): paraphrases are the hardest kind (hit@5 90.3%). Dense embeddings match meaning but blur exact terms (a product, a figure, a rare
 word); BM25 matches exactly those and misses paraphrases and other languages, so the fused ranking
 recovers what either alone drops. The keyword index is kept in memory per collection and rebuilt
 from the vector store when its contents change, so it never becomes a second source of truth.
 
-The reranker is off by default: two more questions answered from the first chunk is not worth
-close to a second per query on CPU. To turn it on, set both in `.env` and rebuild, so the model is
+The reranker is off by default. It puts the right document first for 12 more questions, but the
+model reads the top five chunks, and there it gains 2 questions of 141. That is not worth about
+0.8 s per query on CPU. To turn it on, set both in `.env` and rebuild, so the model is
 baked into the image and loads offline:
 
 ```bash
@@ -324,16 +327,22 @@ retrieved context by a local, multilingual NLI model
 the context entails it, net of contradiction. An answer that declines for lack of context is
 counted as an abstention, not a failure.
 
-Measured on 80 labelled answers over the example corpus (`scripts/evaluate_faithfulness.py`):
+Measured on 271 labelled answers over the example corpus, 136 of them in English
+(`scripts/evaluate_faithfulness.py`):
 
-| Judge | Unfaithful caught | Faithful flagged |
+| | Unfaithful caught | Faithful flagged |
 |---|---|---|
-| Word overlap (reference) | 35% | 12% |
-| NLI over whole chunks | 43% | 16% |
-| **NLI over context sentences** *(shipped)* | **65%** | **7%** |
+| All answers | **54.6%** | **12.5%** |
+| Spanish / English | 62.1% / 47.5% | 11.7% / 13.3% |
 
-It catches every invented addition and most contradictions. Changed figures are its weak spot:
-it catches 8 of 18. CI fails if recall drops below 0.62 or false flags rise above 0.10. To measure
+The design was chosen on the first 80 of these answers. There, judging against whole chunks caught
+43% and context sentences 65% ([ADR 0017](docs/adr/0017-answer-faithfulness-judged-by-nli.md)).
+On the larger set it still catches nearly every invented addition (15 of 17) and outside-knowledge
+claim (14 of 16), but only half the contradictions and 19 of 51 changed figures. Most false flags
+come from answers that open with a bare "No,", which the judge reads without the question. Half of
+the figures it misses appear nowhere in the source, so a figure check would catch them. Both fixes
+are [measured and pending](docs/adr/0021-larger-evaluation-sets.md). CI fails if recall drops below 0.535 or false flags rise above
+0.135. To measure
 your own deployment's LLM end to end, run the live mode against a running stack:
 
 ```bash

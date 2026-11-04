@@ -59,13 +59,38 @@ class TestShortfalls:
         assert problems[1].startswith("MRR 0.100")
 
 
+_QUESTIONS = [
+    json.loads(line)
+    for line in ev.DEFAULT_QUESTIONS.read_text(encoding="utf-8").splitlines()
+    if line.strip()
+]
+
+
 class TestQuestionSet:
     def test_every_expected_document_exists_in_the_corpus(self) -> None:
         """A renamed document would otherwise surface as a crash, not as a gate result."""
         corpus = {p.name for p in ev.DEFAULT_CORPUS.iterdir()}
-        for line in ev.DEFAULT_QUESTIONS.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                assert json.loads(line)["expected_source"] in corpus
+        assert {q["expected_source"] for q in _QUESTIONS} <= corpus
+
+    def test_ids_and_questions_are_unique(self) -> None:
+        assert len({q["id"] for q in _QUESTIONS}) == len(_QUESTIONS)
+        assert len({q["question"] for q in _QUESTIONS}) == len(_QUESTIONS)
+
+    def test_every_question_has_a_known_language_and_kind(self) -> None:
+        assert {q["lang"] for q in _QUESTIONS} == {"es", "en"}
+        assert {q["kind"] for q in _QUESTIONS} == {"direct", "paraphrase", "scenario"}
+
+    def test_every_document_is_asked_about(self) -> None:
+        """A document with a handful of questions would hide a regression in it."""
+        corpus = {p.name for p in ev.DEFAULT_CORPUS.iterdir()}
+        per_document = {name: 0 for name in corpus}
+        for question in _QUESTIONS:
+            per_document[question["expected_source"]] += 1
+        assert min(per_document.values()) >= 15, per_document
+
+    def test_english_is_large_enough_to_read_on_its_own(self) -> None:
+        english = sum(q["lang"] == "en" for q in _QUESTIONS)
+        assert english >= 50 and english / len(_QUESTIONS) >= 0.3
 
 
 class TestRanking:

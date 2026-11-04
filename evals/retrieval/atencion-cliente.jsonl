@@ -1,38 +1,141 @@
-{"id": "q-001", "lang": "es", "question": "¿Cuántos días tengo para devolver un colchón?", "expected_source": "politica-de-devoluciones.md"}
-{"id": "q-002", "lang": "es", "question": "¿Puedo devolver algo si perdí el ticket?", "expected_source": "politica-de-devoluciones.md"}
-{"id": "q-003", "lang": "es", "question": "¿Me devuelven el dinero si compré con tarjeta y cuánto tarda?", "expected_source": "politica-de-devoluciones.md"}
-{"id": "q-004", "lang": "es", "question": "¿Aceptan devoluciones de pintura que mandé a preparar?", "expected_source": "politica-de-devoluciones.md"}
-{"id": "q-005", "lang": "es", "question": "Compré un adorno navideño, ¿hasta cuándo lo puedo devolver?", "expected_source": "politica-de-devoluciones.md"}
-{"id": "q-006", "lang": "es", "question": "¿Cobran la recolección a domicilio de una devolución?", "expected_source": "politica-de-devoluciones.md"}
-{"id": "q-007", "lang": "es", "question": "¿Cuánto dura la garantía del compresor de una refrigeradora?", "expected_source": "garantias.md"}
-{"id": "q-008", "lang": "es", "question": "¿Qué cubre la garantía extendida?", "expected_source": "garantias.md"}
-{"id": "q-009", "lang": "es", "question": "Mi licuadora se arruinó a las tres semanas, ¿me la cambian?", "expected_source": "garantias.md"}
-{"id": "q-010", "lang": "es", "question": "¿La garantía cubre daños por una subida de voltaje?", "expected_source": "garantias.md"}
-{"id": "q-011", "lang": "es", "question": "¿Cuánto tarda el centro de servicio en dar un diagnóstico?", "expected_source": "garantias.md"}
-{"id": "q-012", "lang": "es", "question": "¿Cuánto cuesta el envío de un pedido de Q300 a Quetzaltenango?", "expected_source": "envios-y-entregas.md"}
-{"id": "q-013", "lang": "es", "question": "¿Hacen entregas los domingos?", "expected_source": "envios-y-entregas.md"}
-{"id": "q-014", "lang": "es", "question": "¿En cuántos días llega un pedido a Cobán?", "expected_source": "envios-y-entregas.md"}
-{"id": "q-015", "lang": "es", "question": "¿Puede recoger mi pedido otra persona?", "expected_source": "envios-y-entregas.md"}
-{"id": "q-016", "lang": "es", "question": "Me llegó la estufa golpeada, ¿qué hago?", "expected_source": "envios-y-entregas.md"}
-{"id": "q-017", "lang": "es", "question": "¿La instalación de la lavadora tiene costo fuera de la capital?", "expected_source": "envios-y-entregas.md"}
-{"id": "q-018", "lang": "es", "question": "¿Puedo cancelar un pedido que ya pagué?", "expected_source": "envios-y-entregas.md"}
-{"id": "q-019", "lang": "es", "question": "¿Cómo pido una factura con mi NIT?", "expected_source": "pagos-y-facturacion.md"}
-{"id": "q-020", "lang": "es", "question": "¿Desde qué monto puedo pagar en cuotas sin intereses?", "expected_source": "pagos-y-facturacion.md"}
-{"id": "q-021", "lang": "es", "question": "Me cobraron dos veces la misma compra, ¿qué hago?", "expected_source": "pagos-y-facturacion.md"}
-{"id": "q-022", "lang": "es", "question": "¿Qué requisitos piden para abrir crédito a una empresa?", "expected_source": "pagos-y-facturacion.md"}
-{"id": "q-023", "lang": "es", "question": "¿Aceptan transferencias bancarias?", "expected_source": "pagos-y-facturacion.md"}
-{"id": "q-024", "lang": "es", "question": "¿A qué hora abren los domingos?", "expected_source": "tiendas-y-horarios.md"}
-{"id": "q-025", "lang": "es", "question": "¿Abren el 25 de diciembre?", "expected_source": "tiendas-y-horarios.md"}
-{"id": "q-026", "lang": "es", "question": "¿Cortan madera a la medida?", "expected_source": "tiendas-y-horarios.md"}
-{"id": "q-027", "lang": "es", "question": "¿Las tiendas tienen rampas para silla de ruedas?", "expected_source": "tiendas-y-horarios.md"}
-{"id": "q-028", "lang": "es", "question": "¿Cuánto vale un punto?", "expected_source": "programa-de-lealtad.md"}
-{"id": "q-029", "lang": "es", "question": "¿Cuándo se vencen mis puntos?", "expected_source": "programa-de-lealtad.md"}
-{"id": "q-030", "lang": "es", "question": "¿Qué beneficios tiene el nivel oro?", "expected_source": "programa-de-lealtad.md"}
-{"id": "q-031", "lang": "es", "question": "¿Puedo comprar sin crear una cuenta?", "expected_source": "preguntas-frecuentes.md"}
-{"id": "q-032", "lang": "es", "question": "¿Puedo apartar un producto sin pagar?", "expected_source": "preguntas-frecuentes.md"}
-{"id": "q-033", "lang": "es", "question": "¿Cómo cambio la dirección de entrega de mi pedido?", "expected_source": "preguntas-frecuentes.md"}
-{"id": "q-034", "lang": "es", "question": "Olvidé mi contraseña de la tienda en línea.", "expected_source": "preguntas-frecuentes.md"}
-{"id": "q-035", "lang": "en", "question": "How many days do I have to return a mattress?", "expected_source": "politica-de-devoluciones.md"}
-{"id": "q-036", "lang": "en", "question": "Do you deliver on Sundays?", "expected_source": "envios-y-entregas.md"}
-{"id": "q-037", "lang": "en", "question": "How much is a loyalty point worth?", "expected_source": "programa-de-lealtad.md"}
-{"id": "q-038", "lang": "en", "question": "Can I pay in interest-free instalments?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-001", "lang": "es", "kind": "direct", "question": "¿Cuántos días tengo para devolver un colchón?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-002", "lang": "es", "kind": "paraphrase", "question": "¿Puedo devolver algo si perdí el ticket?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-003", "lang": "es", "kind": "direct", "question": "¿Me devuelven el dinero si compré con tarjeta y cuánto tarda?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-004", "lang": "es", "kind": "direct", "question": "¿Aceptan devoluciones de pintura que mandé a preparar?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-005", "lang": "es", "kind": "scenario", "question": "Compré un adorno navideño, ¿hasta cuándo lo puedo devolver?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-006", "lang": "es", "kind": "direct", "question": "¿Cobran la recolección a domicilio de una devolución?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-007", "lang": "es", "kind": "direct", "question": "¿Cuánto dura la garantía del compresor de una refrigeradora?", "expected_source": "garantias.md"}
+{"id": "q-008", "lang": "es", "kind": "direct", "question": "¿Qué cubre la garantía extendida?", "expected_source": "garantias.md"}
+{"id": "q-009", "lang": "es", "kind": "scenario", "question": "Mi licuadora se arruinó a las tres semanas, ¿me la cambian?", "expected_source": "garantias.md"}
+{"id": "q-010", "lang": "es", "kind": "direct", "question": "¿La garantía cubre daños por una subida de voltaje?", "expected_source": "garantias.md"}
+{"id": "q-011", "lang": "es", "kind": "direct", "question": "¿Cuánto tarda el centro de servicio en dar un diagnóstico?", "expected_source": "garantias.md"}
+{"id": "q-012", "lang": "es", "kind": "scenario", "question": "¿Cuánto cuesta el envío de un pedido de Q300 a Quetzaltenango?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-013", "lang": "es", "kind": "direct", "question": "¿Hacen entregas los domingos?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-014", "lang": "es", "kind": "direct", "question": "¿En cuántos días llega un pedido a Cobán?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-015", "lang": "es", "kind": "direct", "question": "¿Puede recoger mi pedido otra persona?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-016", "lang": "es", "kind": "scenario", "question": "Me llegó la estufa golpeada, ¿qué hago?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-017", "lang": "es", "kind": "direct", "question": "¿La instalación de la lavadora tiene costo fuera de la capital?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-018", "lang": "es", "kind": "direct", "question": "¿Puedo cancelar un pedido que ya pagué?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-019", "lang": "es", "kind": "direct", "question": "¿Cómo pido una factura con mi NIT?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-020", "lang": "es", "kind": "direct", "question": "¿Desde qué monto puedo pagar en cuotas sin intereses?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-021", "lang": "es", "kind": "scenario", "question": "Me cobraron dos veces la misma compra, ¿qué hago?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-022", "lang": "es", "kind": "direct", "question": "¿Qué requisitos piden para abrir crédito a una empresa?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-023", "lang": "es", "kind": "direct", "question": "¿Aceptan transferencias bancarias?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-024", "lang": "es", "kind": "direct", "question": "¿A qué hora abren los domingos?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-025", "lang": "es", "kind": "direct", "question": "¿Abren el 25 de diciembre?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-026", "lang": "es", "kind": "direct", "question": "¿Cortan madera a la medida?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-027", "lang": "es", "kind": "direct", "question": "¿Las tiendas tienen rampas para silla de ruedas?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-028", "lang": "es", "kind": "direct", "question": "¿Cuánto vale un punto?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-029", "lang": "es", "kind": "direct", "question": "¿Cuándo se vencen mis puntos?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-030", "lang": "es", "kind": "direct", "question": "¿Qué beneficios tiene el nivel oro?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-031", "lang": "es", "kind": "direct", "question": "¿Puedo comprar sin crear una cuenta?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-032", "lang": "es", "kind": "direct", "question": "¿Puedo apartar un producto sin pagar?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-033", "lang": "es", "kind": "direct", "question": "¿Cómo cambio la dirección de entrega de mi pedido?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-034", "lang": "es", "kind": "scenario", "question": "Olvidé mi contraseña de la tienda en línea.", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-035", "lang": "en", "kind": "direct", "question": "How many days do I have to return a mattress?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-036", "lang": "en", "kind": "direct", "question": "Do you deliver on Sundays?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-037", "lang": "en", "kind": "direct", "question": "How much is a loyalty point worth?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-038", "lang": "en", "kind": "direct", "question": "Can I pay in interest-free instalments?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-039", "lang": "es", "kind": "direct", "question": "¿Puedo devolver un producto que compré en oferta?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-040", "lang": "es", "kind": "paraphrase", "question": "Si devuelvo algo que estaba rebajado, ¿me regresan el precio normal o lo que pagué?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-041", "lang": "es", "kind": "scenario", "question": "Abrí un desodorante y no me gustó, ¿lo puedo regresar?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-042", "lang": "es", "kind": "direct", "question": "¿Se puede devolver una tarjeta de regalo?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-043", "lang": "es", "kind": "direct", "question": "Pagué en efectivo, ¿cómo me reembolsan?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-044", "lang": "es", "kind": "scenario", "question": "Compré una lámpara por internet, ¿puedo regresarla en una tienda física?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-045", "lang": "es", "kind": "direct", "question": "¿Necesito el empaque original para hacer un cambio?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-046", "lang": "en", "kind": "direct", "question": "Can I return a plant I bought last week?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-047", "lang": "en", "kind": "direct", "question": "What is the return window for regular products?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-048", "lang": "en", "kind": "paraphrase", "question": "I paid with my card; how long until the refund shows up?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-049", "lang": "en", "kind": "paraphrase", "question": "Do I need the receipt to get my money back?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-050", "lang": "en", "kind": "scenario", "question": "The rug I ordered online is not the one I asked for. Do I have to pay to have it picked up?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-051", "lang": "en", "kind": "scenario", "question": "Can I exchange school supplies after a week?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-052", "lang": "en", "kind": "paraphrase", "question": "Will you take back fabric that was cut to length?", "expected_source": "politica-de-devoluciones.md"}
+{"id": "q-053", "lang": "es", "kind": "scenario", "question": "¿Cuánto cobran por enviar un colchón a Escuintla?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-054", "lang": "es", "kind": "direct", "question": "¿Cuánto tarda en estar listo un pedido para recoger en tienda?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-055", "lang": "es", "kind": "paraphrase", "question": "¿Cómo sé dónde viene mi paquete?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-056", "lang": "es", "kind": "scenario", "question": "Vivo en un municipio lejano de Petén, ¿cuánto tarda la entrega?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-057", "lang": "es", "kind": "paraphrase", "question": "¿La instalación incluye conectar la tubería del agua?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-058", "lang": "en", "kind": "direct", "question": "Is shipping free if my order is over Q500?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-059", "lang": "en", "kind": "direct", "question": "How long does delivery take within the capital city?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-060", "lang": "en", "kind": "direct", "question": "How can I track my order?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-061", "lang": "en", "kind": "direct", "question": "What do I need to bring to pick up an online order at a store?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-062", "lang": "en", "kind": "scenario", "question": "My package arrived with a missing part. What should I do?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-063", "lang": "en", "kind": "direct", "question": "Is stove installation free in Guatemala City?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-064", "lang": "en", "kind": "direct", "question": "Do you deliver on public holidays?", "expected_source": "envios-y-entregas.md"}
+{"id": "q-065", "lang": "es", "kind": "direct", "question": "¿Puedo pagar en efectivo en la tienda en línea?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-066", "lang": "es", "kind": "paraphrase", "question": "¿Aceptan American Express?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-067", "lang": "es", "kind": "scenario", "question": "Me equivoqué de nombre en la factura, ¿la pueden corregir?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-068", "lang": "es", "kind": "scenario", "question": "¿En cuántas cuotas puedo pagar una refrigeradora?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-069", "lang": "es", "kind": "paraphrase", "question": "¿Los productos en liquidación se pueden pagar a plazos?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-070", "lang": "es", "kind": "direct", "question": "Si no doy mi NIT, ¿a nombre de quién sale la factura?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-071", "lang": "es", "kind": "direct", "question": "¿Cuál es el plazo de pago del crédito empresarial?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-072", "lang": "en", "kind": "direct", "question": "Which credit cards do you accept?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-073", "lang": "en", "kind": "direct", "question": "Can I pay by bank transfer for an online order?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-074", "lang": "en", "kind": "paraphrase", "question": "How do I get an invoice in my company's name?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-075", "lang": "en", "kind": "scenario", "question": "I was charged twice for the same order. How long does the reversal take?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-076", "lang": "en", "kind": "direct", "question": "How long does approval for a business credit line take?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-077", "lang": "en", "kind": "direct", "question": "Can I use a gift card to pay?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-078", "lang": "en", "kind": "paraphrase", "question": "Can I split a Q1,500 purchase into monthly payments without interest?", "expected_source": "pagos-y-facturacion.md"}
+{"id": "q-079", "lang": "es", "kind": "direct", "question": "¿Cuánto dura la garantía de una estufa?", "expected_source": "garantias.md"}
+{"id": "q-080", "lang": "es", "kind": "paraphrase", "question": "¿Qué garantía tiene un sofá?", "expected_source": "garantias.md"}
+{"id": "q-081", "lang": "es", "kind": "direct", "question": "¿Hasta cuándo puedo comprar la garantía extendida?", "expected_source": "garantias.md"}
+{"id": "q-082", "lang": "es", "kind": "scenario", "question": "Se me cayó el taladro y se rompió, ¿lo cubre la garantía?", "expected_source": "garantias.md"}
+{"id": "q-083", "lang": "es", "kind": "scenario", "question": "¿La garantía cubre el cambio de filtros de la refrigeradora?", "expected_source": "garantias.md"}
+{"id": "q-084", "lang": "es", "kind": "scenario", "question": "¿Qué pasa si no pueden reparar mi lavadora?", "expected_source": "garantias.md"}
+{"id": "q-085", "lang": "es", "kind": "scenario", "question": "Un técnico no autorizado abrió mi microondas, ¿pierdo la garantía?", "expected_source": "garantias.md"}
+{"id": "q-086", "lang": "en", "kind": "direct", "question": "How long is the warranty on power tools?", "expected_source": "garantias.md"}
+{"id": "q-087", "lang": "en", "kind": "direct", "question": "What does the extended warranty not cover?", "expected_source": "garantias.md"}
+{"id": "q-088", "lang": "en", "kind": "direct", "question": "How do I file a warranty claim?", "expected_source": "garantias.md"}
+{"id": "q-089", "lang": "en", "kind": "scenario", "question": "My TV stopped working two weeks after I bought it. Will you swap it for a new one?", "expected_source": "garantias.md"}
+{"id": "q-090", "lang": "en", "kind": "paraphrase", "question": "Does the warranty cover worn-out batteries?", "expected_source": "garantias.md"}
+{"id": "q-091", "lang": "en", "kind": "direct", "question": "How long is the warranty on small appliances like a toaster?", "expected_source": "garantias.md"}
+{"id": "q-092", "lang": "en", "kind": "paraphrase", "question": "How many years can I add with the extended warranty?", "expected_source": "garantias.md"}
+{"id": "q-093", "lang": "en", "kind": "paraphrase", "question": "Is the washing machine motor covered for longer than the rest of the machine?", "expected_source": "garantias.md"}
+{"id": "q-094", "lang": "es", "kind": "paraphrase", "question": "¿A qué hora cierran entre semana?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-095", "lang": "es", "kind": "direct", "question": "¿Qué horario tienen los días de asueto?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-096", "lang": "es", "kind": "paraphrase", "question": "¿Abren el primero de enero?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-097", "lang": "es", "kind": "direct", "question": "¿Hasta qué hora atienden por teléfono los domingos?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-098", "lang": "es", "kind": "scenario", "question": "Mandé un correo a servicio al cliente, ¿cuándo me contestan?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-099", "lang": "es", "kind": "paraphrase", "question": "¿Sacan copias de llaves?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-100", "lang": "es", "kind": "scenario", "question": "Quiero remodelar mi cocina, ¿me pueden asesorar?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-101", "lang": "es", "kind": "paraphrase", "question": "¿Me ayudan a subir las compras al carro?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-102", "lang": "en", "kind": "direct", "question": "What time do your stores open on Sundays?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-103", "lang": "en", "kind": "paraphrase", "question": "Are you open on Christmas Day?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-104", "lang": "en", "kind": "direct", "question": "What are the customer service phone hours?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-105", "lang": "en", "kind": "scenario", "question": "If I place an order online at midnight, when is it processed?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-106", "lang": "en", "kind": "paraphrase", "question": "Do you mix paint in a custom colour?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-107", "lang": "en", "kind": "paraphrase", "question": "Do you have parking for people with disabilities?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-108", "lang": "en", "kind": "paraphrase", "question": "Can I get a key copied at your stores?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-109", "lang": "en", "kind": "direct", "question": "Do I need an appointment for remodelling advice?", "expected_source": "tiendas-y-horarios.md"}
+{"id": "q-110", "lang": "es", "kind": "direct", "question": "¿Cuánto cuesta afiliarme a Puntos Modelo?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-111", "lang": "es", "kind": "direct", "question": "¿Cuántos puntos gano por cada compra?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-112", "lang": "es", "kind": "direct", "question": "¿Desde cuántos puntos puedo canjear?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-113", "lang": "es", "kind": "paraphrase", "question": "¿Puedo pagar toda una compra con puntos?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-114", "lang": "es", "kind": "direct", "question": "¿Puedo cambiar mis puntos por dinero en efectivo?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-115", "lang": "es", "kind": "scenario", "question": "Devolví una compra, ¿qué pasa con los puntos que me dio?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-116", "lang": "es", "kind": "direct", "question": "¿Cuánto tengo que comprar para llegar a nivel plata?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-117", "lang": "es", "kind": "scenario", "question": "Gasté Q16,000 este año, ¿qué nivel me corresponde?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-118", "lang": "es", "kind": "paraphrase", "question": "¿Qué necesito para inscribirme al programa de puntos?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-119", "lang": "en", "kind": "direct", "question": "Is joining the loyalty program free?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-120", "lang": "en", "kind": "direct", "question": "How many points do I earn per Q10 spent?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-121", "lang": "en", "kind": "direct", "question": "Do loyalty points expire?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-122", "lang": "en", "kind": "direct", "question": "Can I use points to buy a gift card?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-123", "lang": "en", "kind": "paraphrase", "question": "What do Silver members get?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-124", "lang": "en", "kind": "direct", "question": "What percentage of a purchase can I pay with points?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-125", "lang": "en", "kind": "scenario", "question": "I'm a Gold member in Quetzaltenango. Do I pay for installation?", "expected_source": "programa-de-lealtad.md"}
+{"id": "q-126", "lang": "es", "kind": "paraphrase", "question": "¿Los precios de la página web son los mismos que en la tienda?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-127", "lang": "es", "kind": "direct", "question": "¿Tienen precios especiales si compro al por mayor?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-128", "lang": "es", "kind": "scenario", "question": "Quiero comprar 60 sillas iguales para un restaurante, ¿me hacen descuento?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-129", "lang": "es", "kind": "paraphrase", "question": "¿Necesito registrarme para comprar en línea?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-130", "lang": "es", "kind": "paraphrase", "question": "¿Por cuánto tiempo me guardan un producto apartado?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-131", "lang": "es", "kind": "scenario", "question": "Alguien que dice ser de atención al cliente me pidió mi contraseña, ¿es normal?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-132", "lang": "es", "kind": "scenario", "question": "Ya salió mi pedido, ¿todavía puedo cambiar la dirección?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-133", "lang": "es", "kind": "direct", "question": "¿Hay ofertas que solo existen en la tienda en línea?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-134", "lang": "en", "kind": "direct", "question": "Can I buy online as a guest?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-135", "lang": "en", "kind": "direct", "question": "Are online prices the same as in store?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-136", "lang": "en", "kind": "paraphrase", "question": "Can I reserve an item without paying?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-137", "lang": "en", "kind": "direct", "question": "Do you offer wholesale prices?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-138", "lang": "en", "kind": "paraphrase", "question": "How do I reset my password?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-139", "lang": "en", "kind": "direct", "question": "How do I change the delivery address of my order?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-140", "lang": "en", "kind": "scenario", "question": "Someone on the phone asked for my full card number. Does your staff ever ask for that?", "expected_source": "preguntas-frecuentes.md"}
+{"id": "q-141", "lang": "en", "kind": "scenario", "question": "I want to order 100 units of the same lamp. Who do I talk to?", "expected_source": "preguntas-frecuentes.md"}

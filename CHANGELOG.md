@@ -11,6 +11,12 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- Larger evaluation sets ([ADR 0021](docs/adr/0021-larger-evaluation-sets.md)). Retrieval goes
+  from 38 to 141 questions, 56 in English. Each question is tagged `direct`, `paraphrase` or
+  `scenario`, and `scripts/evaluate_retrieval.py` reports each kind separately. Faithfulness goes
+  from 80 to 271 labelled answers, half in English, with every kind in both languages. Unit tests
+  keep both sets consistent.
+
 - Shadow mode for the ML injection classifier: `INJECTION_CLASSIFIER_MODE=shadow` (default `off`)
   scores every query the gateway allows in the background and records the result, never blocking,
   delaying or failing a query ([ADR 0020](docs/adr/0020-injection-classifier-in-shadow-mode.md)).
@@ -101,6 +107,10 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Changed
 
+- The CI quality gates are re-set on the larger evaluation sets: retrieval at hit@5 0.955 and MRR
+  0.83, faithfulness at recall 0.535 and a 0.135 false-flag rate. These are new measurements, not
+  regressions. On 141 questions hybrid retrieval measures hit@5 96.5% and MRR 0.850. On 271 answers
+  the judge catches 54.6% of unfaithful answers and flags 12.5% of faithful ones.
 - `/ready` checks every tenant's collection, and is degraded if any of them is unreachable.
 - `scripts/evaluate_retrieval.py` retrieves through the application's own retrieval stages and
   gates the configured mode; `--compare` prints every mode side by side. The CI gate rises to

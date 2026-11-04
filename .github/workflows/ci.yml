@@ -326,16 +326,16 @@ jobs:
 
       - name: Measure retrieval against the example corpus
         # The thresholds apply to the configured RETRIEVAL_MODE (hybrid) and sit
-        # just under its measured hit@5 1.000 (38 of 38 questions) and MRR 0.908:
-        # one miss still passes, two fail, and so does a ranking that drifts down
-        # without losing a hit. --compare also prints the other modes for
-        # reference (ADR 0016). Raise them when retrieval improves; lowering them
-        # is a decision to record in the PR.
+        # just under its measured hit@5 0.965 (136 of 141 questions) and MRR 0.850:
+        # one more miss still passes, two fail, and so does a ranking that drifts
+        # down without losing a hit. --compare also prints the other modes for
+        # reference (ADR 0016, ADR 0021). Raise them when retrieval improves;
+        # lowering them is a decision to record in the PR.
         env:
           HF_HUB_DISABLE_XET: "1"
         run: >-
           uv run python scripts/evaluate_retrieval.py --compare --show-misses
-          --min-hit5 0.97 --min-mrr 0.87
+          --min-hit5 0.955 --min-mrr 0.83
 
   faithfulness-eval:
     name: Faithfulness Judge Gate
@@ -368,15 +368,15 @@ jobs:
       - name: Measure the faithfulness judge against labelled answers
         # The judge is deterministic, so the figures move only when the code,
         # the model or the labels do (ADR 0017). The thresholds sit just under
-        # the measured recall 0.649 (24 of 37 unfaithful answers caught) and
-        # false-flag rate 0.070 (3 of 43 faithful answers flagged): one more
-        # miss or one more false flag passes, two fail. Raise them when the
-        # judge improves; lowering them is a decision to record in the PR.
+        # the measured recall 0.546 (65 of 119 unfaithful answers caught) and
+        # false-flag rate 0.125 (19 of 152 faithful answers flagged): one more
+        # miss or one more false flag passes, two fail (ADR 0021). Raise them
+        # when the judge improves; lowering them is a decision to record in the PR.
         env:
           HF_HUB_DISABLE_XET: "1"
         run: >-
           uv run python scripts/evaluate_faithfulness.py --show-errors
-          --min-recall 0.62 --max-false-flags 0.10
+          --min-recall 0.535 --max-false-flags 0.135
 
   injection-classifier-eval:
     name: Injection Classifier Comparison

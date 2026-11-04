@@ -67,7 +67,7 @@ procedencia SLSA y SBOM.
 
 **[0012](0012-retrieval-quality-is-a-merge-gate.md) — La calidad de recuperación es un control
 del CI.** El CI mide hit@5 y MRR sobre 38 preguntas etiquetadas y falla por debajo de 0,94 y 0,82
-(medido: 0,974 y 0,863). Un cambio en el parser, el chunking o el modelo que empeore la búsqueda no
+(medido: 0,974 y 0,863). Los umbrales actuales, sobre 141 preguntas, están en 0021. Un cambio en el parser, el chunking o el modelo que empeore la búsqueda no
 entra sin que se note.
 
 **[0013](0013-one-worker-per-container.md) — Un worker por contenedor; se escala con réplicas.**
@@ -127,3 +127,16 @@ retrasa ni hace fallar una consulta. Las marcas se cuentan en métricas y se reg
 de la consulta (nunca el texto). El trabajo pendiente tiene límite: lo que no cabe se descarta y
 se cuenta como `busy`. Así se mide, con tráfico real, lo que el corpus de 326 consultas no puede
 decir; activar el bloqueo sería otra decisión, con su propio ADR.
+
+**[0021](0021-larger-evaluation-sets.md) — Conjuntos de evaluación más grandes, y los controles
+del CI recalculados sobre ellos.** La recuperación pasa de 38 a 141 preguntas (56 en inglés,
+clasificadas en directas, parafraseadas y de escenario) y la fidelidad de 80 a 271 respuestas (la
+mitad en inglés). Con la búsqueda híbrida, el hit@5 es 96,5 % y el MRR 0,850. Falla sobre todo en
+las paráfrasis, y BM25 no ayuda nada a las preguntas en inglés sobre un corpus en español. El
+reranker sube el MRR a 0,905, pero en el top 5 que recibe el modelo solo gana 2 preguntas de 141,
+así que sigue siendo opcional. El juez de fidelidad es más débil de lo que mostraban 80 respuestas:
+detecta el 54,6 % de las infieles y marca el 12,5 % de las fieles. 8 de sus 12 falsas alarmas sobre
+respuestas correctas empiezan con un «No,» o «Yes,» suelto. Además, la mitad de las cifras
+equivocadas que no detecta no aparecen en ninguna parte del documento, lo que invalida el argumento
+de 0017 contra una regla de cifras. Los umbrales del CI se fijan justo debajo de lo medido. Las dos
+mejoras quedan como siguientes cambios, cada una con su propia medición.

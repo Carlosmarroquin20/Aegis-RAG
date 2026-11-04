@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 from aegis.domain.models.faithfulness import FaithfulnessAssessment, Inference, SentenceSupport
+from aegis.domain.services.claims import is_abstention
 from aegis.infrastructure.faithfulness.nli_model import TransformersNLIModel
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +37,15 @@ def _load_script() -> ModuleType:
 
 
 ev = _load_script()
+_KINDS = {
+    "supported": "faithful",
+    "supported_with_filler": "faithful",
+    "abstention": "faithful",
+    "wrong_detail": "unfaithful",
+    "contradiction": "unfaithful",
+    "unsupported_addition": "unfaithful",
+    "outside_knowledge": "unfaithful",
+}
 _RECORDS = [
     json.loads(line)
     for line in ev.DEFAULT_ANSWERS.read_text(encoding="utf-8").splitlines()
@@ -106,6 +116,29 @@ class TestDataset:
     def test_both_labels_are_well_represented(self) -> None:
         unfaithful = sum(r["label"] == "unfaithful" for r in _RECORDS)
         assert 0.3 < unfaithful / len(_RECORDS) < 0.7
+
+    def test_every_kind_is_known_and_labelled_as_its_name_says(self) -> None:
+        assert {r["kind"]: r["label"] for r in _RECORDS} == _KINDS
+
+    def test_every_kind_is_measured_in_both_languages(self) -> None:
+        """A kind seen in one language only cannot say whether the judge works in the other."""
+        for kind in _KINDS:
+            assert {r["lang"] for r in _RECORDS if r["kind"] == kind} == {"es", "en"}, kind
+
+    def test_each_language_has_enough_answers_to_read_on_its_own(self) -> None:
+        for lang in ("es", "en"):
+            subset = [r for r in _RECORDS if r["lang"] == lang]
+            assert sum(r["label"] == "unfaithful" for r in subset) >= 40, lang
+            assert sum(r["label"] == "faithful" for r in subset) >= 40, lang
+
+    def test_every_abstention_is_recognised_as_one(self) -> None:
+        """Otherwise the judge would score a refusal's wording instead of skipping it."""
+        for record in _RECORDS:
+            assert is_abstention(record["answer"]) == (record["kind"] == "abstention"), record["id"]
+
+    def test_the_same_answer_is_not_labelled_twice(self) -> None:
+        pairs = [(r["question"], r["answer"]) for r in _RECORDS]
+        assert len(pairs) == len(set(pairs))
 
     def test_an_invalid_label_is_refused(self, tmp_path: Path) -> None:
         path = tmp_path / "answers.jsonl"
