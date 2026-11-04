@@ -23,7 +23,7 @@ services:
       # The model is baked into the image and loaded offline, so the build and
       # the container must name the same one.
       args:
-        EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+        EMBEDDING_MODEL: ${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
         # Baked only when set: needed for the rerank retrieval modes. See .env.example.
         RERANKER_MODEL: ${RERANKER_MODEL:-}
         # Baked only when set: needed for FAITHFULNESS_CHECK=true. See .env.example.
@@ -40,7 +40,7 @@ services:
       - SECURITY_STRICT_MODE=true
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
       # Retrieval stages (dense | hybrid | dense+rerank | hybrid+rerank); see .env.example.
       - RETRIEVAL_MODE=${RETRIEVAL_MODE:-hybrid}
       - RERANKER_MODEL=${RERANKER_MODEL:-cross-encoder/mmarco-mMiniLMv2-L12-H384-v1}

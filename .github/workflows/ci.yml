@@ -337,28 +337,6 @@ jobs:
           uv run python scripts/evaluate_retrieval.py --compare --show-misses
           --min-hit5 0.955 --min-mrr 0.83
 
-      # TEMPORARY (measurement for the next ADR, removed before merge).
-      - name: "Measure: embedding models, hybrid"
-        if: always()
-        env:
-          HF_HUB_DISABLE_XET: "1"
-        run: uv run python scripts/evaluate_retrieval.py --mode hybrid --show-misses --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 --model sentence-transformers/paraphrase-multilingual-mpnet-base-v2 --model intfloat/multilingual-e5-small --model intfloat/multilingual-e5-base --model BAAI/bge-m3
-
-      - name: "Measure: embedding models, dense"
-        if: always()
-        env:
-          HF_HUB_DISABLE_XET: "1"
-        run: uv run python scripts/evaluate_retrieval.py --mode dense --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 --model sentence-transformers/paraphrase-multilingual-mpnet-base-v2 --model intfloat/multilingual-e5-small --model intfloat/multilingual-e5-base --model BAAI/bge-m3
-
-      - name: "Measure: chunk sizes, hybrid"
-        if: always()
-        env:
-          HF_HUB_DISABLE_XET: "1"
-        run: |
-          for size in 256 384 768 1024; do
-            uv run python scripts/evaluate_retrieval.py --mode hybrid --chunk-size "$size"
-          done
-
   faithfulness-eval:
     name: Faithfulness Judge Gate
     runs-on: ubuntu-latest
