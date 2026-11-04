@@ -11,6 +11,14 @@ told to answer in plain text but may still list items. A fragment too short to
 be checked on its own ("Sí.", "Efectivo.") is joined to the next claim, or to
 the previous one at the end, since it means nothing without its neighbour.
 
+Two further helpers cover what NLI models get wrong (ADR 0022). A leading
+reply word ("No, the stores are closed...") answers the question, which the
+judge never sees, and a model reads it as negating the rest of the sentence, so
+``strip_reply_word`` drops it before judging. A figure a claim states that
+appears nowhere in the context is invented, however fluent the sentence around
+it, so ``ungrounded_figures`` names them for the judge to count against the
+claim.
+
 Pure functions, no I/O: they run identically in the API and in the offline
 evaluation.
 """
@@ -19,6 +27,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
+from decimal import Decimal, InvalidOperation
 
 # End of sentence: terminal punctuation (optionally closed by a quote or a
 # parenthesis), whitespace, then what can start a sentence in Spanish or English.
@@ -40,6 +50,44 @@ _ABSTENTION_MARKERS = (
     "does not contain sufficient information",
     "not enough information to answer",
 )
+
+
+# A word that answers a yes/no question before the claim itself, with its
+# punctuation: "Sí, ...", "No. ...", "Yes, ...". "No hay entregas" is a negation,
+# not a reply, and keeps its "No" because no punctuation follows it.
+_REPLY_WORD = re.compile(r"^\s*(?:s[ií]|no|yes)\s*[,.;:!]\s+", re.IGNORECASE)
+
+# A figure: digits, with the separators that join them in a price, a decimal or
+# a time ("Q1,000", "0.10", "1.5", "20:00").
+_FIGURE = re.compile(r"\d+(?:[.,:]\d+)*")
+_TIME = re.compile(r"^(\d{1,2}):(\d{2})$")
+_THOUSANDS = re.compile(r"^\d{1,3}(?:[.,]\d{3})+$")
+# Figures the context may spell out. Only the context's words count: a claim is
+# checked on the figures it writes as digits, so "dos referencias" in the
+# context grounds a claim's "2 references", while a claim's "five years" is left
+# to the NLI model. "un"/"una"/"a" are left out, being articles far more often.
+_NUMBER_WORDS = {
+    **dict.fromkeys(("cero", "zero"), "0"),
+    **dict.fromkeys(("uno", "one"), "1"),
+    **dict.fromkeys(("dos", "two"), "2"),
+    **dict.fromkeys(("tres", "three"), "3"),
+    **dict.fromkeys(("cuatro", "four"), "4"),
+    **dict.fromkeys(("cinco", "five"), "5"),
+    **dict.fromkeys(("seis", "six"), "6"),
+    **dict.fromkeys(("siete", "seven"), "7"),
+    **dict.fromkeys(("ocho", "eight"), "8"),
+    **dict.fromkeys(("nueve", "nine"), "9"),
+    **dict.fromkeys(("diez", "ten"), "10"),
+    **dict.fromkeys(("once", "eleven"), "11"),
+    **dict.fromkeys(("doce", "twelve"), "12"),
+    **dict.fromkeys(("quince", "fifteen"), "15"),
+    **dict.fromkeys(("veinte", "twenty"), "20"),
+    **dict.fromkeys(("treinta", "thirty"), "30"),
+    **dict.fromkeys(("cuarenta", "forty"), "40"),
+    **dict.fromkeys(("cincuenta", "fifty"), "50"),
+    **dict.fromkeys(("cien", "ciento", "hundred"), "100"),
+    **dict.fromkeys(("mil", "thousand"), "1000"),
+}
 
 
 def split_claims(text: str) -> list[str]:
@@ -111,3 +159,62 @@ def is_abstention(text: str) -> bool:
     """
     folded = _fold(text)
     return any(marker in folded for marker in _ABSTENTION_MARKERS) and len(split_claims(text)) <= 2
+
+
+def strip_reply_word(claim: str) -> str:
+    """
+    ``claim`` without a leading yes or no that answers the question. Kept as it
+    is when nothing worth judging would be left.
+    """
+    stripped = _REPLY_WORD.sub("", claim, count=1)
+    if stripped == claim or len(_WORD.findall(stripped)) < MIN_CLAIM_WORDS:
+        return claim
+    return stripped[:1].upper() + stripped[1:]
+
+
+def _readings(figure: str) -> set[str]:
+    """
+    The value a written figure means, canonical, so the same value written two
+    ways matches: "1,000" and "1.000" are a thousand (a separator followed by
+    exactly three digits groups thousands in either convention), "0.10" and
+    "0,1" are a tenth, and a time keeps its form. Empty for what is not a value.
+    """
+    time = _TIME.match(figure)
+    if time:
+        return {f"{int(time.group(1))}:{time.group(2)}"}
+    if _THOUSANDS.match(figure):
+        candidate = figure.replace(",", "").replace(".", "")
+    else:
+        candidate = figure.replace(",", ".")
+    try:
+        value = Decimal(candidate)
+    except InvalidOperation:
+        return set()
+    return {format(value.normalize(), "f")}
+
+
+def grounding_figures(texts: Iterable[str]) -> frozenset[str]:
+    """
+    Every figure the texts state, in every reading, for ``ungrounded_figures``
+    to check claims against: digits, spelled-out numbers, and each time also as
+    its hour and on a 12-hour clock ("20:00" grounds "20", "8:00" and "8").
+    """
+    grounded: set[str] = set()
+    for text in texts:
+        for figure in _FIGURE.findall(text):
+            grounded.update(_readings(figure))
+            time = _TIME.match(figure)
+            if time:
+                hours, minutes = int(time.group(1)), time.group(2)
+                grounded.add(str(hours))
+                if hours > 12:
+                    grounded.update({f"{hours - 12}:{minutes}", str(hours - 12)})
+        for word in _WORD.findall(_fold(text)):
+            if word in _NUMBER_WORDS:
+                grounded.add(_NUMBER_WORDS[word])
+    return frozenset(grounded)
+
+
+def ungrounded_figures(claim: str, grounded: frozenset[str]) -> list[str]:
+    """The figures ``claim`` writes as digits that no reading of ``grounded`` matches."""
+    return [figure for figure in _FIGURE.findall(claim) if not _readings(figure) & grounded]

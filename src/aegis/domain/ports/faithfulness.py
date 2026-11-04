@@ -31,5 +31,11 @@ class FaithfulnessJudgePort(ABC):
     """Judges whether an answer is supported by the context it was generated from."""
 
     @abstractmethod
-    async def assess(self, answer: str, context: list[Document]) -> FaithfulnessAssessment:
-        """Splits ``answer`` into claims and reports the support each finds in ``context``."""
+    async def assess(
+        self, answer: str, context: list[Document], *, question: str = ""
+    ) -> FaithfulnessAssessment:
+        """
+        Splits ``answer`` into claims and reports the support each finds in
+        ``context``. ``question`` is what the user asked: what it states (a
+        figure the user gave) is not something the answer invented.
+        """

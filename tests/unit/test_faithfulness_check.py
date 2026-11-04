@@ -31,14 +31,20 @@ class _FixedJudge(FaithfulnessJudgePort):
     def __init__(self, assessment: FaithfulnessAssessment) -> None:
         self.assessment = assessment
         self.calls: list[tuple[str, list[str]]] = []
+        self.questions: list[str] = []
 
-    async def assess(self, answer: str, context: list[Document]) -> FaithfulnessAssessment:
+    async def assess(
+        self, answer: str, context: list[Document], *, question: str = ""
+    ) -> FaithfulnessAssessment:
         self.calls.append((answer, [d.id for d in context]))
+        self.questions.append(question)
         return self.assessment
 
 
 class _BrokenJudge(FaithfulnessJudgePort):
-    async def assess(self, answer: str, context: list[Document]) -> FaithfulnessAssessment:
+    async def assess(
+        self, answer: str, context: list[Document], *, question: str = ""
+    ) -> FaithfulnessAssessment:
         raise RuntimeError("model crashed")
 
 
@@ -83,6 +89,14 @@ class TestQueryPipeline:
         assert response.faithfulness.score == 0.5
         assert response.faithfulness.unsupported == ["La tienda paga el flete."]
         assert response.faithfulness.abstained is False
+
+    async def test_the_judge_is_told_the_question(self) -> None:
+        """Figures the user gave are not inventions of the answer (ADR 0022)."""
+        judge = _FixedJudge(_PARTLY_SUPPORTED)
+
+        await _use_case(judge).execute(QueryRequest(query=_QUERY))
+
+        assert judge.questions == [_QUERY]
 
     async def test_the_sanitized_answer_is_what_gets_judged(self) -> None:
         judge = _FixedJudge(_PARTLY_SUPPORTED)

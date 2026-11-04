@@ -194,6 +194,72 @@ class TestAssess:
             NLIFaithfulnessJudge(_StubNLI(), threshold=threshold)
 
 
+class TestReplyWords:
+    async def test_a_leading_reply_word_is_not_sent_to_the_model(self) -> None:
+        model = _StubNLI()
+
+        result = await NLIFaithfulnessJudge(model).assess(
+            "No, las plantas no se devuelven.", _CONTEXT
+        )
+
+        assert {claim for _, claim in model.calls[0]} == {"Las plantas no se devuelven."}
+        assert result.sentences[0].text == "No, las plantas no se devuelven."
+
+    async def test_it_can_be_kept_for_comparison(self) -> None:
+        model = _StubNLI()
+
+        await NLIFaithfulnessJudge(model, strip_reply_words=False).assess(
+            "No, las plantas no se devuelven.", _CONTEXT
+        )
+
+        assert {claim for _, claim in model.calls[0]} == {"No, las plantas no se devuelven."}
+
+
+class _AlwaysEntails(EntailmentModelPort):
+    """The NLI blind spot for figures, at its worst: everything is entailed."""
+
+    async def infer(self, pairs: list[tuple[str, str]]) -> list[Inference]:
+        return [Inference(0.99, 0.0) for _ in pairs]
+
+
+class TestFigureCheck:
+    async def test_a_figure_absent_from_the_context_makes_a_claim_unsupported(self) -> None:
+        result = await NLIFaithfulnessJudge(_AlwaysEntails()).assess(
+            "Para colchones el plazo es de 60 días.", _CONTEXT
+        )
+
+        sentence = result.sentences[0]
+        assert not sentence.supported
+        assert sentence.ungrounded_figures == ("60",)
+        assert sentence.support == pytest.approx(0.99)
+        assert result.unsupported == ("Para colchones el plazo es de 60 días.",)
+
+    async def test_only_the_claim_with_the_invented_figure_is_named(self) -> None:
+        result = await NLIFaithfulnessJudge(_AlwaysEntails()).assess(
+            "Para colchones el plazo es de 15 días. La recolección cuesta Q99.", _CONTEXT
+        )
+
+        assert [s.supported for s in result.sentences] == [True, False]
+        assert result.score == 0.5
+
+    async def test_a_figure_from_the_question_is_not_invented(self) -> None:
+        result = await NLIFaithfulnessJudge(_AlwaysEntails()).assess(
+            "Su pedido de Q300 tiene 15 días de plazo.",
+            _CONTEXT,
+            question="Compré algo de Q300, ¿cuánto plazo tengo?",
+        )
+
+        assert result.fully_supported
+
+    async def test_it_can_be_switched_off_for_comparison(self) -> None:
+        result = await NLIFaithfulnessJudge(_AlwaysEntails(), figure_check=False).assess(
+            "Para colchones el plazo es de 60 días.", _CONTEXT
+        )
+
+        assert result.fully_supported
+        assert result.sentences[0].ungrounded_figures == ()
+
+
 class TestAssessment:
     def test_score_is_the_share_of_supported_claims(self) -> None:
         assessment = FaithfulnessAssessment(

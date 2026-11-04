@@ -167,7 +167,10 @@ async def judge_labelled(
     for chunk in chunks:
         by_source[chunk.metadata.get("source", "")].append(chunk)
     return [
-        Outcome(item, await judge.assess(item.answer, by_source[item.source])) for item in answers
+        Outcome(
+            item, await judge.assess(item.answer, by_source[item.source], question=item.question)
+        )
+        for item in answers
     ]
 
 
@@ -199,7 +202,12 @@ def _report(outcomes: Sequence[Outcome], *, show_errors: bool) -> None:
             )
             for sentence in outcome.assessment.sentences:
                 mark = "ok" if sentence.supported else "--"
-                print(f"        {mark} {sentence.support:.2f}  {sentence.text}")
+                invented = (
+                    f"  [figures not in the context: {', '.join(sentence.ungrounded_figures)}]"
+                    if sentence.ungrounded_figures
+                    else ""
+                )
+                print(f"        {mark} {sentence.support:.2f}  {sentence.text}{invented}")
 
 
 async def _live(settings: Settings, store: MemoryStore, questions_path: Path) -> list[float]:
@@ -276,6 +284,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="support is entailment alone, not entailment minus contradiction",
     )
+    parser.add_argument(
+        "--keep-reply-words",
+        action="store_true",
+        help='judge a leading "Yes,"/"No," as part of the claim instead of dropping it',
+    )
+    parser.add_argument(
+        "--no-figure-check",
+        action="store_true",
+        help="do not count a figure absent from the context against a claim",
+    )
     parser.add_argument("--answers", type=Path, default=DEFAULT_ANSWERS)
     parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
     parser.add_argument("--show-errors", action="store_true", help="list every misjudged answer")
@@ -315,7 +333,9 @@ def _main_labelled(
         f"{len(answers)} labelled answers over {args.corpus.name} "
         f"({len(store.chunks)} chunks), threshold {settings.faithfulness_threshold}, "
         f"{args.granularity} premises, "
-        f"{'entailment only' if args.no_contradiction else 'entailment minus contradiction'}"
+        f"{'entailment only' if args.no_contradiction else 'entailment minus contradiction'}, "
+        f"reply words {'kept' if args.keep_reply_words else 'dropped'}, "
+        f"figure check {'off' if args.no_figure_check else 'on'}"
     )
     failed = False
     gated = settings.faithfulness_model
@@ -325,6 +345,8 @@ def _main_labelled(
             threshold=settings.faithfulness_threshold,
             granularity=args.granularity,
             contradiction_aware=not args.no_contradiction,
+            strip_reply_words=not args.keep_reply_words,
+            figure_check=not args.no_figure_check,
         )
         started = time.perf_counter()
         try:

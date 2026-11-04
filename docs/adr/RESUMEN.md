@@ -140,3 +140,13 @@ respuestas correctas empiezan con un «No,» o «Yes,» suelto. Además, la mita
 equivocadas que no detecta no aparecen en ninguna parte del documento, lo que invalida el argumento
 de 0017 contra una regla de cifras. Los umbrales del CI se fijan justo debajo de lo medido. Las dos
 mejoras quedan como siguientes cambios, cada una con su propia medición.
+
+**[0022](0022-faithfulness-reply-words-and-figure-check.md) — El juez de fidelidad quita las
+palabras de respuesta y comprueba las cifras contra el contexto.** Antes de juzgar se quita un
+«Sí,», «No,» o «Yes,» inicial, que solo responde a la pregunta (el juez no la ve), y la frase se
+sigue mostrando tal cual. Si una frase da una cifra que no aparece ni en el contexto ni en la
+pregunta, se marca como no respaldada y se nombra la cifra. La misma cifra en otro formato cuenta
+como la misma: «Q1.000» y «Q1,000», «8 pm» y «20:00», «dos» y «2». Sobre 271 respuestas, el juez
+pasa de detectar el 54,6 % de las infieles al 67,2 %, y de marcar por error el 12,5 % de las fieles
+al 7,9 %. En inglés la detección sube del 47,5 % al 65,6 %. Ahora su punto débil son las
+contradicciones que reutilizan las palabras y cifras del propio documento: detecta 19 de 35.

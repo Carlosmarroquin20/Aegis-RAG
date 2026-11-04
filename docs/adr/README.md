@@ -30,6 +30,7 @@ supersedes the old one, so the history of *why* stays intact.
 | [0019](0019-ml-injection-classifier-measured-not-enabled.md) | An ML injection classifier is measured, not enabled | Accepted |
 | [0020](0020-injection-classifier-in-shadow-mode.md) | Run the injection classifier in shadow mode, never blocking | Accepted |
 | [0021](0021-larger-evaluation-sets.md) | Larger evaluation sets, and the gates re-set on them | Accepted |
+| [0022](0022-faithfulness-reply-words-and-figure-check.md) | The faithfulness judge drops reply words and checks figures against the context | Accepted |
 
 The first three were made when the system was designed and are recorded here retrospectively;
 the rest were recorded as they were decided: 0004 to 0008 during the security hardening pass,
@@ -37,8 +38,9 @@ the rest were recorded as they were decided: 0004 to 0008 during the security ha
 0015 records the embedding-model change of release 1.1.0 after the fact, 0016 the move to
 hybrid retrieval, 0017 how answers are checked against their context, 0018 how answers
 stream without giving up the output guard, 0019 why an ML injection classifier was measured
-but not enabled, 0020 how it runs on real traffic without blocking anything, and 0021 what the
-larger evaluation sets showed and how the quality gates were re-set on them. A summary of all of
+but not enabled, 0020 how it runs on real traffic without blocking anything, 0021 what the
+larger evaluation sets showed and how the quality gates were re-set on them, and 0022 the two
+corrections to the faithfulness judge that came out of it. A summary of all of
 them in Spanish is in [RESUMEN.md](RESUMEN.md).
 For what the system defends against and where it stops, see the
 [threat model](../THREAT_MODEL.md).

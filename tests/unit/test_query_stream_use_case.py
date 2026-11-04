@@ -57,9 +57,13 @@ class _Streaming(FakeLLMClient):
 class _Judge(FaithfulnessJudgePort):
     def __init__(self) -> None:
         self.answers: list[str] = []
+        self.questions: list[str] = []
 
-    async def assess(self, answer: str, context: list[Document]) -> FaithfulnessAssessment:
+    async def assess(
+        self, answer: str, context: list[Document], *, question: str = ""
+    ) -> FaithfulnessAssessment:
         self.answers.append(answer)
+        self.questions.append(question)
         return FaithfulnessAssessment(sentences=(SentenceSupport(answer, 0.9, True),))
 
 
@@ -128,6 +132,7 @@ class TestTheStream:
         end = (await _drain(stream.events))[-1]
 
         assert judge.answers == [_ANSWER]
+        assert judge.questions == [_QUERY.query]
         assert end.faithfulness is not None and end.faithfulness.score == 1.0
 
     async def test_the_tenant_is_charged_for_the_streamed_tokens(self) -> None:

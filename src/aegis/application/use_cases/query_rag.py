@@ -160,7 +160,9 @@ class QueryRAGUseCase:
                 pii_types=sanitized.pii_types_detected,
             )
 
-        faithfulness = await self._judge_faithfulness(sanitized.text, documents, query_hash)
+        faithfulness = await self._judge_faithfulness(
+            sanitized.text, documents, query_hash, question=prepared.query
+        )
 
         return QueryResponse(
             answer=sanitized.text,
@@ -244,7 +246,7 @@ class QueryRAGUseCase:
             )
 
         faithfulness = await self._judge_faithfulness(
-            final.text, prepared.documents, prepared.query_hash
+            final.text, prepared.documents, prepared.query_hash, question=prepared.query
         )
         yield StreamEnd(answer=final.text, truncated=final.was_truncated, faithfulness=faithfulness)
 
@@ -320,7 +322,7 @@ class QueryRAGUseCase:
             await self._charge(prepared.tenant, generation.usage.total_tokens)
 
     async def _judge_faithfulness(
-        self, answer: str, documents: list[Document], query_hash: str
+        self, answer: str, documents: list[Document], query_hash: str, *, question: str
     ) -> FaithfulnessReport | None:
         """
         Scores the answer against the chunks it was generated from. A monitoring
@@ -333,7 +335,7 @@ class QueryRAGUseCase:
         log = logger.bind(query_hash=query_hash[:16])
         with tracer.start_as_current_span("output.faithfulness") as span:
             try:
-                assessment = await self._judge.assess(answer, documents)
+                assessment = await self._judge.assess(answer, documents, question=question)
             except Exception as exc:
                 self._metrics.faithfulness_check_failed()
                 log.error("use_case.faithfulness_check_failed", error=repr(exc))
