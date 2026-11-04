@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -110,6 +111,13 @@ class TestRanking:
             "hit@5 0.500 is below the required 0.600",
             "MRR 0.500 is below the required 0.600",
         ]
+
+
+def _chunk_count(out: str) -> int:
+    """The chunk count the script reports; other output (ingestion logs) may surround it."""
+    found = re.search(r"^(\d+) chunks from", out, re.MULTILINE)
+    assert found, out
+    return int(found.group(1))
 
 
 class _RecordingEncoder:
@@ -217,8 +225,8 @@ class TestEndToEnd:
         )
 
         assert ev.main(["--mode", "dense", "--chunk-size", "256", "--overlap", "32"]) == 0
-        small = int(capsys.readouterr().out.split(" chunks")[0])
+        small = _chunk_count(capsys.readouterr().out)
         assert ev.main(["--mode", "dense", "--chunk-size", "1024"]) == 0
-        large = int(capsys.readouterr().out.split(" chunks")[0])
+        large = _chunk_count(capsys.readouterr().out)
 
         assert small > large
