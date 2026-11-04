@@ -119,10 +119,25 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Changed
 
-- The CI quality gates are re-set on the larger evaluation sets: retrieval at hit@5 0.955 and MRR
-  0.83, faithfulness at recall 0.535 and a 0.135 false-flag rate. These are new measurements, not
-  regressions. On 141 questions hybrid retrieval measures hit@5 96.5% and MRR 0.850. On 271 answers
-  the judge catches 54.6% of unfaithful answers and flags 12.5% of faithful ones.
+- **Breaking for existing collections: the default embedding model is now
+  `intfloat/multilingual-e5-small`** (was `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
+  See [ADR 0023](docs/adr/0023-multilingual-e5-embeddings.md).
+  - **Gain:** on the 141 labelled questions it raises MRR from 0.850 to 0.882 at the same size and
+    speed. Chunks and searches are embedded with the `passage: ` / `query: ` markers E5 was
+    trained with.
+  - **Upgrading:** the API refuses to start on a collection built with the previous model. Either
+    set `EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` to keep it,
+    or re-ingest your documents into a new collection (`CHROMA_COLLECTION`).
+  - **Best retrieval:** for the best measured results (hit@5 100%, MRR 0.957), set
+    `EMBEDDING_MODEL=BAAI/bge-m3` and `RETRIEVAL_MODE=dense`. This costs about 1.8 GB more image and
+    ~180 ms per query on CPU.
+  - **CI gate:** retrieval now needs hit@5 0.96 and MRR 0.86.
+- `scripts/evaluate_retrieval.py` gains `--chunk-size` and `--overlap`, and embeds with the
+  markers the model expects.
+- The CI quality gates were first re-set on the larger evaluation sets
+  ([ADR 0021](docs/adr/0021-larger-evaluation-sets.md)), as new measurements rather than
+  regressions. The judge corrections and the embedding change above then raised them to their
+  current values.
 - `/ready` checks every tenant's collection, and is degraded if any of them is unreachable.
 - `scripts/evaluate_retrieval.py` retrieves through the application's own retrieval stages and
   gates the configured mode; `--compare` prints every mode side by side. The CI gate rises to

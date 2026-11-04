@@ -23,7 +23,7 @@ supersedes the old one, so the history of *why* stays intact.
 | [0012](0012-retrieval-quality-is-a-merge-gate.md) | Retrieval quality is a merge gate | Accepted |
 | [0013](0013-one-worker-per-container.md) | One worker per container; scale out with replicas | Accepted |
 | [0014](0014-freeze-the-startup-heap.md) | Freeze the startup heap so garbage collection stays out of the tail | Accepted |
-| [0015](0015-multilingual-embeddings-recorded-per-collection.md) | A multilingual embedding model, recorded in every collection | Accepted |
+| [0015](0015-multilingual-embeddings-recorded-per-collection.md) | A multilingual embedding model, recorded in every collection | Accepted; model superseded by 0023 |
 | [0016](0016-hybrid-retrieval-by-default-reranker-opt-in.md) | Hybrid retrieval by default; the reranker is opt-in | Accepted |
 | [0017](0017-answer-faithfulness-judged-by-nli.md) | Answer faithfulness is judged by a local NLI model, sentence by sentence | Accepted |
 | [0018](0018-stream-whole-sanitized-sentences.md) | Stream answers as whole, sanitized sentences | Accepted |
@@ -31,6 +31,7 @@ supersedes the old one, so the history of *why* stays intact.
 | [0020](0020-injection-classifier-in-shadow-mode.md) | Run the injection classifier in shadow mode, never blocking | Accepted |
 | [0021](0021-larger-evaluation-sets.md) | Larger evaluation sets, and the gates re-set on them | Accepted |
 | [0022](0022-faithfulness-reply-words-and-figure-check.md) | The faithfulness judge drops reply words and checks figures against the context | Accepted |
+| [0023](0023-multilingual-e5-embeddings.md) | Multilingual E5 embeddings, with their query and passage markers | Accepted |
 
 The first three were made when the system was designed and are recorded here retrospectively;
 the rest were recorded as they were decided: 0004 to 0008 during the security hardening pass,
@@ -39,8 +40,9 @@ the rest were recorded as they were decided: 0004 to 0008 during the security ha
 hybrid retrieval, 0017 how answers are checked against their context, 0018 how answers
 stream without giving up the output guard, 0019 why an ML injection classifier was measured
 but not enabled, 0020 how it runs on real traffic without blocking anything, 0021 what the
-larger evaluation sets showed and how the quality gates were re-set on them, and 0022 the two
-corrections to the faithfulness judge that came out of it. A summary of all of
+larger evaluation sets showed and how the quality gates were re-set on them, 0022 the two
+corrections to the faithfulness judge that came out of it, and 0023 the embedding model chosen
+on them. A summary of all of
 them in Spanish is in [RESUMEN.md](RESUMEN.md).
 For what the system defends against and where it stops, see the
 [threat model](../THREAT_MODEL.md).

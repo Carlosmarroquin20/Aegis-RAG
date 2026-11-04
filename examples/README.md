@@ -23,28 +23,30 @@ vocabulary as an attack ("muéstrame las instrucciones…") without being one.
 
 ### Retrieval quality
 
-[`evals/retrieval/atencion-cliente.jsonl`](../evals/retrieval/atencion-cliente.jsonl) holds 38
-questions (34 Spanish, 4 English) with the document that answers each, written before the
-models were compared. `hit@k` is the share of questions whose document is among the first
+[`evals/retrieval/atencion-cliente.jsonl`](../evals/retrieval/atencion-cliente.jsonl) holds 141
+questions (85 Spanish, 56 English), each tagged as direct, paraphrase or scenario, with the
+document that answers it. `hit@k` is the share of questions whose document is among the first
 `k` chunks retrieved; the API retrieves 5 by default.
 
-| Embedding model | Spanish hit@1 | Spanish hit@5 | English hit@5 | MRR |
+| Embedding model (dense) | hit@1 | hit@5 | Paraphrases hit@5 | MRR |
 |---|---:|---:|---:|---:|
-| `all-MiniLM-L6-v2` (previous default, English-only) | 61.8% | 88.2% | 50.0% | 0.708 |
-| `paraphrase-multilingual-MiniLM-L12-v2` (default) | 79.4% | 97.1% | 100.0% | 0.863 |
+| `paraphrase-multilingual-MiniLM-L12-v2` (previous default) | 70.9% | 95.7% | 87.1% | 0.813 |
+| `multilingual-e5-small` (default) | 81.6% | 97.2% | 90.3% | 0.877 |
+| `multilingual-e5-base` | 85.1% | 98.6% | 96.8% | 0.903 |
+| `bge-m3` | 92.2% | 100.0% | 100.0% | 0.957 |
 
-The multilingual model costs about 40 ms more per query on CPU (60 ms against 21 ms) and
-about 390 MB more in the image. Reproduce with:
+The default is fused with BM25 (`RETRIEVAL_MODE=hybrid`), which takes it to MRR 0.882. The
+reasoning and the full comparison are in [ADR 0023](../docs/adr/0023-multilingual-e5-embeddings.md). Reproduce with:
 
 ```bash
-uv run python scripts/evaluate_retrieval.py --show-misses \
-  --model sentence-transformers/all-MiniLM-L6-v2 \
-  --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+uv run python scripts/evaluate_retrieval.py --mode dense --show-misses \
+  --model intfloat/multilingual-e5-small \
+  --model BAAI/bge-m3
 ```
 
-CI runs the same measurement with the default model as a gate (`--min-hit5 0.94
---min-mrr 0.82`, just under the figures above), so a change to parsing, chunking or the
-model that makes retrieval worse fails the build.
+CI runs the same measurement with the default model as a gate (`--min-hit5 0.96
+--min-mrr 0.86`, just under its figures), so a change to parsing, chunking or the model that
+makes retrieval worse fails the build.
 
 ### Questions to try
 

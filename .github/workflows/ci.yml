@@ -326,16 +326,16 @@ jobs:
 
       - name: Measure retrieval against the example corpus
         # The thresholds apply to the configured RETRIEVAL_MODE (hybrid) and sit
-        # just under its measured hit@5 0.965 (136 of 141 questions) and MRR 0.850:
-        # one more miss still passes, two fail, and so does a ranking that drifts
-        # down without losing a hit. --compare also prints the other modes for
-        # reference (ADR 0016, ADR 0021). Raise them when retrieval improves;
-        # lowering them is a decision to record in the PR.
+        # just under its measured hit@5 0.972 (137 of 141 questions) and MRR 0.882
+        # with multilingual-e5-small: one more miss still passes, two fail, and so
+        # does a ranking that drifts down without losing a hit. --compare also
+        # prints the other modes for reference (ADRs 0016, 0021, 0023). Raise them
+        # when retrieval improves; lowering them is a decision to record in the PR.
         env:
           HF_HUB_DISABLE_XET: "1"
         run: >-
           uv run python scripts/evaluate_retrieval.py --compare --show-misses
-          --min-hit5 0.955 --min-mrr 0.83
+          --min-hit5 0.96 --min-mrr 0.86
 
   faithfulness-eval:
     name: Faithfulness Judge Gate
