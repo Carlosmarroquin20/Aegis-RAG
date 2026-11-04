@@ -549,6 +549,349 @@
         }
       },
       "options": { "showValue": "never", "mergeValues": true }
+    },
+    {
+      "type": "row",
+      "title": "Streaming (POST /api/v1/query/stream)",
+      "id": 104,
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 60 },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Time to first text, p95 (1h)",
+      "id": 20,
+      "description": "From a streamed query's arrival to its first sanitized sentence. Includes retrieval and the 80-character margin the output guard holds back (ADR 0018).",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 61 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aegis_stream_first_delta_seconds_bucket[1h])))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 2 } },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Streams completed (1h)",
+      "id": 21,
+      "description": "Share of streamed answers that reached their end event.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 61 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_streams_total{outcome=\"completed\"}[1h])) / clamp_min(sum(increase(aegis_streams_total[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.9 },
+              { "color": "green", "value": 0.98 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Streams blocked mid-answer (24h)",
+      "id": 22,
+      "description": "The output guard ended a stream after text had been sent: a reflected injection in a later sentence. The client was told to discard the answer.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 61 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_streams_total{outcome=\"blocked\"}[24h])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Streams abandoned (1h)",
+      "id": 23,
+      "description": "The client went away before the end; the LLM request was closed and its tokens not charged to the tenant.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 61 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_streams_total{outcome=\"disconnected\"}[1h])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Time to first text (p50 / p95 / p99)",
+      "id": 24,
+      "description": "Latency a user waits before the answer starts to appear.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 65 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(aegis_stream_first_delta_seconds_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aegis_stream_first_delta_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(aegis_stream_first_delta_seconds_bucket[5m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 15 }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Streams by outcome",
+      "id": 25,
+      "description": "completed, blocked (output guard), failed (model error mid-answer), disconnected (client left).",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 65 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(aegis_streams_total[5m]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 15 }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Answer faithfulness (FAITHFULNESS_CHECK)",
+      "id": 105,
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 73 },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Unsupported answers (1h)",
+      "id": 26,
+      "description": "Share of scored answers with at least one sentence the retrieved context does not support. AegisUnsupportedAnswersHigh fires above 25% for 15 minutes. The judge catches about two thirds of unfaithful answers (ADR 0017).",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 74 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_answers_judged_total{outcome=\"unsupported\"}[1h])) / clamp_min(sum(increase(aegis_answers_judged_total{outcome=~\"supported|unsupported\"}[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.15 },
+              { "color": "red", "value": 0.25 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Mean faithfulness (1h)",
+      "id": 27,
+      "description": "Average share of an answer's sentences supported by its context; abstentions are not scored.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 74 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_answer_faithfulness_sum[1h])) / clamp_min(sum(increase(aegis_answer_faithfulness_count[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.8 },
+              { "color": "green", "value": 0.9 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Abstentions (1h)",
+      "id": 28,
+      "description": "Share of judged answers that declined for lack of context. A rise usually means retrieval is missing the right documents.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 74 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_answers_judged_total{outcome=\"abstained\"}[1h])) / clamp_min(sum(increase(aegis_answers_judged_total[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1 } },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Judge failures (24h)",
+      "id": 29,
+      "description": "Answers served without a faithfulness score because the NLI judge failed.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 74 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_faithfulness_errors_total[24h])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Answers judged by outcome",
+      "id": 30,
+      "description": "supported, unsupported (at least one sentence without support) and abstained.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 78 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(aegis_answers_judged_total[5m]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 15 }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Faithfulness score distribution (24h)",
+      "id": 31,
+      "description": "How many scored answers fell at or below each faithfulness score: le=1 is every answer, le=0.99 those with any unsupported sentence.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 78 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (le) (increase(aegis_answer_faithfulness_bucket[24h]))",
+          "legendFormat": "≤ {{le}}",
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
     }
   ],
   "refresh": "15s",
