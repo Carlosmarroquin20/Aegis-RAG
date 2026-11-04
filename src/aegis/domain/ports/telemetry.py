@@ -52,3 +52,11 @@ class QueryMetricsPort(ABC):
     @abstractmethod
     def faithfulness_check_failed(self) -> None:
         """The faithfulness judge failed; the answer was served without a score."""
+
+    @abstractmethod
+    def injection_shadow_scored(self, score: float, *, flagged: bool) -> None:
+        """The shadow classifier scored a query the gateway allowed."""
+
+    @abstractmethod
+    def injection_shadow_skipped(self, reason: str) -> None:
+        """A query went unscored by the shadow classifier: ``busy`` or ``error``."""

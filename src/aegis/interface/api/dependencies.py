@@ -19,6 +19,7 @@ from starlette.requests import Request
 
 from aegis.application.services.faithfulness import NLIFaithfulnessJudge
 from aegis.application.services.retrieval import Retriever
+from aegis.application.services.shadow_injection import ShadowInjectionMonitor
 from aegis.application.use_cases.ingest_documents import IngestDocumentsUseCase
 from aegis.application.use_cases.query_rag import QueryRAGUseCase
 from aegis.config import get_settings
@@ -36,6 +37,7 @@ from aegis.infrastructure.observability.metrics import LLMPricing, PrometheusQue
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.retrieval.bm25 import StoreBackedLexicalIndex
 from aegis.infrastructure.retrieval.cross_encoder import CrossEncoderReranker
+from aegis.infrastructure.security.injection_classifier import TransformersInjectionClassifier
 from aegis.infrastructure.security.output_sanitizer import OutputSanitizer
 from aegis.infrastructure.security.rate_limiter import (
     InMemoryRateLimitStore,
@@ -295,6 +297,35 @@ def get_faithfulness_judge() -> FaithfulnessJudgePort | None:
     return NLIFaithfulnessJudge(model, threshold=get_settings().faithfulness_threshold)
 
 
+@lru_cache(maxsize=1)
+def get_injection_classifier() -> TransformersInjectionClassifier | None:
+    """The shadow-mode classifier's model, shared by every tenant. None when off."""
+    cfg = get_settings()
+    if cfg.injection_classifier_mode == "off":
+        return None
+    return TransformersInjectionClassifier(
+        cfg.injection_classifier_model, device=cfg.embedding_device
+    )
+
+
+@lru_cache(maxsize=1)
+def get_injection_monitor() -> ShadowInjectionMonitor | None:
+    """
+    One monitor per process: it owns the bound on scores in flight, which must
+    be shared by every request to mean anything.
+    """
+    classifier = get_injection_classifier()
+    if classifier is None:
+        return None
+    cfg = get_settings()
+    return ShadowInjectionMonitor(
+        classifier,
+        PrometheusQueryMetrics(),
+        threshold=cfg.injection_classifier_threshold,
+        max_pending=cfg.injection_classifier_max_pending,
+    )
+
+
 def build_retriever(collection: str) -> Retriever:
     """The retrieval stages RETRIEVAL_MODE selects, over one collection."""
     cfg = get_settings()
@@ -337,6 +368,7 @@ def get_query_use_case(request: Request) -> QueryRAGUseCase:
         metrics=PrometheusQueryMetrics(_hosted_llm_prices()),
         token_ledger=get_token_ledger(),
         faithfulness_judge=get_faithfulness_judge(),
+        injection_monitor=get_injection_monitor(),
     )
 
 

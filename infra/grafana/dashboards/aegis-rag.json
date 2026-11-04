@@ -892,6 +892,161 @@
         "showUnfilled": true,
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
       }
+    },
+    {
+      "type": "row",
+      "title": "Injection classifier, shadow mode (INJECTION_CLASSIFIER_MODE=shadow)",
+      "id": 106,
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 86 },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Flagged by the classifier, allowed by the gateway (1h)",
+      "id": 32,
+      "description": "Share of scored queries the classifier would have refused. Each is an attack the signatures miss or a classifier false positive (about 17% of legitimate queries on the labelled corpus, ADR 0019); the query hashes are in the security.shadow_classifier_flagged log lines.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 87 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_injection_shadow_total{outcome=\"flagged\"}[1h])) / clamp_min(sum(increase(aegis_injection_shadow_total{outcome=~\"flagged|clean\"}[1h])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1 } },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Flagged queries (24h)",
+      "id": 33,
+      "description": "Count of allowed queries the shadow classifier flagged. Nothing was blocked.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 87 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_injection_shadow_total{outcome=\"flagged\"}[24h])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Not scored: busy (1h)",
+      "id": 34,
+      "description": "Queries skipped because INJECTION_CLASSIFIER_MAX_PENDING scores were already in flight. A steady rate means the classifier cannot keep up with traffic on this hardware.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 87 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_injection_shadow_total{outcome=\"busy\"}[1h])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Not scored: classifier errors (24h)",
+      "id": 35,
+      "description": "Scores that failed. The query was answered regardless.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 87 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(aegis_injection_shadow_total{outcome=\"error\"}[24h])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Shadow classifier outcomes",
+      "id": 36,
+      "description": "flagged, clean, busy (skipped under load) and error, for queries the gateway allowed.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 91 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(aegis_injection_shadow_total[5m]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 15 }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Shadow classifier score distribution (24h)",
+      "id": 37,
+      "description": "How many scored queries fell at or below each injection probability. Most of the classifier's false positives on the corpus scored at or near 1.00.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 91 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (le) (increase(aegis_injection_shadow_score_bucket[24h]))",
+          "legendFormat": "≤ {{le}}",
+          "refId": "A",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
     }
   ],
   "refresh": "15s",

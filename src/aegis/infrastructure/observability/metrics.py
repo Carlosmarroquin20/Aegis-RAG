@@ -123,6 +123,22 @@ faithfulness_errors_total = Counter(
     registry=registry,
 )
 
+# ── Injection classifier in shadow mode (INJECTION_CLASSIFIER_MODE=shadow) ───
+
+injection_shadow_score = Histogram(
+    "aegis_injection_shadow_score",
+    "Injection probability the shadow classifier gave queries the gateway allowed.",
+    buckets=(0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 1.0),
+    registry=registry,
+)
+
+injection_shadow_total = Counter(
+    "aegis_injection_shadow_total",
+    "Queries the gateway allowed, by shadow-classifier outcome (flagged, clean, busy, error).",
+    labelnames=("outcome",),
+    registry=registry,
+)
+
 # ── Tenancy ───────────────────────────────────────────────────────────────────
 
 token_budget_rejections_total = Counter(
@@ -269,3 +285,10 @@ class PrometheusQueryMetrics(QueryMetricsPort):
 
     def faithfulness_check_failed(self) -> None:
         faithfulness_errors_total.inc()
+
+    def injection_shadow_scored(self, score: float, *, flagged: bool) -> None:
+        injection_shadow_score.observe(score)
+        injection_shadow_total.labels(outcome="flagged" if flagged else "clean").inc()
+
+    def injection_shadow_skipped(self, reason: str) -> None:
+        injection_shadow_total.labels(outcome=reason).inc()

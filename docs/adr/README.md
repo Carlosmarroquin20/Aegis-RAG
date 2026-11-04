@@ -28,14 +28,15 @@ supersedes the old one, so the history of *why* stays intact.
 | [0017](0017-answer-faithfulness-judged-by-nli.md) | Answer faithfulness is judged by a local NLI model, sentence by sentence | Accepted |
 | [0018](0018-stream-whole-sanitized-sentences.md) | Stream answers as whole, sanitized sentences | Accepted |
 | [0019](0019-ml-injection-classifier-measured-not-enabled.md) | An ML injection classifier is measured, not enabled | Accepted |
+| [0020](0020-injection-classifier-in-shadow-mode.md) | Run the injection classifier in shadow mode, never blocking | Accepted |
 
 The first three were made when the system was designed and are recorded here retrospectively;
 the rest were recorded as they were decided: 0004 to 0008 during the security hardening pass,
 0009 to 0014 while running the service as a shared platform and putting it under load.
 0015 records the embedding-model change of release 1.1.0 after the fact, 0016 the move to
 hybrid retrieval, 0017 how answers are checked against their context, 0018 how answers
-stream without giving up the output guard, and 0019 why an ML injection classifier was measured
-but not enabled. A summary of all of
+stream without giving up the output guard, 0019 why an ML injection classifier was measured
+but not enabled, and 0020 how it runs on real traffic without blocking anything. A summary of all of
 them in Spanish is in [RESUMEN.md](RESUMEN.md).
 For what the system defends against and where it stops, see the
 [threat model](../THREAT_MODEL.md).

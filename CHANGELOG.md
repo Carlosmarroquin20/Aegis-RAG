@@ -11,6 +11,15 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
+- Shadow mode for the ML injection classifier: `INJECTION_CLASSIFIER_MODE=shadow` (default `off`)
+  scores every query the gateway allows in the background and records the result, never blocking,
+  delaying or failing a query ([ADR 0020](docs/adr/0020-injection-classifier-in-shadow-mode.md)).
+  Flags go to `aegis_injection_shadow_total{outcome="flagged"}` and a
+  `security.shadow_classifier_flagged` log line with the query hash; scores in flight are bounded
+  by `INJECTION_CLASSIFIER_MAX_PENDING`, beyond which queries are skipped and counted as `busy`.
+  New metric `aegis_injection_shadow_score`, a Grafana row, and
+  `--build-arg INJECTION_CLASSIFIER_MODEL=...` to bake the model in.
+
 - Grafana panels for the features added since 1.3.0. Production Overview gains a **Streaming**
   row (time to first text p50/p95/p99, streams by outcome, blocked mid-answer, abandoned) and an
   **Answer faithfulness** row (unsupported share against the alert threshold, mean score,

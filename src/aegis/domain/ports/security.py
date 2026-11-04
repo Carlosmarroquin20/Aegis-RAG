@@ -56,3 +56,17 @@ class OutputGuardPort(ABC):
             OutputReflectionError: the response echoes an injection payload and
                                    the guard is configured to block on it.
         """
+
+
+class InjectionScorerPort(ABC):
+    """
+    A second opinion on a query: the probability that it is a prompt injection.
+
+    Not a guard. Nothing in the pipeline refuses a query on this score; it is
+    recorded beside the gateway's verdict so the two can be compared on real
+    traffic (ADR 0020).
+    """
+
+    @abstractmethod
+    async def score(self, text: str) -> float:
+        """The probability in [0, 1] that ``text`` is a prompt injection."""

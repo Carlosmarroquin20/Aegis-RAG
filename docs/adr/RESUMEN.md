@@ -119,3 +119,11 @@ paráfrasis, otros idiomas, sustitución de caracteres. Pero rechaza el 17 % de 
 legítimas (el gateway, el 6 %), entre ellas 18 de 24 preguntas en español que solo suenan
 sospechosas, con puntuaciones de 1,00 que ningún umbral separa. Queda como medición en el CI y
 adaptador listo; un modo que solo registre sin bloquear sería el siguiente paso.
+
+**[0020](0020-injection-classifier-in-shadow-mode.md) — El clasificador de inyección corre en modo
+sombra, sin bloquear nunca.** Con `INJECTION_CLASSIFIER_MODE=shadow`, cada consulta que el gateway
+deja pasar se puntúa en segundo plano: ninguna respuesta lo espera y ningún resultado bloquea,
+retrasa ni hace fallar una consulta. Las marcas se cuentan en métricas y se registran con el hash
+de la consulta (nunca el texto). El trabajo pendiente tiene límite: lo que no cabe se descarta y
+se cuenta como `busy`. Así se mide, con tráfico real, lo que el corpus de 326 consultas no puede
+decir; activar el bloqueo sería otra decisión, con su propio ADR.

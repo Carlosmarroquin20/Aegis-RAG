@@ -28,6 +28,8 @@ services:
         RERANKER_MODEL: ${RERANKER_MODEL:-}
         # Baked only when set: needed for FAITHFULNESS_CHECK=true. See .env.example.
         FAITHFULNESS_MODEL: ${FAITHFULNESS_MODEL:-}
+        # Baked only when set: needed for INJECTION_CLASSIFIER_MODE=shadow.
+        INJECTION_CLASSIFIER_MODEL: ${INJECTION_CLASSIFIER_MODEL:-}
     ports:
       - "${AEGIS_PUBLIC_BIND:-127.0.0.1}:8000:8000"
     environment:
@@ -44,6 +46,8 @@ services:
       - RERANKER_MODEL=${RERANKER_MODEL:-cross-encoder/mmarco-mMiniLMv2-L12-H384-v1}
       - FAITHFULNESS_CHECK=${FAITHFULNESS_CHECK:-false}
       - FAITHFULNESS_MODEL=${FAITHFULNESS_MODEL:-MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli}
+      - INJECTION_CLASSIFIER_MODE=${INJECTION_CLASSIFIER_MODE:-off}
+      - INJECTION_CLASSIFIER_MODEL=${INJECTION_CLASSIFIER_MODEL:-protectai/deberta-v3-base-prompt-injection-v2}
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.2
       # LLM backend. Defaults to the local Ollama service above. To use a hosted,

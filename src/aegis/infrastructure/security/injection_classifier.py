@@ -16,8 +16,12 @@ can fetch or run. Weights load without ``trust_remote_code``.
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from collections.abc import Sequence
 from typing import Any
+
+from aegis.domain.ports.security import InjectionScorerPort
 
 DEFAULT_INJECTION_CLASSIFIER = "protectai/deberta-v3-base-prompt-injection-v2"
 
@@ -26,8 +30,12 @@ class InjectionLabelError(RuntimeError):
     """The model's configuration names no injection label."""
 
 
-class TransformersInjectionClassifier:
-    """Probability, per text, that it is a prompt injection. Synchronous and CPU-bound."""
+class TransformersInjectionClassifier(InjectionScorerPort):
+    """
+    Probability, per text, that it is a prompt injection. ``scores`` is
+    synchronous and CPU-bound (the offline comparison uses it directly);
+    ``score`` runs it on a worker thread for use inside the API.
+    """
 
     def __init__(
         self,
@@ -42,24 +50,32 @@ class TransformersInjectionClassifier:
         self._max_length = max_length
         self._batch_size = batch_size
         self._loaded: tuple[Any, Any, int] | None = None
+        # load() can be reached from a worker thread (score) and from startup.
+        self._load_lock = threading.Lock()
 
     @property
     def model_name(self) -> str:
         return self._model_name
 
     def load(self) -> None:
-        if self._loaded is not None:
-            return
-        # Deferred: importing transformers' model classes imports torch.
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        with self._load_lock:
+            if self._loaded is not None:
+                return
+            # Deferred: importing transformers' model classes imports torch.
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-        tokenizer = AutoTokenizer.from_pretrained(self._model_name, trust_remote_code=False)
-        model = AutoModelForSequenceClassification.from_pretrained(
-            self._model_name, trust_remote_code=False
-        )
-        model.to(self._device)
-        model.eval()
-        self._loaded = (tokenizer, model, injection_index(model.config.id2label))
+            tokenizer = AutoTokenizer.from_pretrained(self._model_name, trust_remote_code=False)
+            model = AutoModelForSequenceClassification.from_pretrained(
+                self._model_name, trust_remote_code=False
+            )
+            model.to(self._device)
+            model.eval()
+            self._loaded = (tokenizer, model, injection_index(model.config.id2label))
+
+    async def score(self, text: str) -> float:
+        """One text's injection probability, computed off the event loop."""
+        (result,) = await asyncio.to_thread(self.scores, [text])
+        return result
 
     def scores(self, texts: Sequence[str]) -> list[float]:
         """The injection probability of each text, in order."""
