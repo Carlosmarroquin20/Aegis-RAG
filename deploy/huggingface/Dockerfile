@@ -31,7 +31,7 @@ ARG DEMO_API_KEY=aegis-public-demo-key
 ARG EMBEDDING_MODEL=intfloat/multilingual-e5-small
 
 # ── Stage 1: console bundle ───────────────────────────────────────────────────
-FROM node:26-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS console
+FROM node:26-alpine@sha256:7ed4edf2b680417bf06d3f465de09bb113f877ff265b15f72a27a4c6fb76fb04 AS console
 
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
