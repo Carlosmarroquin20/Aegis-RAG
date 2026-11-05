@@ -25,7 +25,7 @@ concurrency:
 env:
   # Same uv as the uv image in the Dockerfile, so CI resolves the lockfile with the
   # exact tool that builds the image instead of whatever is latest that day.
-  UV_VERSION: "0.12.9"
+  UV_VERSION: "0.13.7"
 
 jobs:
   quality:
