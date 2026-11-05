@@ -63,7 +63,7 @@ What runs in CI and what ships are both pinned and verifiable:
 To verify an image before running it:
 
 ```bash
-IMAGE=ghcr.io/carlosmarroquin20/aegis-rag-api:1.3.0
+IMAGE=ghcr.io/carlosmarroquin20/aegis-rag-api:1.4.0
 
 # Keyless signature: made by this repository's release workflow, nothing else
 cosign verify "$IMAGE"   --certificate-identity-regexp '^https://github.com/Carlosmarroquin20/Aegis-RAG/.github/workflows/release.yml@'   --certificate-oidc-issuer https://token.actions.githubusercontent.com

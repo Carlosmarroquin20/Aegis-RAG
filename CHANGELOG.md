@@ -9,6 +9,8 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-11-05
+
 ### Added
 
 - Two corrections to the faithfulness judge
@@ -486,6 +488,7 @@ rate limiting, structured logging, Prometheus metrics, OpenTelemetry tracing wit
 dashboards, a React demo console, a multi-stage Docker image, docker-compose stack, GitHub
 Actions CI and an AWS Terraform skeleton.
 
+[1.4.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.2.0
 [1.1.1]: https://github.com/Carlosmarroquin20/Aegis-RAG/releases/tag/v1.1.1
