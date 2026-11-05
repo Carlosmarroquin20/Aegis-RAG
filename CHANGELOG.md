@@ -11,11 +11,13 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ### Added
 
-- A public demo that runs on free hosting (Hugging Face Spaces + a hosted LLM's free tier):
-  one container with nginx, the API and an in-process Chroma, the example corpus indexed at
-  build time, and a manually triggered deployment workflow. See
-  [`docs/PUBLIC_DEMO.md`](docs/PUBLIC_DEMO.md) and
+- A gateway playground on GitHub Pages: the SecurityGateway running in the browser on Pyodide,
+  built from `src/` by `deploy/gateway-playground/build.py` and republished by a workflow
+  whenever the gateway changes. See [`docs/PUBLIC_DEMO.md`](docs/PUBLIC_DEMO.md) and
   [ADR 0024](docs/adr/0024-public-demo-on-free-hosting.md).
+- A single-container demo image for any Docker host (`deploy/huggingface/`): nginx, the API and
+  an in-process Chroma, the example corpus indexed at build time, a rate-limited public key, and
+  a manually triggered workflow that deploys it to a Hugging Face Space (a paid plan).
   - `CHROMA_MODE=embedded` with `CHROMA_PATH` runs Chroma inside the API process, with its
     telemetry off. The default stays `http`.
   - `DOCUMENT_WRITES_ENABLED=false` makes uploads and deletes answer `403`.

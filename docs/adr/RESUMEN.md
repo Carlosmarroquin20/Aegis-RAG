@@ -163,10 +163,11 @@ consulta en CPU. Los fragmentos se quedan en 512 caracteres: ningún otro tamañ
 vez. Las colecciones creadas con el modelo anterior hay que reindexarlas, o fijar el modelo
 anterior en `EMBEDDING_MODEL`; la API no arranca si no coinciden.
 
-**[0024](0024-public-demo-on-free-hosting.md) — Una demo pública en hosting gratuito.** Una
-imagen aparte, de un solo contenedor (nginx, la API y Chroma embebido), para Hugging Face
-Spaces. Los documentos se indexan al construir la imagen y la demo es de solo lectura: lo que se
-ingesta no pasa por el gateway, así que una subida abierta permitiría plantar texto en las
-respuestas de otros visitantes. La clave es pública; lo que acota el costo es el límite de
-peticiones y el presupuesto diario de tokens del tenant. Usa un LLM hospedado (Groq gratis), y
-la consola avisa que las preguntas salen del servidor.
+**[0024](0024-public-demo-on-free-hosting.md) — Una demo pública: el gateway en el navegador, el
+stack completo en un contenedor.** Los Spaces de Docker en Hugging Face pasaron a ser de pago, así
+que la demo gratuita es una página estática en GitHub Pages que ejecuta el SecurityGateway real en
+el navegador con Pyodide: el build copia exactamente los módulos que el gateway importa, un test
+verifica que el árbol construido funciona solo, y un workflow la vuelve a publicar cuando cambia el
+gateway. Nada de lo escrito sale de la pestaña. La imagen de un solo contenedor (nginx, API, Chroma
+embebido, corpus de solo lectura, clave pública con límites) queda lista para cualquier host Docker,
+pero no se publica por defecto porque en todos los revisados cuesta dinero.

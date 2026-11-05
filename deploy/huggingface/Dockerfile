@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Aegis-RAG — public demo image (one container: nginx + API + embedded Chroma).
 #
-# Free hosting platforms such as Hugging Face Spaces run a single container, so
+# Some hosts (Hugging Face Spaces, Cloud Run, a small VM) run a single container, so
 # this image folds the compose stack into one: the console is served by nginx,
 # which forwards API paths to uvicorn on loopback, and Chroma runs in-process
 # (CHROMA_MODE=embedded). The corpus is indexed at build time, so the container

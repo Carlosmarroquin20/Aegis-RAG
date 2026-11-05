@@ -32,7 +32,7 @@ supersedes the old one, so the history of *why* stays intact.
 | [0021](0021-larger-evaluation-sets.md) | Larger evaluation sets, and the gates re-set on them | Accepted |
 | [0022](0022-faithfulness-reply-words-and-figure-check.md) | The faithfulness judge drops reply words and checks figures against the context | Accepted |
 | [0023](0023-multilingual-e5-embeddings.md) | Multilingual E5 embeddings, with their query and passage markers | Accepted |
-| [0024](0024-public-demo-on-free-hosting.md) | A public demo on free hosting: one container, a public key, a read-only corpus | Accepted |
+| [0024](0024-public-demo-on-free-hosting.md) | A public demo: the gateway in the browser, the full stack in one container | Accepted |
 
 The first three were made when the system was designed and are recorded here retrospectively;
 the rest were recorded as they were decided: 0004 to 0008 during the security hardening pass,

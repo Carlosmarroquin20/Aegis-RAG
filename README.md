@@ -487,11 +487,15 @@ The `X-API-Key` is entered in the UI and kept only in the browser's `localStorag
 
 ### Public demo
 
-A single-container build of the console and API (`deploy/huggingface/`) runs on Hugging Face
-Spaces' free tier with a hosted LLM, so anyone can try the query path and the gateway from a
-link. It is read-only, its key is public and rate-limited with a daily token budget, and it says
-plainly that questions leave the server. How to deploy it, and how it differs from the compose
-stack: [`docs/PUBLIC_DEMO.md`](docs/PUBLIC_DEMO.md).
+**[Gateway playground](https://carlosmarroquin20.github.io/Aegis-RAG/playground/)**: the
+SecurityGateway running in your browser on Pyodide, the same Python module the API runs, built
+from `src/` and republished whenever it changes. Try the attacks, the evasions (zero-width
+characters, look-alike letters, missing accents) and the legitimate questions worded like
+attacks; nothing you type leaves the tab.
+
+The whole query path also ships as one container (`deploy/huggingface/`: nginx, the API, an
+in-process Chroma, a read-only corpus and a rate-limited public key) for any Docker host. Both are
+described in [`docs/PUBLIC_DEMO.md`](docs/PUBLIC_DEMO.md).
 
 ---
 
