@@ -1,6 +1,7 @@
 # 0015 — A multilingual embedding model, recorded in every collection
 
-**Status:** Accepted
+**Status:** Accepted. The model choice is superseded by
+[0023](0023-multilingual-e5-embeddings.md); recording and checking the model per collection stands.
 
 ## Context
 

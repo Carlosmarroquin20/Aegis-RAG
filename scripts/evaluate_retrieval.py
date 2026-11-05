@@ -65,6 +65,7 @@ from aegis.domain.ports.vector_store import VectorStorePort
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.retrieval.bm25 import StoreBackedLexicalIndex
 from aegis.infrastructure.retrieval.cross_encoder import CrossEncoderReranker
+from aegis.infrastructure.vector_stores.embedding_prompts import embedding_prompts
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -91,16 +92,22 @@ class MemoryStore(VectorStorePort):
         self.chunks: list[Document] = []
         self._model: Any | None = None
         self._vectors: Any | None = None
+        self._query_prompt = ""
 
-    def embed_with(self, model: Any) -> None:
+    def embed_with(self, model: Any, model_name: str = "") -> None:
+        """Embeds every chunk with ``model``, marked the way ``model_name`` expects."""
+        prompts = embedding_prompts(model_name)
         self._model = model
-        self._vectors = model.encode([c.content for c in self.chunks], normalize_embeddings=True)
+        self._query_prompt = prompts.query
+        self._vectors = model.encode(
+            [prompts.passage + c.content for c in self.chunks], normalize_embeddings=True
+        )
 
     async def similarity_search(
         self, query: str, k: int = 5, score_threshold: float = 0.0
     ) -> list[Document]:
         assert self._model is not None and self._vectors is not None, "call embed_with() first"
-        vector = self._model.encode([query], normalize_embeddings=True)[0]
+        vector = self._model.encode([self._query_prompt + query], normalize_embeddings=True)[0]
         scores = self._vectors @ vector
         order = sorted(range(len(self.chunks)), key=lambda i: -float(scores[i]))[:k]
         return [
@@ -138,12 +145,13 @@ class Question:
     kind: str = ""
 
 
-async def chunk_corpus(corpus: Path) -> MemoryStore:
+async def chunk_corpus(corpus: Path, request: IngestRequest | None = None) -> MemoryStore:
+    """The corpus, chunked by the application's ingestion pipeline with ``request``'s sizes."""
     store = MemoryStore()
     use_case = IngestDocumentsUseCase(
         vector_store=store, parser_registry=ParserRegistry(), collection="retrieval-eval"
     )
-    request = IngestRequest()
+    request = request or IngestRequest()
     for path in sorted(corpus.rglob("*")):
         if path.is_file():
             upload = UploadedFile(
@@ -233,6 +241,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--reranker-model", help="default: the configured RERANKER_MODEL")
     parser.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
+    parser.add_argument(
+        "--chunk-size", type=int, help="characters per chunk; default: the upload default"
+    )
+    parser.add_argument("--overlap", type=int, help="characters shared by neighbouring chunks")
     parser.add_argument("--show-misses", action="store_true", help="list questions ranked past 5")
     parser.add_argument("--min-hit5", type=float, help="fail below this hit@5 over all questions")
     parser.add_argument("--min-mrr", type=float, help="fail below this MRR over all questions")
@@ -246,9 +258,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     models = args.model or [settings.embedding_model]
     # One event loop for the whole run: the reranker's lock belongs to a loop.
     runner = asyncio.Runner()
-    store = runner.run(chunk_corpus(args.corpus))
+    sizes = {
+        key: value
+        for key, value in (("chunk_size", args.chunk_size), ("overlap", args.overlap))
+        if value is not None
+    }
+    request = IngestRequest(**sizes)
+    store = runner.run(chunk_corpus(args.corpus, request))
     questions = _load_questions(args.questions)
-    print(f"{len(store.chunks)} chunks from {args.corpus.name}, {len(questions)} questions")
+    print(
+        f"{len(store.chunks)} chunks from {args.corpus.name} (chunk size {request.chunk_size}, "
+        f"overlap {request.overlap}), {len(questions)} questions"
+    )
 
     reranker = None
     if any(m.endswith("+rerank") for m in modes):
@@ -262,7 +283,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         from sentence_transformers import SentenceTransformer
 
         started = time.perf_counter()
-        store.embed_with(SentenceTransformer(model_name, device="cpu"))
+        store.embed_with(SentenceTransformer(model_name, device="cpu"), model_name)
         print(f"\n{model_name}  (loaded and embedded in {time.perf_counter() - started:.1f} s)")
         for mode in modes:
             started = time.perf_counter()

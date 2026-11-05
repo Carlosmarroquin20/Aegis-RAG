@@ -150,3 +150,15 @@ como la misma: «Q1.000» y «Q1,000», «8 pm» y «20:00», «dos» y «2». S
 pasa de detectar el 54,6 % de las infieles al 67,2 %, y de marcar por error el 12,5 % de las fieles
 al 7,9 %. En inglés la detección sube del 47,5 % al 65,6 %. Ahora su punto débil son las
 contradicciones que reutilizan las palabras y cifras del propio documento: detecta 19 de 35.
+
+**[0023](0023-multilingual-e5-embeddings.md) — Embeddings E5 multilingües, con sus marcas de
+consulta y de pasaje.** Para mejorar las paráfrasis se compararon cinco modelos de embeddings y
+cinco tamaños de fragmento sobre las 141 preguntas. El modelo por defecto pasa a ser
+`multilingual-e5-small`: tiene el mismo tamaño y la misma velocidad que el anterior, y sube el MRR
+de 0,850 a 0,882. E5 se entrenó con «query: » delante de la pregunta y «passage: » delante del
+texto, así que la API embebe los fragmentos y las búsquedas con esas marcas. `bge-m3` en modo denso
+encuentra el documento correcto entre los 5 primeros en todas las preguntas, paráfrasis incluidas
+(MRR 0,957). Queda como opción documentada, porque pesa unos 1,8 GB más y tarda unos 180 ms por
+consulta en CPU. Los fragmentos se quedan en 512 caracteres: ningún otro tamaño mejoró todo a la
+vez. Las colecciones creadas con el modelo anterior hay que reindexarlas, o fijar el modelo
+anterior en `EMBEDDING_MODEL`; la API no arranca si no coinciden.

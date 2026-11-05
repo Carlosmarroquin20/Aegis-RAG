@@ -196,12 +196,16 @@ def _llm_backend(provider: str) -> Backend:
 def get_embedding_function() -> Any:
     """
     The SentenceTransformers model, loaded once and shared by every collection:
-    tenants differ in what they store, not in how text is embedded.
+    tenants differ in what they store, not in how text is embedded. Chunks and
+    searches carry the markers the model was trained with ("passage: " and
+    "query: " for E5, nothing for symmetric models).
     """
-    from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+    from aegis.infrastructure.vector_stores.embedding_function import (
+        PromptedSentenceTransformerEmbeddingFunction,
+    )
 
     cfg = get_settings()
-    return SentenceTransformerEmbeddingFunction(
+    return PromptedSentenceTransformerEmbeddingFunction(
         model_name=cfg.embedding_model,
         device=cfg.embedding_device,
     )

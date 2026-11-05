@@ -216,11 +216,14 @@ class Settings(BaseSettings):
         return self
 
     # ── Embeddings ─────────────────────────────────────────────────────────────
-    # Multilingual: the English-only all-MiniLM-L6-v2 ranked Spanish documents
-    # barely better than chance (scripts/evaluate_retrieval.py). Same 384
-    # dimensions, but vectors from different models are not comparable: changing
-    # this requires re-ingesting, and the adapter refuses a mismatched collection.
-    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    # Multilingual E5 (ADR 0023): same size and speed as the paraphrase MiniLM it
+    # replaced, MRR 0.882 against 0.850 on the 141 labelled questions. Queries and
+    # chunks are embedded with the "query: "/"passage: " markers it was trained
+    # with. BAAI/bge-m3 measures best (MRR 0.957, dense) at about 1.8 GB more
+    # image and ~180 ms per query on CPU. Vectors from different models are not
+    # comparable: changing this requires re-ingesting, and the adapter refuses a
+    # mismatched collection.
+    embedding_model: str = "intfloat/multilingual-e5-small"
     embedding_device: str = "cpu"  # "cuda" for GPU inference
 
     # ── Retrieval ──────────────────────────────────────────────────────────────
