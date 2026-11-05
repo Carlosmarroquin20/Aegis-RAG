@@ -1,0 +1,60 @@
+name: Deploy public demo
+
+# Pushes the demo image's sources to a Hugging Face Space, which builds and runs
+# it (deploy/huggingface/). Manual only: the Space is a public deployment, and
+# publishing it is a decision, not a side effect of a merge.
+#
+# One-time setup, in this repository's settings:
+#   - secret HF_TOKEN   a Hugging Face token with write access to the Space;
+#   - variable HF_SPACE the Space id, e.g. "your-user/aegis-rag".
+# And in the Space's settings, the secret LLM_API_KEY (the provider's API key).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Upload to the Space
+    runs-on: ubuntu-latest
+    environment: demo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: Stage the Space
+        run: deploy/huggingface/stage.sh "$RUNNER_TEMP/hf-space"
+
+      - name: Upload
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+          STAGED: ${{ runner.temp }}/hf-space
+          COMMIT: ${{ github.sha }}
+        run: |
+          test -n "$HF_TOKEN" || { echo "::error::secret HF_TOKEN is not set"; exit 1; }
+          test -n "$HF_SPACE" || { echo "::error::variable HF_SPACE is not set"; exit 1; }
+          uv run --no-project --python 3.11 --with 'huggingface_hub==0.27.1' python - <<'PY'
+          import os
+
+          from huggingface_hub import HfApi
+
+          HfApi(token=os.environ["HF_TOKEN"]).upload_folder(
+              repo_id=os.environ["HF_SPACE"],
+              repo_type="space",
+              folder_path=os.environ["STAGED"],
+              commit_message=f"Deploy {os.environ['COMMIT'][:12]}",
+              # Mirror the staged tree: files dropped from it leave the Space too.
+              delete_patterns=["*"],
+          )
+          PY
