@@ -1,0 +1,14 @@
+[
+ "aegis/__init__.py",
+ "aegis/domain/__init__.py",
+ "aegis/domain/models/__init__.py",
+ "aegis/domain/models/query.py",
+ "aegis/domain/models/security.py",
+ "aegis/domain/ports/__init__.py",
+ "aegis/domain/ports/security.py",
+ "aegis/infrastructure/__init__.py",
+ "aegis/infrastructure/security/__init__.py",
+ "aegis/infrastructure/security/markup.py",
+ "aegis/infrastructure/security/security_gateway.py",
+ "structlog.py"
+]
