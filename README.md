@@ -485,6 +485,14 @@ The `X-API-Key` is entered in the UI and kept only in the browser's `localStorag
   <img src="docs/web-console.png" alt="Aegis-RAG web console — query panel" width="720">
 </p>
 
+### Public demo
+
+A single-container build of the console and API (`deploy/huggingface/`) runs on Hugging Face
+Spaces' free tier with a hosted LLM, so anyone can try the query path and the gateway from a
+link. It is read-only, its key is public and rate-limited with a daily token budget, and it says
+plainly that questions leave the server. How to deploy it, and how it differs from the compose
+stack: [`docs/PUBLIC_DEMO.md`](docs/PUBLIC_DEMO.md).
+
 ---
 
 ## API Reference

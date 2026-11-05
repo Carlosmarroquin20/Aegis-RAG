@@ -162,3 +162,11 @@ encuentra el documento correcto entre los 5 primeros en todas las preguntas, par
 consulta en CPU. Los fragmentos se quedan en 512 caracteres: ningún otro tamaño mejoró todo a la
 vez. Las colecciones creadas con el modelo anterior hay que reindexarlas, o fijar el modelo
 anterior en `EMBEDDING_MODEL`; la API no arranca si no coinciden.
+
+**[0024](0024-public-demo-on-free-hosting.md) — Una demo pública en hosting gratuito.** Una
+imagen aparte, de un solo contenedor (nginx, la API y Chroma embebido), para Hugging Face
+Spaces. Los documentos se indexan al construir la imagen y la demo es de solo lectura: lo que se
+ingesta no pasa por el gateway, así que una subida abierta permitiría plantar texto en las
+respuestas de otros visitantes. La clave es pública; lo que acota el costo es el límite de
+peticiones y el presupuesto diario de tokens del tenant. Usa un LLM hospedado (Groq gratis), y
+la consola avisa que las preguntas salen del servidor.

@@ -9,6 +9,19 @@ commit history; the reasoning behind the larger decisions is in [`docs/adr`](doc
 
 ## [Unreleased]
 
+### Added
+
+- A public demo that runs on free hosting (Hugging Face Spaces + a hosted LLM's free tier):
+  one container with nginx, the API and an in-process Chroma, the example corpus indexed at
+  build time, and a manually triggered deployment workflow. See
+  [`docs/PUBLIC_DEMO.md`](docs/PUBLIC_DEMO.md) and
+  [ADR 0024](docs/adr/0024-public-demo-on-free-hosting.md).
+  - `CHROMA_MODE=embedded` with `CHROMA_PATH` runs Chroma inside the API process, with its
+    telemetry off. The default stays `http`.
+  - `DOCUMENT_WRITES_ENABLED=false` makes uploads and deletes answer `403`.
+  - Building the console with `VITE_DEMO_API_KEY` bakes in a public key and switches it to
+    demo mode.
+
 ## [1.4.0] — 2026-11-05
 
 ### Added
