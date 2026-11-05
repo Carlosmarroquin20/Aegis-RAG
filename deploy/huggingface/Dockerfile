@@ -43,7 +43,7 @@ ARG DEMO_API_KEY
 RUN VITE_DEMO_API_KEY="${DEMO_API_KEY}" npm run build
 
 # ── Stage 2: Python base ──────────────────────────────────────────────────────
-FROM python:3.11-slim@sha256:b7a9e5f6a93d6d4a31f129bbd4bdee69efccb6ded0fb230d78aafaf37af98377 AS base
+FROM python:3.11-slim@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79 AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
