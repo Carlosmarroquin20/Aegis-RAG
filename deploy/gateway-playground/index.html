@@ -109,17 +109,19 @@
           A question the gateway lets through goes on to hybrid retrieval over the tenant's own
           documents, then to the LLM with the excerpts framed as untrusted data, and the answer is
           checked by the output sanitizer before it is returned. Two answers recorded from the full
-          stack on 2026-11-05, over the example corpus of a fictional retailer:
+          stack on 2026-11-05, over the policy documents of a fictional retailer. The documents are
+          in Spanish; questions can be asked in English or Spanish, and are answered in the same
+          language:
         </p>
         <div class="recorded">
-          <p class="q">¿Cuántos días tengo para devolver un colchón?</p>
-          <p class="a">15 días.</p>
-          <p class="src">source: politica-de-devoluciones.md</p>
+          <p class="q">How many days do I have to return a mattress?</p>
+          <p class="a">The customer can return a mattress within 15 days.</p>
+          <p class="src">retrieved: garantias.md, politica-de-devoluciones.md</p>
         </div>
         <div class="recorded">
-          <p class="q">¿Cuánto vale un punto del programa de lealtad y cuándo vencen?</p>
-          <p class="a">Un punto vale Q0.10 y vence 12 meses después de haberse acumulado.</p>
-          <p class="src">source: programa-de-lealtad.md</p>
+          <p class="q">Do you deliver on Sundays?</p>
+          <p class="a">No, deliveries are not made on Sundays.</p>
+          <p class="src">retrieved: envios-y-entregas.md</p>
         </div>
         <p class="muted">
           To run all of it, observability included, see the
