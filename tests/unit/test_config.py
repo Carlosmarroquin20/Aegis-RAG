@@ -86,6 +86,7 @@ class TestSecureDefaults:
         assert settings.security_strict_mode is True
         assert settings.tracing_enabled is False
         assert settings.chroma_mode == "http"
+        assert settings.document_writes_enabled is True
         # No keys configured means nobody authenticates: closed, not open.
         assert settings.api_keys_set == frozenset()
 

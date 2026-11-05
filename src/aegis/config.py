@@ -155,6 +155,14 @@ class Settings(BaseSettings):
             raise ValueError("CHROMA_MODE=embedded requires CHROMA_PATH to be set")
         return self
 
+    # ── Document management ───────────────────────────────────────────────────
+    # False makes the corpus read-only through the API: uploads and deletes are
+    # answered 403, listing and querying are unaffected. For deployments whose
+    # key is public, such as the hosted demo: ingested documents bypass the
+    # SecurityGateway by design, so an open upload endpoint would let anyone put
+    # text in front of every other visitor's queries.
+    document_writes_enabled: bool = True
+
     # ── LLM Backend ────────────────────────────────────────────────────────────
     # "ollama" runs the model locally and keeps the deployment air-gapped.
     # "openai_compatible" calls a hosted provider (Groq, OpenRouter, Mistral, a

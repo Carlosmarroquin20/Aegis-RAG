@@ -6,6 +6,9 @@ GET    /api/v1/documents          — List indexed document chunks (paginated).
 DELETE /api/v1/documents          — Bulk delete by list of chunk IDs.
 DELETE /api/v1/documents/{doc_id} — Delete a single chunk.
 
+The write routes answer 403 when DOCUMENT_WRITES_ENABLED is false (read-only
+deployments such as the public demo); listing is always available.
+
 File uploads use multipart/form-data. The route rejects an oversized part before
 reading it into memory, and the use case enforces the same ceiling again before
 parsing. Neither bounds what the multipart parser spools to disk while receiving
@@ -34,7 +37,11 @@ from aegis.application.use_cases.ingest_documents import (
 )
 from aegis.domain.ports.document_parser import ParseError
 from aegis.domain.ports.vector_store import VectorStorePort
-from aegis.interface.api.dependencies import get_ingest_use_case, get_vector_store
+from aegis.interface.api.dependencies import (
+    get_ingest_use_case,
+    get_vector_store,
+    require_document_writes,
+)
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
@@ -77,8 +84,10 @@ def _safe_filename(raw: str | None) -> str:
     response_model=IngestResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Upload and index a document",
+    dependencies=[Depends(require_document_writes)],
     responses={
         400: {"description": "Unsupported file type or corrupt content."},
+        403: {"description": "Document changes are disabled on this deployment."},
         413: {"description": "File exceeds the 50 MB upload limit."},
     },
 )
@@ -156,6 +165,7 @@ async def list_documents(
     "/{doc_id}",
     response_model=DeleteResponse,
     summary="Delete a single document chunk by ID",
+    dependencies=[Depends(require_document_writes)],
 )
 async def delete_document(
     doc_id: str,
@@ -169,6 +179,7 @@ async def delete_document(
     "",
     response_model=DeleteResponse,
     summary="Bulk delete document chunks by IDs",
+    dependencies=[Depends(require_document_writes)],
 )
 async def bulk_delete_documents(
     ids: list[str],

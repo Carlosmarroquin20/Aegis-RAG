@@ -15,6 +15,7 @@ from functools import cache, lru_cache
 from typing import Any
 from urllib.parse import urlsplit
 
+from fastapi import HTTPException, status
 from starlette.requests import Request
 
 from aegis.application.services.faithfulness import NLIFaithfulnessJudge
@@ -346,6 +347,25 @@ def build_retriever(collection: str) -> Retriever:
 def get_retriever(request: Request) -> RetrieverPort:
     """The calling tenant's retriever, over its own collection only."""
     return build_retriever(request_tenant(request).collection)
+
+
+DOCUMENT_WRITES_DISABLED_DETAIL = "Document changes are disabled on this deployment."
+
+
+def require_document_writes() -> None:
+    """
+    Refuses uploads and deletes when DOCUMENT_WRITES_ENABLED is false.
+
+    A route dependency rather than a check inside the handlers, so a write route
+    added later gets the same answer by declaring it. FastAPI reads a multipart
+    body before it resolves dependencies, so a refused upload has still been
+    received; BodySizeLimitMiddleware bounds that, and the demo image's nginx
+    refuses these methods before they reach the API at all.
+    """
+    if not get_settings().document_writes_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=DOCUMENT_WRITES_DISABLED_DETAIL
+        )
 
 
 def _hosted_llm_prices() -> dict[str, LLMPricing]:

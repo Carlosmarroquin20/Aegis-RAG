@@ -18,9 +18,11 @@ from aegis.application.use_cases.ingest_documents import (
     FileTooLargeError,
     UnsupportedFileTypeError,
 )
+from aegis.config import Settings
 from aegis.domain.models.document import Document
 from aegis.domain.ports.document_parser import ParseError
 from aegis.domain.ports.vector_store import VectorStoreUnavailableError
+from aegis.interface.api import dependencies
 from aegis.interface.api.dependencies import get_ingest_use_case, get_vector_store
 from aegis.interface.api.error_handlers import register_dependency_error_handlers
 from aegis.interface.api.routes import documents
@@ -286,3 +288,34 @@ class TestDeleteDocuments:
             "DELETE", "/api/v1/documents", json=[str(i) for i in range(501)]
         )
         assert resp.status_code == 400
+
+
+class TestReadOnlyDeployment:
+    """DOCUMENT_WRITES_ENABLED=false: the public demo serves a fixed corpus."""
+
+    @pytest.fixture(autouse=True)
+    def _read_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            dependencies, "get_settings", lambda: Settings(document_writes_enabled=False)
+        )
+
+    def test_upload_is_refused(self) -> None:
+        # No canned response: the fake raises if the route reaches the use case.
+        resp = _client(_FakeIngestUseCase()).post(
+            "/api/v1/documents",
+            files={"file": ("notes.txt", b"hello world", "text/plain")},
+        )
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == dependencies.DOCUMENT_WRITES_DISABLED_DETAIL
+
+    def test_deletes_are_refused_and_nothing_is_removed(self) -> None:
+        store = FakeVectorStore()
+        client = _store_client(store)
+        single = client.delete("/api/v1/documents/chunk-1")
+        bulk = client.request("DELETE", "/api/v1/documents", json=["a"])
+        assert (single.status_code, bulk.status_code) == (403, 403)
+        assert store.deleted_ids == []
+
+    def test_listing_still_works(self) -> None:
+        resp = _store_client(FakeVectorStore()).get("/api/v1/documents")
+        assert resp.status_code == 200
