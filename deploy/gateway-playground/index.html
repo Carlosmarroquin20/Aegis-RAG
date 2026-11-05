@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aegis-RAG — Gateway Playground</title>
+    <meta
+      name="description"
+      content="Aegis-RAG's prompt-injection gateway, running in your browser on Pyodide. Try to get past it."
+    />
+    <!-- Pages cannot send headers, so the policy is declared here. Pyodide needs
+         'wasm-unsafe-eval' to compile its runtime; everything else is this site
+         or the pinned Pyodide release on jsDelivr. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; connect-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'"
+    />
+    <link rel="stylesheet" href="playground.css" />
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
+    <script type="module" src="playground.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <svg viewBox="0 0 24 24" class="mark" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3Zm0 2.2 6 2.25V11c0 3.9-2.5 6.8-6 8.8-3.5-2-6-4.9-6-8.8V6.45l6-2.25Z"
+          />
+          <path fill="currentColor" d="m11 13.4-2-2-1.4 1.4L11 16.2l5.4-5.4L15 9.4l-4 4Z" />
+        </svg>
+        <div>
+          <h1>Aegis-RAG — Gateway Playground</h1>
+          <p class="sub">Try to get a prompt injection past the first line of defence.</p>
+        </div>
+      </header>
+
+      <section class="card intro">
+        <p>
+          Every question sent to Aegis-RAG is scored by its <strong>SecurityGateway</strong> before
+          anything is retrieved or generated. This page runs that gateway — the same Python module
+          the API runs, copied from the repository when the page is built — inside your browser,
+          on <a href="https://pyodide.org" rel="noreferrer">Pyodide</a>. Nothing you type leaves
+          this tab.
+        </p>
+        <p class="muted">
+          It is the first layer only: retrieval, the LLM and the output sanitizer are not part of
+          this page. The gateway is a fast heuristic, not the safety boundary on its own; the
+          project explains why in
+          <a
+            href="https://github.com/Carlosmarroquin20/Aegis-RAG/blob/main/docs/adr/0002-heuristic-gateway-is-not-the-safety-boundary.md"
+            rel="noreferrer"
+            >ADR 0002</a
+          >.
+        </p>
+      </section>
+
+      <section class="card">
+        <p id="status" class="status" role="status">Loading the Python runtime (about 10 MB, cached after the first visit)…</p>
+
+        <div class="probes">
+          <p class="label">Attacks</p>
+          <div class="chips" id="attacks"></div>
+          <p class="label">Legitimate questions, some worded like attacks</p>
+          <div class="chips" id="benign"></div>
+        </div>
+
+        <form id="form">
+          <label for="query" class="visually-hidden">Question</label>
+          <textarea
+            id="query"
+            rows="4"
+            maxlength="8192"
+            placeholder="Type a question, or pick one above…"
+            spellcheck="false"
+          ></textarea>
+          <div class="row">
+            <label class="toggle">
+              <input type="checkbox" id="strict" checked />
+              Strict mode <span class="muted">(also blocks SUSPICIOUS, as the API does)</span>
+            </label>
+            <button type="submit" id="evaluate" disabled>Evaluate</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card result" id="result" hidden>
+        <div class="row">
+          <h2 id="verdict"></h2>
+          <span class="badge" id="level"></span>
+        </div>
+        <div class="meter" aria-hidden="true"><span id="meter"></span></div>
+        <dl>
+          <dt>Score</dt>
+          <dd id="score"></dd>
+          <dt>Rules</dt>
+          <dd id="rules"></dd>
+          <dt>Time</dt>
+          <dd id="time"></dd>
+          <dt>Query hash</dt>
+          <dd id="hash" class="mono"></dd>
+        </dl>
+        <p class="muted" id="next"></p>
+      </section>
+
+      <section class="card">
+        <h2>What the full system does next</h2>
+        <p class="muted">
+          A question the gateway lets through goes on to hybrid retrieval over the tenant's own
+          documents, then to the LLM with the excerpts framed as untrusted data, and the answer is
+          checked by the output sanitizer before it is returned. Two answers recorded from the full
+          stack on 2026-11-05, over the example corpus of a fictional retailer:
+        </p>
+        <div class="recorded">
+          <p class="q">¿Cuántos días tengo para devolver un colchón?</p>
+          <p class="a">15 días.</p>
+          <p class="src">source: politica-de-devoluciones.md</p>
+        </div>
+        <div class="recorded">
+          <p class="q">¿Cuánto vale un punto del programa de lealtad y cuándo vencen?</p>
+          <p class="a">Un punto vale Q0.10 y vence 12 meses después de haberse acumulado.</p>
+          <p class="src">source: programa-de-lealtad.md</p>
+        </div>
+        <p class="muted">
+          To run all of it, observability included, see the
+          <a href="https://github.com/Carlosmarroquin20/Aegis-RAG#quick-start" rel="noreferrer"
+            >quick start</a
+          >. How well the gateway does on 326 labelled questions:
+          <a
+            href="https://github.com/Carlosmarroquin20/Aegis-RAG/blob/main/docs/GATEWAY_EVALUATION.md"
+            rel="noreferrer"
+            >gateway evaluation</a
+          >.
+        </p>
+      </section>
+
+      <footer>
+        <a href="https://github.com/Carlosmarroquin20/Aegis-RAG" rel="noreferrer">Source on GitHub</a>
+        · <a href="../">Interactive diagrams</a>
+      </footer>
+    </main>
+  </body>
+</html>

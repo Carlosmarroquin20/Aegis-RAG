@@ -1,0 +1,293 @@
+/* Same palette as the web console and the diagrams page. Dark only, like them. */
+:root {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --panel: #111a2e;
+  --border: #1f2c47;
+  --text: #e5edf5;
+  --muted: #9fb2c8;
+  --accent: #3b82f6;
+  --clean: #34d399;
+  --suspicious: #fbbf24;
+  --blocked: #f87171;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+main {
+  width: min(760px, 100% - 32px);
+  margin: 0 auto;
+  padding: 32px 0 48px;
+  display: grid;
+  gap: 16px;
+}
+
+a {
+  color: #7fb0ff;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mark {
+  width: 36px;
+  height: 36px;
+  color: var(--accent);
+  flex: none;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.sub,
+.muted {
+  color: var(--muted);
+}
+
+.sub {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.card > p:first-child {
+  margin-top: 0;
+}
+
+.card > p:last-child {
+  margin-bottom: 0;
+}
+
+.status {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.status.ready {
+  color: var(--clean);
+}
+
+.status.error {
+  color: var(--blocked);
+}
+
+.label {
+  margin: 12px 0 6px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: #16223a;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  border-color: var(--accent);
+}
+
+form {
+  margin-top: 16px;
+}
+
+textarea {
+  width: 100%;
+  font: 0.95rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+form .row {
+  margin-top: 10px;
+}
+
+.toggle {
+  font-size: 0.9rem;
+}
+
+button[type="submit"] {
+  font: inherit;
+  font-weight: 600;
+  color: white;
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 20px;
+  cursor: pointer;
+}
+
+button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.result[data-level="CLEAN"] {
+  border-color: color-mix(in srgb, var(--clean) 50%, var(--border));
+}
+
+.result[data-level="SUSPICIOUS"] {
+  border-color: color-mix(in srgb, var(--suspicious) 50%, var(--border));
+}
+
+.result[data-level="BLOCKED"],
+.result[data-level="INVALID"] {
+  border-color: color-mix(in srgb, var(--blocked) 50%, var(--border));
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  padding: 2px 10px;
+  border: 1px solid currentColor;
+}
+
+[data-level="CLEAN"] .badge {
+  color: var(--clean);
+}
+
+[data-level="SUSPICIOUS"] .badge {
+  color: var(--suspicious);
+}
+
+[data-level="BLOCKED"] .badge,
+[data-level="INVALID"] .badge {
+  color: var(--blocked);
+}
+
+.meter {
+  height: 6px;
+  margin: 14px 0 6px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  width: 0;
+  transition: width 0.2s;
+  background: var(--clean);
+}
+
+[data-level="SUSPICIOUS"] .meter span {
+  background: var(--suspicious);
+}
+
+[data-level="BLOCKED"] .meter span {
+  background: var(--blocked);
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 12px 0;
+}
+
+dt {
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+}
+
+.recorded {
+  border-left: 3px solid var(--border);
+  padding: 2px 0 2px 12px;
+  margin: 12px 0;
+}
+
+.recorded p {
+  margin: 0;
+}
+
+.recorded .q {
+  color: var(--muted);
+}
+
+.recorded .src {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+footer {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}

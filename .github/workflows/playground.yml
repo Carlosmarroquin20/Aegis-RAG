@@ -1,0 +1,63 @@
+name: Publish gateway playground
+
+# Rebuilds the gateway playground (deploy/gateway-playground) from the current
+# gateway source and publishes it under /playground/ on GitHub Pages, which this
+# repository serves from the gh-pages branch. Runs whenever the code the page
+# loads may have changed, so the public page never runs an older gateway than
+# main does. The rest of gh-pages (the diagrams) is left as it is.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/aegis/__init__.py"
+      - "src/aegis/domain/**"
+      - "src/aegis/infrastructure/__init__.py"
+      - "src/aegis/infrastructure/security/**"
+      - "deploy/gateway-playground/**"
+      - ".github/workflows/playground.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push to gh-pages
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        run: python3 deploy/gateway-playground/build.py --out "$RUNNER_TEMP/playground"
+
+      - name: Check out gh-pages
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Commit and push if the page changed
+        working-directory: gh-pages
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          rm -rf playground
+          cp -R "$RUNNER_TEMP/playground" playground
+          git add --all playground
+          if git diff --cached --quiet; then
+            echo "Playground unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Publish gateway playground from ${SOURCE_SHA::12}"
+          git push origin gh-pages
