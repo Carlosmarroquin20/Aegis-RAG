@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from aegis.config import Settings
 from aegis.infrastructure.tenancy.registry import TenantRegistry
 
 _DEPLOY = Path(__file__).resolve().parents[2] / "deploy" / "huggingface"
@@ -62,6 +63,14 @@ class TestDemoImage:
     def test_the_seed_step_indexes_the_tenant_the_api_serves(self) -> None:
         assert "--tenant demo" in _DOCKERFILE
         assert _env("TENANTS_FILE") == "/app/deploy/tenants.toml"
+
+    def test_the_baked_embedding_model_is_the_default(self) -> None:
+        """
+        The demo pins the model it bakes and indexes with. When the default
+        changes, the demo must follow, or its corpus is embedded with a model
+        the rest of the project no longer evaluates.
+        """
+        assert _arg_default("EMBEDDING_MODEL") == Settings.model_fields["embedding_model"].default
 
     def test_no_llm_key_is_baked_in(self) -> None:
         """The provider key is a platform secret; the API must refuse to start without it."""

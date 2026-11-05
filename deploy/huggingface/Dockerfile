@@ -15,6 +15,9 @@
 #   - Read-only corpus and one public key with a request limit and a daily
 #     token budget (tenants.toml).
 #   - No Prometheus, Grafana or Jaeger: /metrics is not reachable from outside.
+#   - Retrieval is the default hybrid mode; the reranker, the faithfulness check
+#     and the shadow injection classifier stay off, so no model beyond the
+#     embedding one is baked and each answer costs no extra CPU on free hardware.
 #
 # Build from the repository root:
 #   docker build -f deploy/huggingface/Dockerfile -t aegis-rag-demo .
@@ -25,7 +28,7 @@
 # Public on purpose: it ends up in the browser bundle. tenants.toml holds its
 # digest, and tests/unit/test_demo_deployment.py checks that the two match.
 ARG DEMO_API_KEY=aegis-public-demo-key
-ARG EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+ARG EMBEDDING_MODEL=intfloat/multilingual-e5-small
 
 # ── Stage 1: console bundle ───────────────────────────────────────────────────
 FROM node:26-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS console
