@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 
 import { checkReady } from "./api";
 import { ApiKeyBar } from "./components/ApiKeyBar";
+import { DemoCorpusPanel } from "./components/DemoCorpusPanel";
+import { DemoNotice } from "./components/DemoNotice";
 import { QueryPanel } from "./components/QueryPanel";
 import { SecurityDemo } from "./components/SecurityDemo";
 import { UploadPanel } from "./components/UploadPanel";
+import { DEMO_API_KEY, DEMO_QUESTIONS, IS_DEMO } from "./demo";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 
 type Tab = "query" | "documents" | "security";
@@ -16,13 +19,14 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function App() {
-  const [apiKey, setApiKey] = useLocalStorage("aegis.apiKey", "");
+  const [storedKey, setStoredKey] = useLocalStorage("aegis.apiKey", "");
+  const apiKey = IS_DEMO ? DEMO_API_KEY : storedKey;
   const [tab, setTab] = useState<Tab>("query");
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col gap-5 px-4 py-8">
       <Header />
-      <ApiKeyBar apiKey={apiKey} onChange={setApiKey} />
+      {IS_DEMO ? <DemoNotice /> : <ApiKeyBar apiKey={storedKey} onChange={setStoredKey} />}
 
       <nav className="flex gap-1 rounded-xl border border-aegis-border bg-aegis-panel/50 p-1">
         {TABS.map(({ id, label }) => (
@@ -37,8 +41,10 @@ export default function App() {
       </nav>
 
       <main className="flex-1">
-        {tab === "query" && <QueryPanel apiKey={apiKey} />}
-        {tab === "documents" && <UploadPanel apiKey={apiKey} />}
+        {tab === "query" && (
+          <QueryPanel apiKey={apiKey} examples={IS_DEMO ? DEMO_QUESTIONS : []} />
+        )}
+        {tab === "documents" && (IS_DEMO ? <DemoCorpusPanel /> : <UploadPanel apiKey={apiKey} />)}
         {tab === "security" && <SecurityDemo apiKey={apiKey} />}
       </main>
 

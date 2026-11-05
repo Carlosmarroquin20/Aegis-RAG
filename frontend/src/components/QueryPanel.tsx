@@ -5,7 +5,7 @@ import { ApiError, type FaithfulnessReport, type StreamStart } from "../types";
 import { SourceList } from "./SourceList";
 import { ThreatBadge } from "./ThreatBadge";
 
-export function QueryPanel({ apiKey }: { apiKey: string }) {
+export function QueryPanel({ apiKey, examples = [] }: { apiKey: string; examples?: string[] }) {
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState(5);
   const [loading, setLoading] = useState(false);
@@ -59,6 +59,20 @@ export function QueryPanel({ apiKey }: { apiKey: string }) {
   return (
     <div className="space-y-4">
       <form onSubmit={run} className="card space-y-4 p-5">
+        {examples.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {examples.map((example) => (
+              <button
+                key={example}
+                type="button"
+                className="btn-ghost text-left text-xs"
+                onClick={() => setQuery(example)}
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        )}
         <textarea
           className="field min-h-[120px] resize-y"
           placeholder="Ask a question about your indexed documents…"
