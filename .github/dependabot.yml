@@ -78,6 +78,16 @@ updates:
     commit-message:
       prefix: "build(deps)"
 
+  # The public demo image repeats the base images of the two above; keep its
+  # pins moving with theirs.
+  - package-ecosystem: "docker"
+    directory: "/deploy/huggingface"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "build(deps)"
+
   # ── Compose stack images ────────────────────────────────────────────────────
   - package-ecosystem: "docker-compose"
     directory: "/"

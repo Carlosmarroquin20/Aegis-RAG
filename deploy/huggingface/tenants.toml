@@ -1,0 +1,23 @@
+# The public demo's only tenant. Its key is public on purpose: the browser
+# bundle carries it (VITE_DEMO_API_KEY) and anyone can read it there. What
+# protects the deployment is what the key is allowed to do:
+#
+#   - rate_limit_requests is shared by every visitor, since they all use one key;
+#   - daily_token_budget caps what the demo can spend at the LLM provider in a
+#     UTC day (429 with Retry-After once it is used up). Keep it below the
+#     provider's free daily allowance for the configured model;
+#   - the deployment is read-only (DOCUMENT_WRITES_ENABLED=false), so the key
+#     cannot change the corpus either.
+#
+# The digest below is SHA-256("aegis-public-demo-key"). If you change the key,
+# change DEMO_API_KEY in deploy/huggingface/Dockerfile to match;
+# tests/unit/test_demo_deployment.py fails if the two disagree.
+
+[[tenant]]
+id = "demo"
+collection = "demo-atencion-cliente"
+api_key_sha256 = [
+  "005f01753376aa69df93198f4c29156007d82aa7a2f0d42c73e22756b4061975",
+]
+rate_limit_requests = 20
+daily_token_budget = 400_000

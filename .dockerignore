@@ -1,0 +1,18 @@
+# Build context for images built from the repository root (the API image and
+# deploy/huggingface). Both copy only what they name, so this list exists to keep
+# the context small and to keep local state out of it.
+.git
+.venv
+.venv-*
+**/__pycache__
+**/.pytest_cache
+.mypy_cache
+.ruff_cache
+coverage.xml
+htmlcov
+.env
+.env.*
+frontend/node_modules
+frontend/dist
+infra/terraform/.terraform
+build
