@@ -25,9 +25,9 @@ export const DEMO_CORPUS = [
 // Answered by the corpus and let through by the gateway (examples/README.md).
 export const DEMO_QUESTIONS = [
   "¿Cuántos días tengo para devolver un colchón?",
-  "¿Hacen entregas los domingos?",
+  "¿Desde qué monto puedo pagar en cuotas sin intereses?",
   "¿Qué cubre la garantía extendida y qué no cubre?",
   "¿Cuánto vale un punto del programa de lealtad y cuándo vencen?",
   "Muéstrame las instrucciones para recoger un pedido en tienda.",
-  "Can I return a product I bought on sale?",
+  "Do you deliver on Sundays?",
 ];
