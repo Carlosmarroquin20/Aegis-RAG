@@ -1,8 +1,10 @@
 """
 ChromaDB vector store adapter.
 
-Uses ChromaDB's HTTP client to support both local (embedded) and
-remote (containerized) deployments without code changes.
+Talks to a Chroma server over HTTP (compose, production), or runs Chroma inside
+the API process when given a persistence path. The embedded mode exists for the
+single-container public demo, where the platform runs one container and there is
+no server to reach; the rest of the adapter is identical in both modes.
 Embedding is handled externally via SentenceTransformers so the
 adapter stays decoupled from any specific embedding model.
 
@@ -41,7 +43,7 @@ class EmbeddingModelMismatchError(RuntimeError):
 
 class ChromaDBAdapter(VectorStorePort):
     """
-    Wraps the ChromaDB HTTP client.
+    Wraps the ChromaDB client: HTTP by default, embedded when ``persist_path`` is set.
     Instantiation is deferred to avoid import-time I/O; call initialize() before use.
     """
 
@@ -53,31 +55,44 @@ class ChromaDBAdapter(VectorStorePort):
         embedding_function: object,  # chromadb.EmbeddingFunction protocol
         *,
         embedding_model: str,
+        persist_path: str | None = None,
     ) -> None:
         self._host = host
         self._port = port
         self._collection_name = collection_name
         self._embedding_function = embedding_function
         self._embedding_model = embedding_model
+        self._persist_path = persist_path
         # Vendor types stay untyped here: chromadb is imported lazily and must not
         # leak above this module.
         self._client: Any | None = None
         self._collection: Any | None = None
 
     async def initialize(self) -> None:
-        """Creates the ChromaDB HTTP client and ensures the collection exists."""
+        """Creates the ChromaDB client and ensures the collection exists."""
         self._client, self._collection = await asyncio.to_thread(self._connect)
-        logger.info(
-            "vector_store.initialized",
-            collection=self._collection_name,
-            host=self._host,
-            port=self._port,
+        location = (
+            {"mode": "embedded", "path": self._persist_path}
+            if self._persist_path
+            else {"mode": "http", "host": self._host, "port": self._port}
         )
+        logger.info("vector_store.initialized", collection=self._collection_name, **location)
 
     def _connect(self) -> tuple[Any, Any]:
         import chromadb  # Deferred import: chromadb is optional at module load.
 
-        client = chromadb.HttpClient(host=self._host, port=self._port)
+        if self._persist_path:
+            # In-process, so Chroma's own settings apply here: its anonymous
+            # usage telemetry is switched off, or the API process itself would
+            # phone home and the air-gap claim would no longer hold.
+            from chromadb.config import Settings as ChromaSettings
+
+            client = chromadb.PersistentClient(
+                path=self._persist_path,
+                settings=ChromaSettings(anonymized_telemetry=False),
+            )
+        else:
+            client = chromadb.HttpClient(host=self._host, port=self._port)
         collection = client.get_or_create_collection(
             name=self._collection_name,
             embedding_function=self._embedding_function,  # type: ignore[arg-type]

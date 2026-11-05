@@ -133,6 +133,27 @@ class Settings(BaseSettings):
     chroma_host: str = "localhost"
     chroma_port: int = 8001
     chroma_collection: str = "aegis_documents"
+    # "http" talks to the Chroma server at CHROMA_HOST:CHROMA_PORT. "embedded"
+    # runs Chroma inside the API process and persists to CHROMA_PATH: one process,
+    # no server. It suits a single container (the public demo image), not a
+    # deployment with several API replicas, which would each open the same files.
+    chroma_mode: str = "http"  # "http" | "embedded"
+    chroma_path: str = ""
+
+    @field_validator("chroma_mode")
+    @classmethod
+    def validate_chroma_mode(cls, v: str) -> str:
+        allowed = {"http", "embedded"}
+        lowered = v.lower()
+        if lowered not in allowed:
+            raise ValueError(f"chroma_mode must be one of {allowed}")
+        return lowered
+
+    @model_validator(mode="after")
+    def require_chroma_path_when_embedded(self) -> Settings:
+        if self.chroma_mode == "embedded" and not self.chroma_path.strip():
+            raise ValueError("CHROMA_MODE=embedded requires CHROMA_PATH to be set")
+        return self
 
     # ── LLM Backend ────────────────────────────────────────────────────────────
     # "ollama" runs the model locally and keeps the deployment air-gapped.

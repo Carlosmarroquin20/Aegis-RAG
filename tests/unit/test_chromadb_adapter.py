@@ -10,7 +10,9 @@ loop thread.
 
 from __future__ import annotations
 
+import sys
 import threading
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -298,3 +300,49 @@ class TestEmbeddingModelGuard:
 
         assert created["metadata"][EMBEDDING_MODEL_KEY] == "model-a"
         assert created["metadata"]["hnsw:space"] == "cosine"
+
+
+class TestClientSelection:
+    """HTTP by default; in-process with telemetry off when a path is given."""
+
+    @pytest.fixture()
+    def fake_chromadb(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+        created: dict[str, Any] = {}
+        collection = SimpleNamespace(metadata={EMBEDDING_MODEL_KEY: "model-a"})
+
+        class _Client:
+            def __init__(self, kind: str, **kwargs: Any) -> None:
+                created["kind"], created["kwargs"] = kind, kwargs
+
+            def get_or_create_collection(self, **kwargs: Any) -> Any:
+                return collection
+
+        chromadb = ModuleType("chromadb")
+        chromadb.HttpClient = lambda **kw: _Client("http", **kw)  # type: ignore[attr-defined]
+        chromadb.PersistentClient = lambda **kw: _Client("embedded", **kw)  # type: ignore[attr-defined]
+        config = ModuleType("chromadb.config")
+        config.Settings = lambda **kw: SimpleNamespace(**kw)  # type: ignore[attr-defined]
+        chromadb.config = config  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "chromadb", chromadb)
+        monkeypatch.setitem(sys.modules, "chromadb.config", config)
+        return created
+
+    def _store(self, persist_path: str | None) -> ChromaDBAdapter:
+        return ChromaDBAdapter(
+            host="chroma",
+            port=8000,
+            collection_name="docs",
+            embedding_function=object(),
+            embedding_model="model-a",
+            persist_path=persist_path,
+        )
+
+    async def test_http_client_by_default(self, fake_chromadb: dict[str, Any]) -> None:
+        await self._store(None).initialize()
+        assert fake_chromadb == {"kind": "http", "kwargs": {"host": "chroma", "port": 8000}}
+
+    async def test_embedded_client_with_telemetry_off(self, fake_chromadb: dict[str, Any]) -> None:
+        await self._store("/data/chroma").initialize()
+        assert fake_chromadb["kind"] == "embedded"
+        assert fake_chromadb["kwargs"]["path"] == "/data/chroma"
+        assert fake_chromadb["kwargs"]["settings"].anonymized_telemetry is False

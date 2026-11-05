@@ -226,6 +226,7 @@ def get_collection_store(collection: str) -> ChromaDBAdapter:
         collection_name=collection,
         embedding_function=get_embedding_function(),
         embedding_model=cfg.embedding_model,
+        persist_path=cfg.chroma_path if cfg.chroma_mode == "embedded" else None,
     )
 
 

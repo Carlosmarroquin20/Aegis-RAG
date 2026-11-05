@@ -35,6 +35,7 @@ class TestValidation:
             ("otel_exporter", "zipkin"),
             ("retrieval_mode", "sparse"),
             ("retrieval_mode", "rerank"),
+            ("chroma_mode", "sqlite"),
         ],
     )
     def test_unknown_choice_is_rejected_at_startup(self, field: str, value: str) -> None:
@@ -64,6 +65,17 @@ class TestValidation:
         assert settings.reranker_enabled is rerank
 
 
+class TestEmbeddedVectorStore:
+    def test_embedded_mode_requires_a_path(self) -> None:
+        """Without one, Chroma would quietly write to ./chroma in the working directory."""
+        with pytest.raises(ValidationError, match="CHROMA_PATH"):
+            Settings(chroma_mode="embedded", chroma_path=" ")
+
+    def test_embedded_mode_with_a_path_is_accepted(self) -> None:
+        settings = Settings(chroma_mode="EMBEDDED", chroma_path="/data/chroma")
+        assert settings.chroma_mode == "embedded"
+
+
 class TestSecureDefaults:
     def test_defaults_are_conservative(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for name in ("DEBUG", "VALID_API_KEYS", "SECURITY_STRICT_MODE", "TRACING_ENABLED"):
@@ -73,6 +85,7 @@ class TestSecureDefaults:
         assert settings.debug is False
         assert settings.security_strict_mode is True
         assert settings.tracing_enabled is False
+        assert settings.chroma_mode == "http"
         # No keys configured means nobody authenticates: closed, not open.
         assert settings.api_keys_set == frozenset()
 
