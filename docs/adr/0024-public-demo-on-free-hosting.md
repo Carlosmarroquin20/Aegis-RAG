@@ -27,9 +27,13 @@ the visitor's browser.
   and copies exactly those files, and refuses to build if the gateway starts importing a
   package the browser cannot load. `structlog` is replaced by a no-op stand-in; pydantic comes
   with Pyodide.
-- A unit test imports the built tree on its own, so a file missing from the page fails the
-  build here, not in a visitor's browser. A workflow republishes the page whenever the gateway
-  changes on main.
+- No third-party code runs: the Pyodide runtime is served by the site, taken from its npm
+  package and checked against the integrity hash npm publishes, with the pydantic wheels checked
+  against the runtime's own lock file. The CSP allows `'self'` only. Loading it from a CDN would
+  have been simpler, and would have let a compromised CDN run code on the page.
+- The build imports the built tree on its own, with the pydantic version the runtime ships, and
+  refuses to publish a page whose gateway does not block a known attack. A workflow republishes
+  the page whenever anything under `src/aegis/` changes on main.
 - Nothing typed leaves the tab, so there is no key, no quota and nothing to abuse. The page
   says what it is not: the first layer only, with two answers recorded from the full stack to
   show what follows.

@@ -18,14 +18,21 @@ the score, the rules that fired and how long it took. There is no API, no key an
 
 - **Source:** [`deploy/gateway-playground/`](../deploy/gateway-playground). `build.py` follows
   the gateway's imports from `src/` and copies exactly those files; the page loads them into
-  Pyodide. `tests/unit/test_gateway_playground.py` imports the built tree on its own, so a
-  missing file fails CI rather than a visitor's browser.
-- **Publishing:** the *Publish gateway playground* workflow rebuilds it and pushes it to
-  `playground/` on the `gh-pages` branch whenever the gateway changes on main (or by hand).
-- **Locally:**
+  Pyodide. `--verify` imports the built tree on its own and checks it blocks a known attack, so
+  a missing file fails the build rather than a visitor's browser.
+- **No third-party code at runtime:** the Pyodide runtime is served by the site itself. The
+  build takes it from the `pyodide` npm package, checked against the SHA-512 integrity npm
+  publishes (pinned in `build.py`), and the pydantic wheels against the SHA-256 in that
+  runtime's lock file. The page's CSP allows `'self'` only, plus `'wasm-unsafe-eval'` to compile
+  the runtime. GitHub Pages cannot send headers, so the policy is a `<meta>` tag, and framing
+  cannot be restricted; the page has no state or action worth framing.
+- **Publishing:** the *Publish gateway playground* workflow rebuilds and verifies it, on Python
+  3.12 with the pydantic version Pyodide ships, and pushes it to `playground/` on the
+  `gh-pages` branch whenever anything under `src/aegis/` changes on main (or by hand).
+- **Locally** (downloads the runtime, about 15 MB; `--verify` needs pydantic 2.10.5):
 
   ```bash
-  python deploy/gateway-playground/build.py --out build/playground
+  uv run --no-project --python 3.12 --with "pydantic==2.10.5" python deploy/gateway-playground/build.py --out build/playground --verify
   python -m http.server 8765 --directory build/playground
   ```
 
