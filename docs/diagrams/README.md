@@ -24,6 +24,17 @@ node bin/archify.mjs validate architecture aegis-architecture.json --quality sho
 node bin/archify.mjs deliver  architecture aegis-architecture.json aegis-architecture.html --quality showcase --json
 ```
 
+Before publishing a render to `gh-pages`, give it a Content-Security-Policy:
+
+```bash
+python docs/diagrams/add_csp.py aegis-architecture.html aegis-query-sequence.html
+```
+
+It allows only the page's own inline scripts, by SHA-256, plus embedded fonts and images, and no
+network at all, so a future Archify change cannot quietly start loading or sending anything.
+Re-running it after a new render replaces the tag. GitHub Pages cannot send headers, which is why
+the policy is a `<meta>` tag.
+
 Every render must pass Archify's nine showcase composition checks (single SVG, orthogonal arrows,
 label/route clearance, no crossings, corridor spacing, route rhythm, legend clearance) before it is
 accepted. Open the resulting `.html` in a browser to explore it (pan/zoom, guided views, theme
