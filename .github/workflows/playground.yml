@@ -5,15 +5,19 @@ name: Publish gateway playground
 # repository serves from the gh-pages branch. Runs whenever the code the page
 # loads may have changed, so the public page never runs an older gateway than
 # main does. The rest of gh-pages (the diagrams) is left as it is.
+#
+# Nothing is published unless the built page passed --verify: the copied gateway
+# imported on its own, on Python 3.12 with the pydantic version the vendored
+# Pyodide runtime ships (build.py refuses any other), and blocked a known attack.
+# The runtime itself is downloaded and checked against pinned hashes in build.py.
 
 on:
   push:
     branches: [main]
     paths:
-      - "src/aegis/__init__.py"
-      - "src/aegis/domain/**"
-      - "src/aegis/infrastructure/__init__.py"
-      - "src/aegis/infrastructure/security/**"
+      # All of the package: the build follows the gateway's imports wherever
+      # they lead, so a narrower filter could leave the page on old code.
+      - "src/aegis/**"
       - "deploy/gateway-playground/**"
       - ".github/workflows/playground.yml"
   workflow_dispatch:
@@ -36,8 +40,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build
-        run: python3 deploy/gateway-playground/build.py --out "$RUNNER_TEMP/playground"
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Build and verify
+        # Python and pydantic as in the browser (Pyodide 0.27.7: CPython 3.12,
+        # pydantic 2.10.5). build.py fails if these drift from its runtime.
+        run: >-
+          uv run --no-project --python 3.12 --with "pydantic==2.10.5"
+          python deploy/gateway-playground/build.py --out "$RUNNER_TEMP/playground" --verify
 
       - name: Check out gh-pages
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
