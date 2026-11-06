@@ -8,15 +8,17 @@
       name="description"
       content="Aegis-RAG's prompt-injection gateway, running in your browser on Pyodide. Try to get past it."
     />
-    <!-- Pages cannot send headers, so the policy is declared here. Pyodide needs
-         'wasm-unsafe-eval' to compile its runtime; everything else is this site
-         or the pinned Pyodide release on jsDelivr. -->
+    <!-- Pages cannot send headers, so the policy is declared here. Everything,
+         the Pyodide runtime included, is served by this site (build.py checks
+         the runtime against pinned hashes); 'wasm-unsafe-eval' lets the browser
+         compile Pyodide's WebAssembly, and nothing else is allowed. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; connect-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'"
+      content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'"
     />
+    <meta name="referrer" content="no-referrer" />
     <link rel="stylesheet" href="playground.css" />
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
+    <script src="pyodide/pyodide.js"></script>
     <script type="module" src="playground.js"></script>
   </head>
   <body>

@@ -187,7 +187,8 @@ button[type="submit"]:disabled {
 }
 
 .result[data-level="BLOCKED"],
-.result[data-level="INVALID"] {
+.result[data-level="INVALID"],
+.result[data-level="ERROR"] {
   border-color: color-mix(in srgb, var(--blocked) 50%, var(--border));
 }
 
@@ -209,7 +210,8 @@ button[type="submit"]:disabled {
 }
 
 [data-level="BLOCKED"] .badge,
-[data-level="INVALID"] .badge {
+[data-level="INVALID"] .badge,
+[data-level="ERROR"] .badge {
   color: var(--blocked);
 }
 
