@@ -125,21 +125,38 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("startup.begin", app=cfg.app_name, version=cfg.app_version)
 
-    if "openai_compatible" in (cfg.llm_provider, cfg.llm_fallback_provider):
+    hosted_roles = cfg.hosted_llm_roles
+    if hosted_roles:
         # Logged at warning level on purpose: this is the one configuration in
         # which document content leaves the host, and it should be impossible to
         # run that way without the log saying so.
+        if "primary" in hosted_roles:
+            detail = "queries and retrieved excerpts are sent to this provider"
+        elif hosted_roles == ["small"]:
+            detail = (
+                "queries the router calls simple, and their retrieved excerpts, are sent "
+                "to this provider"
+            )
+        else:
+            detail = (
+                "queries and retrieved excerpts are sent to this provider "
+                "whenever the local model fails"
+            )
         logger.warning(
             "startup.hosted_llm_enabled",
             provider_host=urlsplit(cfg.llm_base_url).hostname,
             model=cfg.llm_model,
-            role="primary" if cfg.llm_provider == "openai_compatible" else "fallback",
-            detail=(
-                "queries and retrieved excerpts are sent to this provider"
-                if cfg.llm_provider == "openai_compatible"
-                else "queries and retrieved excerpts are sent to this provider "
-                "whenever the local model fails"
-            ),
+            role=hosted_roles[0],
+            roles=hosted_roles,
+            detail=detail,
+        )
+    if cfg.routing_enabled:
+        logger.info(
+            "startup.llm_routing_enabled",
+            small_provider=cfg.small_llm_provider,
+            small_model=cfg.llm_small_model,
+            large_provider=cfg.llm_provider,
+            large_model=cfg.large_llm_model,
         )
     if cfg.llm_fallback_provider:
         logger.info(

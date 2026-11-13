@@ -34,6 +34,7 @@ from aegis.infrastructure.faithfulness.nli_model import TransformersNLIModel
 from aegis.infrastructure.llm.fallback import Backend, FallbackLLMClient
 from aegis.infrastructure.llm.ollama_adapter import OllamaAdapter
 from aegis.infrastructure.llm.openai_compatible_adapter import OpenAICompatibleAdapter
+from aegis.infrastructure.llm.router import RoutingLLMClient
 from aegis.infrastructure.observability.metrics import LLMPricing, PrometheusQueryMetrics
 from aegis.infrastructure.parsers.parser_registry import ParserRegistry
 from aegis.infrastructure.retrieval.bm25 import StoreBackedLexicalIndex
@@ -163,23 +164,37 @@ def get_llm_client() -> LLMClientPort:
     """
     cfg = get_settings()
     primary = _llm_backend(cfg.llm_provider)
-    if not cfg.llm_fallback_provider:
-        return primary.client
-    return FallbackLLMClient(
-        [primary, _llm_backend(cfg.llm_fallback_provider)],
+    large: LLMClientPort = primary.client
+    if cfg.llm_fallback_provider:
+        large = FallbackLLMClient(
+            [primary, _llm_backend(cfg.llm_fallback_provider)],
+            failure_threshold=cfg.llm_circuit_failure_threshold,
+            reset_seconds=cfg.llm_circuit_reset_seconds,
+        )
+    if not cfg.routing_enabled:
+        return large
+    small = _llm_backend(cfg.small_llm_provider, model=cfg.llm_small_model)
+    return RoutingLLMClient(
+        # Named with its model: on one hosted provider the small and the large
+        # model share a host, and each needs its own circuit gauge.
+        small=Backend(name=f"{small.name}/{cfg.llm_small_model}", client=small.client),
+        large=large,
         failure_threshold=cfg.llm_circuit_failure_threshold,
         reset_seconds=cfg.llm_circuit_reset_seconds,
     )
 
 
-def _llm_backend(provider: str) -> Backend:
-    """One adapter, named the way its answers will report their provider."""
+def _llm_backend(provider: str, *, model: str | None = None) -> Backend:
+    """
+    One adapter, named the way its answers will report their provider. ``model``
+    overrides the configured one, for the router's small model.
+    """
     cfg = get_settings()
     if provider == "openai_compatible":
         adapter = OpenAICompatibleAdapter(
             base_url=cfg.llm_base_url,
             api_key=cfg.llm_api_key.get_secret_value(),
-            model=cfg.llm_model,
+            model=model or cfg.llm_model,
             timeout_seconds=cfg.llm_timeout_seconds,
         )
         return Backend(
@@ -187,7 +202,7 @@ def _llm_backend(provider: str) -> Backend:
         )
     ollama = OllamaAdapter(
         base_url=cfg.ollama_base_url,
-        model=cfg.ollama_model,
+        model=model or cfg.ollama_model,
         timeout_seconds=cfg.ollama_timeout_seconds,
     )
     return Backend(name="ollama", client=ollama)
@@ -368,18 +383,28 @@ def require_document_writes() -> None:
         )
 
 
-def _hosted_llm_prices() -> dict[str, LLMPricing]:
-    """Prices for the hosted provider, keyed the way its adapter names itself."""
+def _hosted_llm_prices() -> dict[str | tuple[str, str], LLMPricing]:
+    """
+    Prices for the hosted provider, keyed the way its adapter names itself. The
+    router's small model, when hosted, shares that host, so its price is keyed
+    by host and model.
+    """
     cfg = get_settings()
     if not cfg.llm_base_url:
         return {}
     host = urlsplit(cfg.llm_base_url).hostname or ""
-    return {
+    prices: dict[str | tuple[str, str], LLMPricing] = {
         host: LLMPricing(
             input_per_million=cfg.llm_input_price_per_mtok,
             output_per_million=cfg.llm_output_price_per_mtok,
         )
     }
+    if cfg.routing_enabled and cfg.small_llm_provider == "openai_compatible":
+        prices[(host, cfg.llm_small_model)] = LLMPricing(
+            input_per_million=cfg.llm_small_input_price_per_mtok,
+            output_per_million=cfg.llm_small_output_price_per_mtok,
+        )
+    return prices
 
 
 def get_query_use_case(request: Request) -> QueryRAGUseCase:

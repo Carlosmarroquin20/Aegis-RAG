@@ -203,6 +203,32 @@ class Settings(BaseSettings):
     llm_circuit_failure_threshold: int = Field(default=3, ge=1)
     llm_circuit_reset_seconds: float = Field(default=30.0, gt=0)
 
+    # Model routing (ADR 0026): "heuristic" sends the questions the complexity
+    # classifier calls simple to a small model, and the rest to the backend(s)
+    # above. "off" uses the backend(s) above for everything.
+    llm_routing: str = "off"  # "off" | "heuristic"
+    # Where the small model runs. "" means the same provider as LLM_PROVIDER,
+    # the usual case: one hosted provider serving a small and a large model
+    # (LLM_BASE_URL and LLM_API_KEY are shared), or a second Ollama model.
+    llm_small_provider: str = ""  # "" | "ollama" | "openai_compatible"
+    llm_small_model: str = ""
+    # Prices of the small model, when it is hosted; see the ones above.
+    llm_small_input_price_per_mtok: float = Field(default=0.0, ge=0)
+    llm_small_output_price_per_mtok: float = Field(default=0.0, ge=0)
+
+    @property
+    def routing_enabled(self) -> bool:
+        return self.llm_routing == "heuristic"
+
+    @property
+    def small_llm_provider(self) -> str:
+        """The provider the small model runs on, once the default is resolved."""
+        return self.llm_small_provider or self.llm_provider
+
+    @property
+    def large_llm_model(self) -> str:
+        return self.llm_model if self.llm_provider == "openai_compatible" else self.ollama_model
+
     @field_validator("llm_provider")
     @classmethod
     def validate_llm_provider(cls, v: str) -> str:
@@ -221,16 +247,60 @@ class Settings(BaseSettings):
             raise ValueError(f"llm_fallback_provider must be one of {allowed}")
         return lowered
 
+    @field_validator("llm_routing")
+    @classmethod
+    def validate_llm_routing(cls, v: str) -> str:
+        allowed = {"off", "heuristic"}
+        lowered = v.strip().lower()
+        if lowered not in allowed:
+            raise ValueError(f"llm_routing must be one of {allowed}")
+        return lowered
+
+    @field_validator("llm_small_provider")
+    @classmethod
+    def validate_llm_small_provider(cls, v: str) -> str:
+        allowed = {"", "ollama", "openai_compatible"}
+        lowered = v.strip().lower()
+        if lowered not in allowed:
+            raise ValueError(f"llm_small_provider must be one of {allowed}")
+        return lowered
+
+    @model_validator(mode="after")
+    def require_small_llm_settings(self) -> Settings:
+        """Routing needs a small model, and one that is not the large one."""
+        if not self.routing_enabled:
+            return self
+        if not self.llm_small_model.strip():
+            raise ValueError("LLM_ROUTING=heuristic requires LLM_SMALL_MODEL to be set")
+        if (
+            self.small_llm_provider == self.llm_provider
+            and self.llm_small_model == self.large_llm_model
+        ):
+            raise ValueError("LLM_SMALL_MODEL must differ from the model it routes away from")
+        return self
+
+    @property
+    def hosted_llm_roles(self) -> list[str]:
+        """Which configured backends send queries and excerpts off the host."""
+        roles = []
+        if self.llm_provider == "openai_compatible":
+            roles.append("primary")
+        if self.llm_fallback_provider == "openai_compatible":
+            roles.append("fallback")
+        if self.routing_enabled and self.small_llm_provider == "openai_compatible":
+            roles.append("small")
+        return roles
+
     @model_validator(mode="after")
     def require_hosted_llm_settings(self) -> Settings:
         """
         Fails at startup, not on the first query, when the hosted provider is
-        selected, as the main backend or as the fallback, without the settings
+        selected, as the main backend, the fallback or the small model, without the settings
         it cannot work without.
         """
         if self.llm_fallback_provider and self.llm_fallback_provider == self.llm_provider:
             raise ValueError("LLM_FALLBACK_PROVIDER must differ from LLM_PROVIDER")
-        if "openai_compatible" not in (self.llm_provider, self.llm_fallback_provider):
+        if not self.hosted_llm_roles:
             return self
         missing = [
             name

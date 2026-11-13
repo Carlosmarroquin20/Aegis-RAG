@@ -101,6 +101,25 @@ streams_total = Counter(
     registry=registry,
 )
 
+# ── Model routing (opt-in, LLM_ROUTING) ──────────────────────────────────────
+
+# Both label sets are fixed in code: the tiers, and the classifier's signal
+# names (domain/services/query_complexity.py) or "plain_lookup".
+llm_routes_total = Counter(
+    "aegis_llm_routes_total",
+    "Questions routed to the small or the large model, by the signal that decided it.",
+    labelnames=("tier", "reason"),
+    registry=registry,
+)
+
+llm_route_escalations_total = Counter(
+    "aegis_llm_route_escalations_total",
+    "Simple questions answered by the large model because the small one could not "
+    "(small_unavailable, circuit_open).",
+    labelnames=("reason",),
+    registry=registry,
+)
+
 # ── MCP endpoint (opt-in, MCP_ENABLED) ───────────────────────────────────────
 
 # Every MCP call shares the path label "/mcp", so this is where the tool and
@@ -254,10 +273,13 @@ class PrometheusQueryMetrics(QueryMetricsPort):
     so any number of instances report into the same series.
     """
 
-    def __init__(self, prices: Mapping[str, LLMPricing] | None = None) -> None:
-        # Keyed by Generation.provider. A provider without an entry is costed at
-        # zero: with a fallback in place, one deployment can be answered by a
-        # hosted model and by a local one, and only the former is billed.
+    def __init__(self, prices: Mapping[str | tuple[str, str], LLMPricing] | None = None) -> None:
+        # Keyed by Generation.provider, or by (provider, model) where one
+        # provider serves models at different prices (the router's small and
+        # large model on one host); the model entry wins. A provider without an
+        # entry is costed at zero: with a fallback in place, one deployment can
+        # be answered by a hosted model and by a local one, and only the former
+        # is billed.
         self._prices = dict(prices or {})
 
     def query_blocked(self, assessment: ThreatAssessment) -> None:
@@ -278,7 +300,10 @@ class PrometheusQueryMetrics(QueryMetricsPort):
         labels = {"provider": generation.provider, "model": generation.model, "client": client}
         llm_tokens_total.labels(**labels, direction="input").inc(usage.input_tokens)
         llm_tokens_total.labels(**labels, direction="output").inc(usage.output_tokens)
-        pricing = self._prices.get(generation.provider, LLMPricing())
+        pricing = self._prices.get(
+            (generation.provider, generation.model),
+            self._prices.get(generation.provider, LLMPricing()),
+        )
         llm_cost_usd_total.labels(**labels).inc(pricing.cost(usage))
 
     def token_budget_exhausted(self, tenant_id: str) -> None:
