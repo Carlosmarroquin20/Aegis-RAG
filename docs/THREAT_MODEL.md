@@ -43,6 +43,7 @@ stack, and the reference deployment (`docker-compose.yml`, `infra/terraform`).
 |---|---|
 | **Anonymous network client** | Can reach the published port. No API key. |
 | **Authenticated client** | Holds a valid API key. Can query, upload, list and delete. May be malicious or compromised. |
+| **MCP agent** | An authenticated client driven by a model, through `/mcp` (when enabled). Can only ask questions. Its choices can be steered by whatever content reaches its own context. |
 | **Document author** | Cannot call the API, but writes content that an operator later ingests. The indirect prompt-injection actor. |
 | **Network neighbour** | On the same LAN as a developer machine or the same network as the host. |
 | **Upstream dependency** | A compromised package, base image or CI action. |
@@ -131,6 +132,12 @@ the 2025 edition of the OWASP Top 10 for LLM Applications.
 |---|---|---|---|---|
 | T-26 | **A streamed answer outruns the output guard** (LLM05). Text sent as it is generated cannot be taken back, so markup, a hidden link target or a reflected injection could reach the client before the checks that a buffered answer gets. | Only whole sentences are released, each sanitized first; a boundary is released only after an 80-character margin has arrived and been scanned, so a payload straddling it is caught first; open tags and links hold release. Refusals and failures before the first text keep their status codes; later failures end the stream with an `error` event and the client discards what it showed. See [ADR 0018](adr/0018-stream-whole-sanitized-sentences.md). | `application/services/streaming.py`, `interface/api/routes/query.py` | `TestReflection`, `TestFailuresAfterText`, `TestRefusalsBeforeAnyText` |
 
+### MCP endpoint
+
+| ID | Threat | Control | Enforced in | Verified by |
+|---|---|---|---|---|
+| T-27 | **An agent as the caller** (LLM06, LLM01). With `MCP_ENABLED`, the client is a model that a poisoned page or document in *its* context can steer: into destructive calls, into calls under another tenant, or into reading raw document text that carries instructions for it. A browser page on another origin could also drive a loopback-bound endpoint (DNS rebinding). | `/mcp` is a route of the same app, behind the same API key, tenant, rate limit and body limit (capped at 64 KB there), and the tool runs the same pipeline. There is one tool, `ask`, read-only, with no write or delete counterpart. The tenant comes from the key, never from tool arguments. Sources carry metadata and score, never chunk text. Refusals are tool errors worded like the REST errors. A browser `Origin` outside `CORS_ALLOWED_ORIGINS` is refused with 403. See [ADR 0025](adr/0025-mcp-server-read-only-behind-the-same-stack.md). | `interface/mcp/server.py`, `interface/api/main.py` | `TestToolOverMCP`, `TestHttpBoundary`, `TestRefusals`, `TestOriginGuard` |
+
 ## 6. Residual risks and non-goals
 
 These are known, deliberate limits. They are listed because a threat model that claims full
@@ -164,6 +171,12 @@ existing `QueryGuardPort` without changing the pipeline.
 following instructions in its context. The reflection guard catches echoes of known payloads,
 not a model that quietly follows a novel one. Do not ingest documents from sources you would
 not trust to send your users an email.
+
+**An MCP answer is read by another model.** The answer an agent receives from `ask` has passed
+the output guard, but that guard catches known reflections, not a document that quietly steers
+the answer. The agent's model then reads that answer with its own tools at hand. The tool
+description tells it to treat the answer as information, not instructions; what the agent may do
+with it is outside this system's control.
 
 **PII handling is detect-and-log, not redaction.** Regular expressions cannot classify
 personal data reliably, and silently altering answers would be worse than flagging them. A

@@ -144,7 +144,7 @@ Document ingestion follows the same hexagonal pattern: magic-byte MIME detection
 
 ## Security Controls — OWASP LLM Top 10 (2025)
 
-> The full **[threat model](docs/THREAT_MODEL.md)** lists 26 threats across the query, transport, ingestion, supply-chain and tenancy surfaces — each with the module that enforces the control and the test that verifies it — and states the residual risks plainly, including what the input gateway does *not* catch.
+> The full **[threat model](docs/THREAT_MODEL.md)** lists 27 threats across the query, transport, ingestion, supply-chain, tenancy and MCP surfaces — each with the module that enforces the control and the test that verifies it — and states the residual risks plainly, including what the input gateway does *not* catch.
 >
 > How much the input gateway actually catches is **[measured](docs/GATEWAY_EVALUATION.md)**, per attack category, with the individual misses and false positives listed.
 >
@@ -471,6 +471,36 @@ in `VALID_API_KEYS` behaves exactly as before. The design and its trade-offs are
 
 ---
 
+## MCP endpoint
+
+Agents can use a tenant's documents as a tool. With `MCP_ENABLED=true` the API serves the
+[Model Context Protocol](https://modelcontextprotocol.io) at `/mcp` (Streamable HTTP, stateless),
+and any MCP client connects with its API key as a header:
+
+```bash
+claude mcp add --transport http aegis http://127.0.0.1:8000/mcp --header "X-API-Key: <key>"
+```
+
+- **One tool, `ask`, and it is read-only.** It runs the same pipeline as `/api/v1/query`:
+  gateway, token budget, retrieval, output guard, faithfulness check. Uploads and deletes stay on
+  the REST API. An agent is the caller a poisoned page in its own context can steer, and a delete
+  tool would turn that into data loss here.
+- **Same controls as REST.** `/mcp` is a route of the same app, so the API key, the tenant, the
+  rate limit and the metrics apply unchanged. The tenant comes from the key, never from a tool
+  argument.
+- **No raw document text.** Sources carry their metadata and score, not the 200-character
+  preview the REST response includes: that preview never passed the output guard, and here
+  another model would read it.
+- **Refusals are tool errors** worded like the REST errors (a blocked query, a spent budget, an
+  unavailable backend), so the agent reads them instead of retrying. A browser `Origin` outside
+  `CORS_ALLOWED_ORIGINS` is refused with `403`, against DNS rebinding, even with `DEBUG=true`.
+
+Both protocol eras are served: the 2025 initialize handshake and the self-contained requests of
+revision 2026-07-28. The integration tests drive the endpoint with the SDK's own client in both.
+The design is [ADR 0025](docs/adr/0025-mcp-server-read-only-behind-the-same-stack.md).
+
+---
+
 ## Web Console
 
 A React + TypeScript demo UI ships with the stack at **http://localhost:8080**, with three tabs:
@@ -507,6 +537,7 @@ described in [`docs/PUBLIC_DEMO.md`](docs/PUBLIC_DEMO.md).
 | `GET`  | `/ready`  | Readiness probe (checks ChromaDB + Ollama; 503 until both answer) |
 | `GET`  | `/metrics` | Prometheus scrape target |
 | `POST` | `/api/v1/query` | Submit a question to the RAG pipeline |
+| `POST` | `/mcp` | MCP endpoint with one read-only tool, `ask` (only with `MCP_ENABLED=true`) |
 | `POST` | `/api/v1/documents` | Upload and index a document (TXT, MD, PDF, DOCX) |
 | `GET`  | `/api/v1/documents` | List indexed chunks (paginated) |
 | `DELETE` | `/api/v1/documents/{id}` | Delete a single chunk |

@@ -33,6 +33,7 @@ supersedes the old one, so the history of *why* stays intact.
 | [0022](0022-faithfulness-reply-words-and-figure-check.md) | The faithfulness judge drops reply words and checks figures against the context | Accepted |
 | [0023](0023-multilingual-e5-embeddings.md) | Multilingual E5 embeddings, with their query and passage markers | Accepted |
 | [0024](0024-public-demo-on-free-hosting.md) | A public demo: the gateway in the browser, the full stack in one container | Accepted |
+| [0025](0025-mcp-server-read-only-behind-the-same-stack.md) | An MCP server: one read-only tool, behind the same middleware and pipeline | Accepted |
 
 The first three were made when the system was designed and are recorded here retrospectively;
 the rest were recorded as they were decided: 0004 to 0008 during the security hardening pass,
@@ -43,7 +44,7 @@ stream without giving up the output guard, 0019 why an ML injection classifier w
 but not enabled, 0020 how it runs on real traffic without blocking anything, 0021 what the
 larger evaluation sets showed and how the quality gates were re-set on them, 0022 the two
 corrections to the faithfulness judge that came out of it, 0023 the embedding model chosen
-on them, and 0024 the public demo. A summary of all of
+on them, 0024 the public demo, and 0025 the MCP endpoint. A summary of all of
 them in Spanish is in [RESUMEN.md](RESUMEN.md).
 For what the system defends against and where it stops, see the
 [threat model](../THREAT_MODEL.md).

@@ -171,3 +171,17 @@ verifica que el árbol construido funciona solo, y un workflow la vuelve a publi
 gateway. Nada de lo escrito sale de la pestaña. La imagen de un solo contenedor (nginx, API, Chroma
 embebido, corpus de solo lectura, clave pública con límites) queda lista para cualquier host Docker,
 pero no se publica por defecto porque en todos los revisados cuesta dinero.
+
+**[0025](0025-mcp-server-read-only-behind-the-same-stack.md) — Un servidor MCP: una sola
+herramienta de solo lectura, detrás del mismo middleware y el mismo pipeline.** Para que los
+agentes (Claude Code, Cursor y otros) usen la base documental sin un envoltorio escrito a mano, la
+API monta un endpoint MCP en `/mcp` (Streamable HTTP, sin estado), apagado por defecto
+(`MCP_ENABLED`). Pasa por la misma pila que REST: la API key resuelve el tenant, y el límite de
+peticiones, el presupuesto de tokens, el gateway y el sanitizador de salida se aplican igual.
+Expone una sola herramienta, `ask`. No hay herramientas de escritura: un agente es justo el
+cliente que un documento envenenado puede manipular. El resultado no incluye el fragmento crudo
+de cada fuente, porque es el único texto que no pasó por el guardián de salida y lo leería el
+modelo de otro. Los rechazos llegan como resultados de herramienta con error, con los mismos
+mensajes vagos que en REST, y un `Origin` de navegador fuera de la lista se rechaza con 403
+aunque `DEBUG` esté activo. Sirve tanto a los clientes del protocolo de 2025 como a los de la
+revisión 2026-07-28, y los tests lo comprueban con el cliente oficial del SDK.
