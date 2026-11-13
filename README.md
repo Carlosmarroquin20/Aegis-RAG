@@ -434,6 +434,27 @@ answered query and spend by client and model. A backend that reports no usage is
 separately (`aegis_llm_usage_unreported_total`), so missing data shows up instead of reading as
 free. The `llm.generate` span carries the OpenTelemetry GenAI attributes (`gen_ai.usage.*`).
 
+**Model routing.** Most questions are single lookups that a small model answers as well as a
+large one, for less. With routing on, a rule-based classifier sends those to a small model and
+keeps comparisons, explanations, calculations, multi-part questions and summaries on the large
+one:
+
+```bash
+LLM_ROUTING=heuristic
+LLM_SMALL_MODEL=llama-3.1-8b-instant      # same provider and key as LLM_MODEL by default
+LLM_SMALL_INPUT_PRICE_PER_MTOK=0.05       # its own price, for the cost metrics
+LLM_SMALL_OUTPUT_PRICE_PER_MTOK=0.08
+```
+
+The classifier is asymmetric on purpose: any one sign of complexity keeps the question on the
+large model, because a hard question answered by the small one is the costly mistake. If the
+small model is down or rate limited, the large one answers instead. On the labelled routing set
+it keeps 82.7% of complex questions on the large model and moves 97.4% of simple ones to the
+small model; questions that combine two policies without saying so are its weak spot. Figures
+and misses are in [`docs/ROUTER_EVALUATION.md`](docs/ROUTER_EVALUATION.md), the design in
+[ADR 0026](docs/adr/0026-route-simple-questions-to-a-small-model.md). It measures the routing
+decision; how well a given small model answers what it is sent is still to be measured live.
+
 ---
 
 ## Multi-tenancy

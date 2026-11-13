@@ -185,3 +185,16 @@ modelo de otro. Los rechazos llegan como resultados de herramienta con error, co
 mensajes vagos que en REST, y un `Origin` de navegador fuera de la lista se rechaza con 403
 aunque `DEBUG` esté activo. Sirve tanto a los clientes del protocolo de 2025 como a los de la
 revisión 2026-07-28, y los tests lo comprueban con el cliente oficial del SDK.
+
+**[0026](0026-route-simple-questions-to-a-small-model.md) — Las preguntas simples van a un modelo
+chico, según un clasificador de reglas.** Casi todo lo que se pregunta es una consulta puntual
+(«¿Entregan los domingos?») que un modelo chico responde igual de bien, más rápido y más barato.
+Con `LLM_ROUTING=heuristic`, un clasificador puro manda esas preguntas al modelo chico
+(`LLM_SMALL_MODEL`, por defecto en el mismo proveedor) y deja en el grande las comparaciones,
+explicaciones, cálculos, preguntas múltiples y resúmenes. Es asimétrico a propósito: basta una
+señal de complejidad para quedarse en el grande, porque mandar una pregunta difícil al chico es
+el error caro. Si el modelo chico falla o está limitado, responde el grande. Sobre el conjunto
+etiquetado, el 82,7 % de las preguntas complejas se queda en el grande y el 97,4 % de las simples
+pasa al chico; el punto débil son las preguntas que combinan dos políticas sin decirlo (1 de 8).
+Mide la decisión, no las respuestas: cuánto pierde en calidad un modelo chico concreto falta
+medirlo en vivo.

@@ -1,0 +1,206 @@
+{"id": "r-001", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuántos días tengo para devolver un colchón?"}
+{"id": "r-002", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Puedo devolver algo si perdí el ticket?"}
+{"id": "r-003", "lang": "es", "origin": "retrieval_set", "kind": "multi_part", "label": "complex", "question": "¿Me devuelven el dinero si compré con tarjeta y cuánto tarda?"}
+{"id": "r-004", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Aceptan devoluciones de pintura que mandé a preparar?"}
+{"id": "r-005", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Compré un adorno navideño, ¿hasta cuándo lo puedo devolver?"}
+{"id": "r-006", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cobran la recolección a domicilio de una devolución?"}
+{"id": "r-007", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuánto dura la garantía del compresor de una refrigeradora?"}
+{"id": "r-008", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Qué cubre la garantía extendida?"}
+{"id": "r-009", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Mi licuadora se arruinó a las tres semanas, ¿me la cambian?"}
+{"id": "r-010", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿La garantía cubre daños por una subida de voltaje?"}
+{"id": "r-011", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuánto tarda el centro de servicio en dar un diagnóstico?"}
+{"id": "r-012", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuánto cuesta el envío de un pedido de Q300 a Quetzaltenango?"}
+{"id": "r-013", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Hacen entregas los domingos?"}
+{"id": "r-014", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿En cuántos días llega un pedido a Cobán?"}
+{"id": "r-015", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Puede recoger mi pedido otra persona?"}
+{"id": "r-016", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Me llegó la estufa golpeada, ¿qué hago?"}
+{"id": "r-017", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿La instalación de la lavadora tiene costo fuera de la capital?"}
+{"id": "r-018", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Puedo cancelar un pedido que ya pagué?"}
+{"id": "r-019", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cómo pido una factura con mi NIT?"}
+{"id": "r-020", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Desde qué monto puedo pagar en cuotas sin intereses?"}
+{"id": "r-021", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Me cobraron dos veces la misma compra, ¿qué hago?"}
+{"id": "r-022", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Qué requisitos piden para abrir crédito a una empresa?"}
+{"id": "r-023", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Aceptan transferencias bancarias?"}
+{"id": "r-024", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿A qué hora abren los domingos?"}
+{"id": "r-025", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Abren el 25 de diciembre?"}
+{"id": "r-026", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cortan madera a la medida?"}
+{"id": "r-027", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Las tiendas tienen rampas para silla de ruedas?"}
+{"id": "r-028", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuánto vale un punto?"}
+{"id": "r-029", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuándo se vencen mis puntos?"}
+{"id": "r-030", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Qué beneficios tiene el nivel oro?"}
+{"id": "r-031", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Puedo comprar sin crear una cuenta?"}
+{"id": "r-032", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Puedo apartar un producto sin pagar?"}
+{"id": "r-033", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cómo cambio la dirección de entrega de mi pedido?"}
+{"id": "r-034", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Olvidé mi contraseña de la tienda en línea."}
+{"id": "r-035", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How many days do I have to return a mattress?"}
+{"id": "r-036", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Do you deliver on Sundays?"}
+{"id": "r-037", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How much is a loyalty point worth?"}
+{"id": "r-038", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I pay in interest-free instalments?"}
+{"id": "r-039", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Puedo devolver un producto que compré en oferta?"}
+{"id": "r-040", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Si devuelvo algo que estaba rebajado, ¿me regresan el precio normal o lo que pagué?"}
+{"id": "r-041", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Abrí un desodorante y no me gustó, ¿lo puedo regresar?"}
+{"id": "r-042", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Se puede devolver una tarjeta de regalo?"}
+{"id": "r-043", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Pagué en efectivo, ¿cómo me reembolsan?"}
+{"id": "r-044", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Compré una lámpara por internet, ¿puedo regresarla en una tienda física?"}
+{"id": "r-045", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Necesito el empaque original para hacer un cambio?"}
+{"id": "r-046", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I return a plant I bought last week?"}
+{"id": "r-047", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "What is the return window for regular products?"}
+{"id": "r-048", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "I paid with my card; how long until the refund shows up?"}
+{"id": "r-049", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Do I need the receipt to get my money back?"}
+{"id": "r-050", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "The rug I ordered online is not the one I asked for. Do I have to pay to have it picked up?"}
+{"id": "r-051", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I exchange school supplies after a week?"}
+{"id": "r-052", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Will you take back fabric that was cut to length?"}
+{"id": "r-053", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuánto cobran por enviar un colchón a Escuintla?"}
+{"id": "r-054", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuánto tarda en estar listo un pedido para recoger en tienda?"}
+{"id": "r-055", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cómo sé dónde viene mi paquete?"}
+{"id": "r-056", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Vivo en un municipio lejano de Petén, ¿cuánto tarda la entrega?"}
+{"id": "r-057", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿La instalación incluye conectar la tubería del agua?"}
+{"id": "r-058", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Is shipping free if my order is over Q500?"}
+{"id": "r-059", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How long does delivery take within the capital city?"}
+{"id": "r-060", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How can I track my order?"}
+{"id": "r-061", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "What do I need to bring to pick up an online order at a store?"}
+{"id": "r-062", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "My package arrived with a missing part. What should I do?"}
+{"id": "r-063", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Is stove installation free in Guatemala City?"}
+{"id": "r-064", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Do you deliver on public holidays?"}
+{"id": "r-065", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Puedo pagar en efectivo en la tienda en línea?"}
+{"id": "r-066", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Aceptan American Express?"}
+{"id": "r-067", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Me equivoqué de nombre en la factura, ¿la pueden corregir?"}
+{"id": "r-068", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿En cuántas cuotas puedo pagar una refrigeradora?"}
+{"id": "r-069", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Los productos en liquidación se pueden pagar a plazos?"}
+{"id": "r-070", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Si no doy mi NIT, ¿a nombre de quién sale la factura?"}
+{"id": "r-071", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuál es el plazo de pago del crédito empresarial?"}
+{"id": "r-072", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Which credit cards do you accept?"}
+{"id": "r-073", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I pay by bank transfer for an online order?"}
+{"id": "r-074", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How do I get an invoice in my company's name?"}
+{"id": "r-075", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "I was charged twice for the same order. How long does the reversal take?"}
+{"id": "r-076", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How long does approval for a business credit line take?"}
+{"id": "r-077", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I use a gift card to pay?"}
+{"id": "r-078", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I split a Q1,500 purchase into monthly payments without interest?"}
+{"id": "r-079", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuánto dura la garantía de una estufa?"}
+{"id": "r-080", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Qué garantía tiene un sofá?"}
+{"id": "r-081", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Hasta cuándo puedo comprar la garantía extendida?"}
+{"id": "r-082", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Se me cayó el taladro y se rompió, ¿lo cubre la garantía?"}
+{"id": "r-083", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿La garantía cubre el cambio de filtros de la refrigeradora?"}
+{"id": "r-084", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Qué pasa si no pueden reparar mi lavadora?"}
+{"id": "r-085", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Un técnico no autorizado abrió mi microondas, ¿pierdo la garantía?"}
+{"id": "r-086", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How long is the warranty on power tools?"}
+{"id": "r-087", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "What does the extended warranty not cover?"}
+{"id": "r-088", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How do I file a warranty claim?"}
+{"id": "r-089", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "My TV stopped working two weeks after I bought it. Will you swap it for a new one?"}
+{"id": "r-090", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Does the warranty cover worn-out batteries?"}
+{"id": "r-091", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How long is the warranty on small appliances like a toaster?"}
+{"id": "r-092", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How many years can I add with the extended warranty?"}
+{"id": "r-093", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Is the washing machine motor covered for longer than the rest of the machine?"}
+{"id": "r-094", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿A qué hora cierran entre semana?"}
+{"id": "r-095", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Qué horario tienen los días de asueto?"}
+{"id": "r-096", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Abren el primero de enero?"}
+{"id": "r-097", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Hasta qué hora atienden por teléfono los domingos?"}
+{"id": "r-098", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Mandé un correo a servicio al cliente, ¿cuándo me contestan?"}
+{"id": "r-099", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Sacan copias de llaves?"}
+{"id": "r-100", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Quiero remodelar mi cocina, ¿me pueden asesorar?"}
+{"id": "r-101", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Me ayudan a subir las compras al carro?"}
+{"id": "r-102", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "What time do your stores open on Sundays?"}
+{"id": "r-103", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Are you open on Christmas Day?"}
+{"id": "r-104", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "What are the customer service phone hours?"}
+{"id": "r-105", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "If I place an order online at midnight, when is it processed?"}
+{"id": "r-106", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Do you mix paint in a custom colour?"}
+{"id": "r-107", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Do you have parking for people with disabilities?"}
+{"id": "r-108", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I get a key copied at your stores?"}
+{"id": "r-109", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Do I need an appointment for remodelling advice?"}
+{"id": "r-110", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuánto cuesta afiliarme a Puntos Modelo?"}
+{"id": "r-111", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuántos puntos gano por cada compra?"}
+{"id": "r-112", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Desde cuántos puntos puedo canjear?"}
+{"id": "r-113", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Puedo pagar toda una compra con puntos?"}
+{"id": "r-114", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Puedo cambiar mis puntos por dinero en efectivo?"}
+{"id": "r-115", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Devolví una compra, ¿qué pasa con los puntos que me dio?"}
+{"id": "r-116", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Cuánto tengo que comprar para llegar a nivel plata?"}
+{"id": "r-117", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Gasté Q16,000 este año, ¿qué nivel me corresponde?"}
+{"id": "r-118", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Qué necesito para inscribirme al programa de puntos?"}
+{"id": "r-119", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Is joining the loyalty program free?"}
+{"id": "r-120", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How many points do I earn per Q10 spent?"}
+{"id": "r-121", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Do loyalty points expire?"}
+{"id": "r-122", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I use points to buy a gift card?"}
+{"id": "r-123", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "What do Silver members get?"}
+{"id": "r-124", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "What percentage of a purchase can I pay with points?"}
+{"id": "r-125", "lang": "en", "origin": "retrieval_set", "kind": "combined_policies", "label": "complex", "question": "I'm a Gold member in Quetzaltenango. Do I pay for installation?"}
+{"id": "r-126", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Los precios de la página web son los mismos que en la tienda?"}
+{"id": "r-127", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Tienen precios especiales si compro al por mayor?"}
+{"id": "r-128", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Quiero comprar 60 sillas iguales para un restaurante, ¿me hacen descuento?"}
+{"id": "r-129", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Necesito registrarme para comprar en línea?"}
+{"id": "r-130", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Por cuánto tiempo me guardan un producto apartado?"}
+{"id": "r-131", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Alguien que dice ser de atención al cliente me pidió mi contraseña, ¿es normal?"}
+{"id": "r-132", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Ya salió mi pedido, ¿todavía puedo cambiar la dirección?"}
+{"id": "r-133", "lang": "es", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "¿Hay ofertas que solo existen en la tienda en línea?"}
+{"id": "r-134", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I buy online as a guest?"}
+{"id": "r-135", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Are online prices the same as in store?"}
+{"id": "r-136", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Can I reserve an item without paying?"}
+{"id": "r-137", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Do you offer wholesale prices?"}
+{"id": "r-138", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How do I reset my password?"}
+{"id": "r-139", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "How do I change the delivery address of my order?"}
+{"id": "r-140", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "Someone on the phone asked for my full card number. Does your staff ever ask for that?"}
+{"id": "r-141", "lang": "en", "origin": "retrieval_set", "kind": "lookup", "label": "simple", "question": "I want to order 100 units of the same lamp. Who do I talk to?"}
+{"id": "c-001", "lang": "es", "origin": "authored", "kind": "comparison", "label": "complex", "question": "¿Qué diferencia hay entre la garantía normal y la extendida?"}
+{"id": "c-002", "lang": "es", "origin": "authored", "kind": "comparison", "label": "complex", "question": "¿Me conviene más pagar en cuotas o al contado?"}
+{"id": "c-003", "lang": "es", "origin": "authored", "kind": "comparison", "label": "complex", "question": "Compara los beneficios del nivel plata y del nivel oro."}
+{"id": "c-004", "lang": "es", "origin": "authored", "kind": "explanation", "label": "complex", "question": "¿Por qué no me cubre la garantía si el aparato se dañó por una subida de voltaje?"}
+{"id": "c-005", "lang": "es", "origin": "authored", "kind": "synthesis", "label": "complex", "question": "Explícame paso a paso cómo hago un reclamo de garantía y cuánto tarda cada etapa."}
+{"id": "c-006", "lang": "es", "origin": "authored", "kind": "calculation", "label": "complex", "question": "Si compro una refrigeradora de Q6,000 y pago con puntos el máximo permitido, ¿cuánto pagaría en efectivo?"}
+{"id": "c-007", "lang": "es", "origin": "authored", "kind": "multi_part", "label": "complex", "question": "Quiero devolver un colchón que compré hace 10 días con tarjeta, ¿me lo aceptan, quién paga la recolección y cuándo veo el reembolso?"}
+{"id": "c-008", "lang": "es", "origin": "authored", "kind": "synthesis", "label": "complex", "question": "Resume las políticas de devolución, envío y garantía en pocas líneas."}
+{"id": "c-009", "lang": "es", "origin": "authored", "kind": "calculation", "label": "complex", "question": "¿Cuánto me costaría en total una lavadora de Q4,500 con envío a Cobán e instalación?"}
+{"id": "c-010", "lang": "es", "origin": "authored", "kind": "comparison", "label": "complex", "question": "¿Cuál es la diferencia entre recoger en tienda y envío a domicilio en tiempo y costo?"}
+{"id": "c-011", "lang": "es", "origin": "authored", "kind": "comparison", "label": "complex", "question": "¿Qué es mejor para un negocio, el crédito empresarial o pagar con tarjeta en cuotas?"}
+{"id": "c-012", "lang": "es", "origin": "authored", "kind": "multi_part", "label": "complex", "question": "¿Cuántos puntos gano si compro Q2,500 y cuánto valen esos puntos?"}
+{"id": "c-013", "lang": "es", "origin": "authored", "kind": "explanation", "label": "complex", "question": "Explica por qué una devolución de un producto en oferta me reembolsa menos."}
+{"id": "c-014", "lang": "es", "origin": "authored", "kind": "combined_policies", "label": "complex", "question": "¿Qué pasa con mis puntos y mi garantía si devuelvo una estufa y compro otra más cara?"}
+{"id": "c-015", "lang": "es", "origin": "authored", "kind": "comparison", "label": "complex", "question": "¿En qué se diferencian las tiendas de la capital y las de los departamentos en horarios y servicios?"}
+{"id": "c-016", "lang": "es", "origin": "authored", "kind": "synthesis", "label": "complex", "question": "Dame un resumen de todo lo que necesito saber antes de comprar una refrigeradora en línea."}
+{"id": "c-017", "lang": "es", "origin": "authored", "kind": "multi_part", "label": "complex", "question": "Si vivo en Petén y mi pedido llega dañado, ¿qué hago, cuánto tarda el cambio y quién paga el envío de vuelta?"}
+{"id": "c-018", "lang": "es", "origin": "authored", "kind": "explanation", "label": "complex", "question": "Analiza si me conviene la garantía extendida para un televisor de Q3,000."}
+{"id": "c-019", "lang": "es", "origin": "authored", "kind": "explanation", "label": "complex", "question": "¿Por qué me cobraron el envío si mi pedido pasaba de Q500?"}
+{"id": "c-020", "lang": "es", "origin": "authored", "kind": "calculation", "label": "complex", "question": "¿Cómo calculo cuántas cuotas me salen para una compra de Q9,000?"}
+{"id": "c-021", "lang": "es", "origin": "authored", "kind": "multi_part", "label": "complex", "question": "¿Qué opciones tengo para pagar una compra grande y cuáles tienen intereses?"}
+{"id": "c-022", "lang": "es", "origin": "authored", "kind": "comparison", "label": "complex", "question": "Compará el plazo de devolución de muebles con el de los productos normales."}
+{"id": "c-023", "lang": "es", "origin": "authored", "kind": "combined_policies", "label": "complex", "question": "¿Cuánto tiempo y dinero me cuesta cambiar un taladro defectuoso fuera de la capital?"}
+{"id": "c-024", "lang": "es", "origin": "authored", "kind": "synthesis", "label": "complex", "question": "Necesito saber cómo funciona el programa de lealtad completo: cómo me inscribo, cuántos puntos gano, cómo los canjeo y cuándo vencen."}
+{"id": "c-025", "lang": "es", "origin": "authored", "kind": "comparison", "label": "complex", "question": "¿Cuál sale más barato, enviar un sofá a Escuintla o recogerlo en la tienda más cercana?"}
+{"id": "c-026", "lang": "es", "origin": "authored", "kind": "combined_policies", "label": "complex", "question": "Tengo una estufa de hace ocho meses que hace un ruido raro y ya la abrió un técnico de mi colonia; ¿todavía me la reparan?"}
+{"id": "c-027", "lang": "es", "origin": "authored", "kind": "combined_policies", "label": "complex", "question": "Me mudé a Huehuetenango después de comprar una lavadora con instalación incluida en la capital, ¿me la instalan allá sin costo?"}
+{"id": "c-028", "lang": "en", "origin": "authored", "kind": "comparison", "label": "complex", "question": "What is the difference between the standard and the extended warranty?"}
+{"id": "c-029", "lang": "en", "origin": "authored", "kind": "comparison", "label": "complex", "question": "Compare Silver and Gold membership benefits."}
+{"id": "c-030", "lang": "en", "origin": "authored", "kind": "explanation", "label": "complex", "question": "Why would my warranty claim be rejected after a power surge?"}
+{"id": "c-031", "lang": "en", "origin": "authored", "kind": "synthesis", "label": "complex", "question": "Explain step by step how a return works, from request to refund."}
+{"id": "c-032", "lang": "en", "origin": "authored", "kind": "calculation", "label": "complex", "question": "If I buy a Q6,000 fridge and pay the maximum allowed with points, how much do I pay in cash?"}
+{"id": "c-033", "lang": "en", "origin": "authored", "kind": "multi_part", "label": "complex", "question": "I want to return a mattress I bought 10 days ago by card: will you accept it, who pays the pickup, and when do I get my money?"}
+{"id": "c-034", "lang": "en", "origin": "authored", "kind": "synthesis", "label": "complex", "question": "Summarize your return, shipping and warranty policies."}
+{"id": "c-035", "lang": "en", "origin": "authored", "kind": "calculation", "label": "complex", "question": "How much would a Q4,500 washing machine cost in total with delivery to Cobán and installation?"}
+{"id": "c-036", "lang": "en", "origin": "authored", "kind": "comparison", "label": "complex", "question": "Which is cheaper: delivery to Escuintla or picking it up in store?"}
+{"id": "c-037", "lang": "en", "origin": "authored", "kind": "synthesis", "label": "complex", "question": "Is the extended warranty worth it for a Q3,000 TV?"}
+{"id": "c-038", "lang": "en", "origin": "authored", "kind": "multi_part", "label": "complex", "question": "How many points do I earn on a Q2,500 purchase, and how much are they worth?"}
+{"id": "c-039", "lang": "en", "origin": "authored", "kind": "combined_policies", "label": "complex", "question": "What happens to my points and warranty if I return a stove and buy a more expensive one?"}
+{"id": "c-040", "lang": "en", "origin": "authored", "kind": "synthesis", "label": "complex", "question": "Give me an overview of everything I should know before ordering a fridge online."}
+{"id": "c-041", "lang": "en", "origin": "authored", "kind": "explanation", "label": "complex", "question": "Why was I charged for shipping if my order was over Q500?"}
+{"id": "c-042", "lang": "en", "origin": "authored", "kind": "multi_part", "label": "complex", "question": "What are my payment options for a large purchase, and which ones charge interest?"}
+{"id": "c-043", "lang": "en", "origin": "authored", "kind": "synthesis", "label": "complex", "question": "Walk me through filing a warranty claim and how long each stage takes."}
+{"id": "c-044", "lang": "en", "origin": "authored", "kind": "comparison", "label": "complex", "question": "Should my business use the credit line or pay by card in instalments?"}
+{"id": "c-045", "lang": "en", "origin": "authored", "kind": "comparison", "label": "complex", "question": "How do store hours and services differ between the capital and other departments?"}
+{"id": "c-046", "lang": "en", "origin": "authored", "kind": "multi_part", "label": "complex", "question": "My order arrived damaged in Petén. What do I do, how long does the replacement take, and who pays the return shipping?"}
+{"id": "c-047", "lang": "en", "origin": "authored", "kind": "calculation", "label": "complex", "question": "Calculate the monthly payment for a Q9,000 purchase in 12 interest-free instalments."}
+{"id": "c-048", "lang": "en", "origin": "authored", "kind": "multi_part", "label": "complex", "question": "I bought a sofa on sale last month with points and part cash; it doesn't fit through my door. Can I return it, and what happens to the points?"}
+{"id": "c-049", "lang": "en", "origin": "authored", "kind": "combined_policies", "label": "complex", "question": "My Gold-level discount wasn't applied to an online order that was delivered to Xela on a holiday."}
+{"id": "c-050", "lang": "en", "origin": "authored", "kind": "combined_policies", "label": "complex", "question": "A technician from the store installed my dishwasher and it leaked the next day, damaging the floor."}
+{"id": "s-001", "lang": "es", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "¿Cuál es el mejor horario para llamar a servicio al cliente?"}
+{"id": "s-002", "lang": "en", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "What's the best way to track my order?"}
+{"id": "s-003", "lang": "es", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "¿Por qué medio puedo pagar en línea?"}
+{"id": "s-004", "lang": "en", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "What is the total warranty period on a fridge compressor?"}
+{"id": "s-005", "lang": "es", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "¿Qué porcentaje de la compra puedo pagar con puntos?"}
+{"id": "s-006", "lang": "es", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "Hola, ¿a qué hora abren hoy?"}
+{"id": "s-007", "lang": "en", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "Thanks! What time do you close on Saturdays?"}
+{"id": "s-008", "lang": "es", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "¿Tienen estacionamiento?"}
+{"id": "s-009", "lang": "en", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "Do you sell gift cards?"}
+{"id": "s-010", "lang": "es", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "¿El envío es gratis?"}
+{"id": "s-011", "lang": "en", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "How do I explain to the delivery driver where I live?"}
+{"id": "s-012", "lang": "es", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "¿Hacen envíos a Petén y a Izabal?"}
+{"id": "s-013", "lang": "en", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "Can I return it if it's different from the picture?"}
+{"id": "s-014", "lang": "es", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "¿Necesito factura y DPI para hacer una devolución?"}
+{"id": "s-015", "lang": "en", "origin": "authored", "kind": "lookup_with_trigger_words", "label": "simple", "question": "What is the phone number for customer service?"}

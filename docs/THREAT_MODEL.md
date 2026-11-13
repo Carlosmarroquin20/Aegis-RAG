@@ -68,8 +68,9 @@ flowchart LR
 - **B2** — retrieved text may contain instructions aimed at the model.
 - **B3** — model output is untrusted: it may echo an injection, leak a prompt or carry markup.
 - **B4** — an uploaded file may lie about its type and may be built to exhaust the parser.
-- **B5** — exists only with `LLM_PROVIDER=openai_compatible`. The query and retrieved excerpts
-  cross it. Off by default.
+- **B5** — exists only when a backend is hosted: `LLM_PROVIDER`, `LLM_FALLBACK_PROVIDER` or
+  the router's small model (`LLM_SMALL_PROVIDER`) set to `openai_compatible`. The query and
+  retrieved excerpts cross it. Off by default.
 
 ## 5. Threats and controls
 
