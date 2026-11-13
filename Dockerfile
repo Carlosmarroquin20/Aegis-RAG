@@ -26,8 +26,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1
 
-# Install only OS-level runtime deps (no build tools).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install only OS-level runtime deps (no build tools), and apply Debian's
+# security updates: the pinned python image is rebuilt upstream only every few
+# weeks, and a fix Debian has already shipped (zlib CVE-2026-76844 and
+# CVE-2026-85091, for one) should not wait for that rebuild.
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
