@@ -46,6 +46,7 @@ services:
       - RERANKER_MODEL=${RERANKER_MODEL:-cross-encoder/mmarco-mMiniLMv2-L12-H384-v1}
       - FAITHFULNESS_CHECK=${FAITHFULNESS_CHECK:-false}
       - FAITHFULNESS_MODEL=${FAITHFULNESS_MODEL:-MoritzLaurer/multilingual-MiniLMv2-L12-mnli-xnli}
+      - MCP_ENABLED=${MCP_ENABLED:-false}
       - INJECTION_CLASSIFIER_MODE=${INJECTION_CLASSIFIER_MODE:-off}
       - INJECTION_CLASSIFIER_MODEL=${INJECTION_CLASSIFIER_MODEL:-protectai/deberta-v3-base-prompt-injection-v2}
       - OLLAMA_BASE_URL=http://ollama:11434

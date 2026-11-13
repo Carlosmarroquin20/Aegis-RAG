@@ -18,16 +18,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.routing import Route
 
-from aegis.config import MIN_RECOMMENDED_API_KEY_CHARS, get_settings
+from aegis.config import MIN_RECOMMENDED_API_KEY_CHARS, Settings, get_settings
 from aegis.infrastructure.observability.runtime import (
     freeze_startup_heap,
     install_gc_pause_metrics,
@@ -39,6 +41,7 @@ from aegis.infrastructure.observability.tracing import (
     shutdown_tracing,
 )
 from aegis.interface.api.dependencies import (
+    build_query_use_case,
     get_auth_failure_limiter,
     get_injection_classifier,
     get_injection_monitor,
@@ -65,6 +68,9 @@ from aegis.interface.api.middleware.security_middleware import (
 )
 from aegis.interface.api.routes import documents, health, query
 
+if TYPE_CHECKING:
+    from aegis.interface.mcp.server import MCPEndpoint
+
 # Ceiling for any request body. The upload limit applies to the file itself; the
 # multipart envelope around it (boundaries, part headers, the other form fields)
 # adds a little on top, so the transport limit sits slightly above it. Requests
@@ -77,8 +83,6 @@ def _configure_logging(settings_obj: object) -> None:
     Configures structlog for either machine-readable JSON (production)
     or human-readable console output (development).
     """
-    from aegis.config import Settings
-
     cfg: Settings = settings_obj  # type: ignore[assignment]
 
     # NOTE: structlog.stdlib.add_logger_name is intentionally omitted. It reads
@@ -213,9 +217,55 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("shutdown.complete")
 
 
+def _build_mcp_endpoint(cfg: Settings, allowed_origins: list[str]) -> MCPEndpoint:
+    """
+    The MCP endpoint (ADR 0025), imported only when enabled: the SDK is an
+    optional extra, and a deployment that does not serve MCP does not load it.
+    """
+    try:
+        from aegis.interface.mcp.server import build_mcp_endpoint
+    except ModuleNotFoundError as exc:
+        if exc.name is None or not exc.name.startswith("mcp"):
+            raise
+        raise RuntimeError(
+            'MCP_ENABLED is set but the MCP SDK is not installed: install "aegis-rag[mcp]"'
+        ) from exc
+    return build_mcp_endpoint(
+        lambda tenant: build_query_use_case(tenant.collection),
+        version=cfg.app_version,
+        allowed_origins=allowed_origins,
+    )
+
+
+def _app_lifespan(
+    mcp: MCPEndpoint | None,
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    """
+    The application lifespan, plus the MCP transport's task group when the
+    endpoint is on. A route added to the app does not get a lifespan of its
+    own, so the endpoint's must be entered here, after startup succeeded.
+    """
+    if mcp is None:
+        return lifespan
+
+    @asynccontextmanager
+    async def serving(app: FastAPI) -> AsyncIterator[None]:
+        async with lifespan(app), mcp.running():
+            structlog.get_logger(__name__).info("startup.mcp_enabled", path=mcp.path)
+            yield
+
+    return serving
+
+
 def create_app() -> FastAPI:
     cfg = get_settings()
     _configure_logging(cfg)
+
+    origins = ["*"] if cfg.debug else cfg.cors_allowed_origins
+    # The MCP Origin check uses the configured list even in debug. Debug opens
+    # CORS for the web console; it must not also open the endpoint to DNS
+    # rebinding, and a loopback-bound dev stack is exactly where that applies.
+    mcp_endpoint = _build_mcp_endpoint(cfg, cfg.cors_allowed_origins) if cfg.mcp_enabled else None
 
     app = FastAPI(
         title=cfg.app_name,
@@ -230,7 +280,7 @@ def create_app() -> FastAPI:
         docs_url="/docs" if cfg.debug else None,
         redoc_url="/redoc" if cfg.debug else None,
         openapi_url="/openapi.json" if cfg.debug else None,
-        lifespan=lifespan,
+        lifespan=_app_lifespan(mcp_endpoint),
     )
 
     # ── Security & Observability Middleware Stack ─────────────────────────────
@@ -251,8 +301,6 @@ def create_app() -> FastAPI:
     #   - BodyLimit is innermost: authentication has already run, so only an
     #     authenticated caller can make the server read a body at all, and the
     #     413 it returns is still logged, counted and given security headers.
-    origins = ["*"] if cfg.debug else cfg.cors_allowed_origins
-
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_REQUEST_BODY_BYTES)
     app.add_middleware(ErrorBoundaryMiddleware)
     app.add_middleware(
@@ -288,6 +336,12 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(query.router)
     app.include_router(documents.router)
+    if mcp_endpoint is not None:
+        # A plain route to an ASGI app: it sits behind the whole middleware stack
+        # above, like the REST routes, and its metric path label is fixed.
+        app.router.routes.append(
+            Route(mcp_endpoint.path, endpoint=mcp_endpoint.app, include_in_schema=False)
+        )
 
     # ── Exception handlers ────────────────────────────────────────────────────
     # Vector store / LLM outages become 503/504 instead of a generic 500.

@@ -163,6 +163,12 @@ class Settings(BaseSettings):
     # text in front of every other visitor's queries.
     document_writes_enabled: bool = True
 
+    # ── MCP endpoint (ADR 0025) ────────────────────────────────────────────────
+    # True mounts a Model Context Protocol endpoint at /mcp with one read-only
+    # tool, "ask", behind the same API key, tenant, rate limit and pipeline as
+    # the REST routes. Needs the "mcp" extra; startup fails without it.
+    mcp_enabled: bool = False
+
     # ── LLM Backend ────────────────────────────────────────────────────────────
     # "ollama" runs the model locally and keeps the deployment air-gapped.
     # "openai_compatible" calls a hosted provider (Groq, OpenRouter, Mistral, a

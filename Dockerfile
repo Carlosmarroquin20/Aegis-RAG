@@ -55,10 +55,11 @@ COPY pyproject.toml uv.lock* ./
 
 # Install production dependencies only into an isolated venv.
 # --frozen ensures the lockfile is respected; --no-dev excludes test tools; the
-# redis + otel extras bundle the optional Redis rate-limiter backend and the
-# OpenTelemetry stack so both can be enabled at runtime (RATE_LIMIT_BACKEND /
-# TRACING_ENABLED) without rebuilding.
-RUN uv sync --frozen --no-dev --extra redis --extra otel --no-install-project
+# redis + otel + mcp extras bundle the optional Redis rate-limiter backend, the
+# OpenTelemetry stack and the MCP SDK so each can be enabled at runtime
+# (RATE_LIMIT_BACKEND / TRACING_ENABLED / MCP_ENABLED) without rebuilding. The
+# MCP SDK is not imported unless MCP_ENABLED is set.
+RUN uv sync --frozen --no-dev --extra redis --extra otel --extra mcp --no-install-project
 
 # Copy application source after deps to maximize layer cache hits.
 # README.md is required because pyproject sets `readme = "README.md"`; hatchling
@@ -67,7 +68,7 @@ COPY README.md ./README.md
 COPY src/ ./src/
 
 # Install the project itself (editable=false for production).
-RUN uv sync --frozen --no-dev --extra redis --extra otel
+RUN uv sync --frozen --no-dev --extra redis --extra otel --extra mcp
 
 # ── Pre-bake the embedding model ──────────────────────────────────────────────
 # The API loads a SentenceTransformers model at startup. Fetching it from the

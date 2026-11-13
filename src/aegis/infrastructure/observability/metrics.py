@@ -101,6 +101,18 @@ streams_total = Counter(
     registry=registry,
 )
 
+# ── MCP endpoint (opt-in, MCP_ENABLED) ───────────────────────────────────────
+
+# Every MCP call shares the path label "/mcp", so this is where the tool and
+# its result are visible. Both labels are fixed sets defined in code.
+mcp_tool_calls_total = Counter(
+    "aegis_mcp_tool_calls_total",
+    "MCP tool calls by tool and outcome (answered, blocked, budget_exhausted, "
+    "output_blocked, timeout, unavailable, error).",
+    labelnames=("tool", "outcome"),
+    registry=registry,
+)
+
 # ── Answer faithfulness (opt-in, FAITHFULNESS_CHECK) ─────────────────────────
 
 answer_faithfulness = Histogram(
