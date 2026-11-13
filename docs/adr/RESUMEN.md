@@ -198,3 +198,14 @@ etiquetado, el 82,7 % de las preguntas complejas se queda en el grande y el 97,4
 pasa al chico; el punto débil son las preguntas que combinan dos políticas sin decirlo (1 de 8).
 Mide la decisión, no las respuestas: cuánto pierde en calidad un modelo chico concreto falta
 medirlo en vivo.
+
+**[0027](0027-small-answers-in-the-wrong-language-go-to-the-large-model.md) — Una respuesta del
+modelo chico en otro idioma la vuelve a generar el grande.** Medido en vivo, `gpt-oss-20b`
+respondió en español 11 de 65 preguntas en inglés, porque el corpus está en español; el grande
+nunca lo hizo. El idioma de una respuesta se distingue por sus palabras funcionales, sin ningún
+modelo: si la pregunta y la respuesta tienen idioma y no coinciden, el router descarta la
+respuesta chica y responde el grande. Si alguna de las dos no permite decidir («Q55.»), se
+conserva: nunca adivina. En streaming retiene los primeros 160 caracteres hasta saber el idioma.
+Los tokens descartados se cuentan aparte para que el costo no quede oculto. Sobre las respuestas
+grabadas marca exactamente las 11 y ninguna del grande; las respuestas peores bajarían del 12 %
+al 5,1 %, todas omisiones.
