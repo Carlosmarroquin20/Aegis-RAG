@@ -114,9 +114,20 @@ llm_routes_total = Counter(
 
 llm_route_escalations_total = Counter(
     "aegis_llm_route_escalations_total",
-    "Simple questions answered by the large model because the small one could not "
-    "(small_unavailable, circuit_open).",
+    "Simple questions answered by the large model because the small one could not, or "
+    "answered in the wrong language (small_unavailable, circuit_open, wrong_language).",
     labelnames=("reason",),
+    registry=registry,
+)
+
+# Tokens of small-model answers thrown away for being in the wrong language.
+# The use case reports only the answer it returns, so without this counter the
+# cost of an escalation would be invisible. No client label: the router does
+# not know the caller.
+llm_discarded_tokens_total = Counter(
+    "aegis_llm_discarded_tokens_total",
+    "Tokens billed for answers the router discarded and regenerated on the large model.",
+    labelnames=("provider", "model", "direction"),
     registry=registry,
 )
 

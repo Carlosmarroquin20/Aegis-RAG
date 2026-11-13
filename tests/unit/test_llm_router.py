@@ -30,6 +30,15 @@ from aegis.infrastructure.observability.metrics import (
 _SIMPLE = "Do you deliver on Sundays?"
 _COMPLEX = "What is the difference between the standard and the extended warranty?"
 _CONTEXT = [Document(id="d1", content="We deliver Monday to Saturday.", metadata={})]
+_SPANISH_ANSWER = "No, las entregas se hacen de lunes a sábado y no hay servicio los domingos."
+_LONG_ENGLISH = (
+    "No, we do not deliver on Sundays. Deliveries are made from Monday to Saturday, and an "
+    "order placed on a Saturday afternoon is scheduled for the following Monday at the earliest."
+)
+_LONG_SPANISH = (
+    "No, las entregas se hacen de lunes a sábado. Un pedido que se hace el sábado por la "
+    "tarde se programa para el lunes siguiente, y no hay servicio de entrega los domingos."
+)
 
 
 class _Clock:
@@ -41,19 +50,30 @@ class _Clock:
 
 
 class _ScriptedLLM(LLMClientPort):
-    """Answers or raises the next scripted error; streams in two pieces."""
+    """
+    Answers ``pieces`` joined (by default "from <name>"), or raises the next
+    scripted error; streams the pieces one by one, raising after the first when
+    ``fail_after_text``.
+    """
 
-    def __init__(self, name: str, *errors: Exception, fail_after_text: bool = False) -> None:
+    def __init__(
+        self,
+        name: str,
+        *errors: Exception,
+        fail_after_text: bool = False,
+        pieces: list[str] | None = None,
+    ) -> None:
         self.name = name
         self.errors: list[Exception] = list(errors)
         self.fail_after_text = fail_after_text
+        self.pieces = pieces if pieces is not None else ["from ", name]
         self.calls = 0
         self.closed = False
         self.healthy = True
 
     def _generation(self) -> Generation:
         return Generation(
-            text=f"from {self.name}", provider="host", model=self.name, usage=TokenUsage(10, 5)
+            text="".join(self.pieces), provider="host", model=self.name, usage=TokenUsage(10, 5)
         )
 
     async def generate(
@@ -80,10 +100,12 @@ class _ScriptedLLM(LLMClientPort):
         self.calls += 1
         if self.errors and not self.fail_after_text:
             raise self.errors.pop(0)
-        yield TextDelta("from ")
+        first, *rest = self.pieces
+        yield TextDelta(first)
         if self.errors:
             raise self.errors.pop(0)
-        yield TextDelta(self.name)
+        for piece in rest:
+            yield TextDelta(piece)
         yield self._generation()
 
     async def health_check(self) -> bool:
@@ -238,7 +260,12 @@ class TestStreaming:
     async def test_a_failure_after_text_is_raised_not_restarted_elsewhere(
         self, clock: _Clock
     ) -> None:
-        small = _ScriptedLLM("small", LLMUnavailableError("cut"), fail_after_text=True)
+        small = _ScriptedLLM(
+            "small",
+            LLMUnavailableError("cut"),
+            fail_after_text=True,
+            pieces=[_LONG_ENGLISH, " And more."],
+        )
         large = _ScriptedLLM("large")
         router = _router(small, large, clock)
 
@@ -247,6 +274,13 @@ class TestStreaming:
 
         assert large.calls == 0
         assert router.breaker.consecutive_failures == 1
+
+    async def test_a_failure_while_the_start_is_still_held_escalates(self, clock: _Clock) -> None:
+        # Nothing has reached the caller yet, so the large model can still answer.
+        small = _ScriptedLLM("small", LLMUnavailableError("cut"), fail_after_text=True)
+        large = _ScriptedLLM("large")
+
+        assert await _streamed(_router(small, large, clock), _SIMPLE, _CONTEXT) == "from large"
 
     async def test_an_open_circuit_streams_from_the_large_model(self, clock: _Clock) -> None:
         small = _ScriptedLLM("small", LLMUnavailableError("a"), LLMUnavailableError("b"))
@@ -289,6 +323,89 @@ class TestStreaming:
         await stream.aclose()
 
         assert router.breaker.consecutive_failures == 1
+
+
+def _discarded(direction: str) -> float:
+    labels = {"provider": "host", "model": "small", "direction": direction}
+    return _sample("aegis_llm_discarded_tokens_total", labels)
+
+
+class TestWrongLanguage:
+    async def test_a_small_answer_in_another_language_is_regenerated_by_the_large_model(
+        self, clock: _Clock
+    ) -> None:
+        small = _ScriptedLLM("small", pieces=[_SPANISH_ANSWER])
+        large = _ScriptedLLM("large", pieces=[_LONG_ENGLISH])
+        router = _router(small, large, clock)
+
+        generation = await router.generate(_SIMPLE, _CONTEXT)
+
+        assert generation.model == "large"
+        assert _sample("aegis_llm_route_escalations_total", {"reason": "wrong_language"}) == 1
+        # The discarded answer was billed; the use case only sees the large one.
+        assert (_discarded("input"), _discarded("output")) == (10, 5)
+        # The small model worked; its circuit is not penalised.
+        assert router.breaker.consecutive_failures == 0
+
+    async def test_an_answer_in_the_questions_language_is_kept(self, clock: _Clock) -> None:
+        small = _ScriptedLLM("small", pieces=[_LONG_ENGLISH])
+        large = _ScriptedLLM("large")
+
+        generation = await _router(small, large, clock).generate(_SIMPLE, _CONTEXT)
+
+        assert generation.model == "small"
+        assert large.calls == 0
+
+    async def test_an_answer_without_a_detectable_language_is_kept(self, clock: _Clock) -> None:
+        small = _ScriptedLLM("small", pieces=["Q55."])
+        large = _ScriptedLLM("large")
+
+        generation = await _router(small, large, clock).generate(_SIMPLE, _CONTEXT)
+
+        assert generation.model == "small"
+
+    async def test_a_question_without_a_detectable_language_keeps_the_answer(
+        self, clock: _Clock
+    ) -> None:
+        small = _ScriptedLLM("small", pieces=[_SPANISH_ANSWER])
+
+        generation = await _router(small, _ScriptedLLM("large"), clock).generate(
+            "¿Aceptan American Express?", _CONTEXT
+        )
+
+        assert generation.model == "small"
+
+    async def test_a_streamed_answer_in_another_language_never_reaches_the_caller(
+        self, clock: _Clock
+    ) -> None:
+        small = _ScriptedLLM("small", pieces=[_LONG_SPANISH[:80], _LONG_SPANISH[80:]])
+        large = _ScriptedLLM("large", pieces=["Deliveries ", "are Monday to Saturday."])
+
+        text = await _streamed(_router(small, large, clock), _SIMPLE, _CONTEXT)
+
+        assert text == "Deliveries are Monday to Saturday."
+        assert _sample("aegis_llm_route_escalations_total", {"reason": "wrong_language"}) == 1
+
+    async def test_a_short_streamed_answer_is_checked_when_it_ends(self, clock: _Clock) -> None:
+        small = _ScriptedLLM("small", pieces=["No, ", "las entregas son de lunes a sábado."])
+        large = _ScriptedLLM("large", pieces=[_LONG_ENGLISH])
+
+        text = await _streamed(_router(small, large, clock), _SIMPLE, _CONTEXT)
+
+        assert text == _LONG_ENGLISH
+        assert _discarded("output") == 5
+
+    async def test_a_held_answer_in_the_right_language_is_passed_on_whole_and_in_order(
+        self, clock: _Clock
+    ) -> None:
+        pieces = [_LONG_ENGLISH[:60], _LONG_ENGLISH[60:120], _LONG_ENGLISH[120:]]
+        small = _ScriptedLLM("small", pieces=pieces)
+        large = _ScriptedLLM("large")
+        events = [e async for e in _router(small, large, clock).stream(_SIMPLE, _CONTEXT)]
+
+        assert [e.text for e in events if isinstance(e, TextDelta)] == pieces
+        assert isinstance(events[-1], Generation) and events[-1].model == "small"
+        assert large.calls == 0
 
 
 class TestLifecycle:

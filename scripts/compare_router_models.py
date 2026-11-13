@@ -26,7 +26,7 @@ pair both models answered: a model of another family (not the large model
 judging its own answers) says whether the small answer is equivalent to the
 large one, omits a detail, omits a condition that could change what the
 customer does, or contradicts it. The answer's language is checked separately
-and deterministically, since the system prompt requires the question's.
+and deterministically, with the router's own check (ADR 0027).
 
 Results are appended one line per question as they arrive, and a rerun skips
 the questions already in the file, so a run cut short by a provider's daily
@@ -43,7 +43,6 @@ import argparse
 import asyncio
 import json
 import logging
-import re
 import statistics
 import sys
 import time
@@ -72,6 +71,7 @@ from aegis.domain.ports.llm_client import (  # noqa: E402
     LLMRateLimitedError,
     LLMUnavailableError,
 )
+from aegis.domain.services.language import detect_language  # noqa: E402
 from aegis.domain.services.query_complexity import Tier, assess_complexity  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,28 +91,6 @@ The reference answer is taken as correct. Classify the candidate answer:
 - "contradicts": it states something the reference contradicts.
 Ignore language, tone and length. Use only the two answers, no outside knowledge.
 Reply with JSON: {"verdict": "<one of the four>", "note": "<at most 15 words>"}"""
-
-# Function words that tell Spanish from English in a short answer. Enough to
-# catch an answer in the wrong language, which is all this is for.
-_ES = frozenset(
-    "el la los las de del que en sí si se es son puedes puede para por con una un su sus tu"
-    " tus está están hay cuando como más no".split()
-)
-_EN = frozenset(
-    "the is are you your can to of and for in it not yes be will with on at this that we our"
-    " no".split()
-)
-_WORDS = re.compile(r"[a-záéíóúñü]+")
-
-
-def answer_language(text: str) -> str | None:
-    """'es', 'en', or None when the function words do not decide it."""
-    words = _WORDS.findall(text.lower())
-    spanish = sum(w in _ES for w in words)
-    english = sum(w in _EN for w in words)
-    if spanish == english:
-        return None
-    return "es" if spanish > english else "en"
 
 
 class _Recording(LLMClientPort):
@@ -444,7 +422,7 @@ def summarise(records: Sequence[dict[str, Any]]) -> str:
         ]
     english = [r for r in ok if r["lang"] == "en"]
     for name in ("small", "large"):
-        wrong = [r for r in ok if answer_language(r[name]["answer"]) not in (None, r["lang"])]
+        wrong = [r for r in ok if detect_language(r[name]["answer"]) not in (None, r["lang"])]
         lines.append(
             f"  {name} answered in another language: {_pct(len(wrong), len(ok))}"
             f" ({sum(r['lang'] == 'en' for r in wrong)} of {len(english)} English questions)"
