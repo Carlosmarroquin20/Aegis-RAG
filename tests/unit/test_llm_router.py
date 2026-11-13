@@ -365,7 +365,7 @@ class TestRoutingSettings:
                 _env_file=None,
                 llm_routing="heuristic",
                 llm_small_provider="openai_compatible",
-                llm_small_model="llama-3.1-8b-instant",
+                llm_small_model="openai/gpt-oss-20b",
             )
 
     def test_a_hosted_small_model_is_reported_as_sending_data_off_the_host(self) -> None:
@@ -375,7 +375,7 @@ class TestRoutingSettings:
             _env_file=None,
             llm_routing="heuristic",
             llm_small_provider="openai_compatible",
-            llm_small_model="llama-3.1-8b-instant",
+            llm_small_model="openai/gpt-oss-20b",
             **_HOSTED,
         )
 
@@ -393,7 +393,7 @@ class TestRoutingWiring:
             _env_file=None,
             llm_provider="openai_compatible",
             llm_routing="heuristic",
-            llm_small_model="llama-3.1-8b-instant",
+            llm_small_model="openai/gpt-oss-20b",
             llm_input_price_per_mtok=0.15,
             llm_small_input_price_per_mtok=0.05,
             **_HOSTED,
@@ -403,10 +403,10 @@ class TestRoutingWiring:
         try:
             client = dependencies.get_llm_client()
             assert isinstance(client, RoutingLLMClient)
-            assert client.breaker.name == "api.groq.com/llama-3.1-8b-instant"
+            assert client.breaker.name == "api.groq.com/openai/gpt-oss-20b"
             prices = dependencies._hosted_llm_prices()  # noqa: SLF001
             assert prices["api.groq.com"].input_per_million == 0.15
-            assert prices[("api.groq.com", "llama-3.1-8b-instant")].input_per_million == 0.05
+            assert prices[("api.groq.com", "openai/gpt-oss-20b")].input_per_million == 0.05
             await client.aclose()
         finally:
             dependencies.get_llm_client.cache_clear()
