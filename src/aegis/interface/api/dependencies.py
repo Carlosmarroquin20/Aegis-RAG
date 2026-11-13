@@ -384,9 +384,18 @@ def _hosted_llm_prices() -> dict[str, LLMPricing]:
 
 def get_query_use_case(request: Request) -> QueryRAGUseCase:
     """FastAPI dependency factory for the query pipeline, bound to the caller's tenant."""
+    return build_query_use_case(request_tenant(request).collection)
+
+
+def build_query_use_case(collection: str) -> QueryRAGUseCase:
+    """
+    The query pipeline over one collection. The REST routes and the MCP tool
+    both build it here, so the two interfaces cannot drift apart in what they
+    check: same gateway, budget, retrieval, output guard and judge.
+    """
     return QueryRAGUseCase(
-        vector_store=get_vector_store(request),
-        retriever=get_retriever(request),
+        vector_store=get_collection_store(collection),
+        retriever=build_retriever(collection),
         llm_client=get_llm_client(),
         security_gateway=get_security_gateway(),
         output_sanitizer=get_output_sanitizer(),
