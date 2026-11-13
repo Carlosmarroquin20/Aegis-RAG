@@ -1,0 +1,112 @@
+# Model router: live comparison of the small and the large model
+
+How much answer quality the router gives up when it sends a question to the small model
+([ADR 0026](adr/0026-route-simple-questions-to-a-small-model.md)).
+[`ROUTER_EVALUATION.md`](ROUTER_EVALUATION.md) measures which questions go where; this measures
+what the small model then answers.
+
+**Run:** 2026-11-13. Groq, free tier. Small model `openai/gpt-oss-20b`, large model
+`openai/gpt-oss-120b`. Pipeline as shipped: strict gateway, hybrid retrieval over
+`examples/atencion-cliente` with `intfloat/multilingual-e5-small`, output sanitizer, NLI
+faithfulness judge. Raw results, one line per question:
+[`evals/routing/live/gpt-oss-20b.jsonl`](../evals/routing/live/gpt-oss-20b.jsonl). Reproduce
+with `scripts/compare_router_models.py` (it needs a hosted provider in `.env`, so it is not
+run in CI).
+
+**Questions:** the 159 questions of the routing dataset that the classifier sends to the small
+model: 150 labelled simple, and the 9 complex questions it misroutes. Each was answered by both
+models from the same retrieved context. 158 were answered by both. For the remaining one,
+`gpt-oss-20b` returned no text at all; in production the router hands such a failure to the
+large model.
+
+## Headline
+
+| | Small (`gpt-oss-20b`) | Large (`gpt-oss-120b`) |
+|---|---|---|
+| Answered in the wrong language | **11 of 65 English questions** | 0 of 65 |
+| Abstained ("the context does not cover this") | 12 of 158 | 13 of 158 |
+| Faithfulness to the context (NLI judge, mean) | 0.894 | 0.799 |
+| Latency, median / p95 | 0.52 s / 0.85 s | 0.77 s / 1.28 s |
+| Tokens per answer, in / out | 955 / 197 | 955 / 167 |
+
+Compared with the large model's answers on the 145 questions both answered. An independent
+judge (`qwen/qwen3.8-27b`) classified every pair, and the 25 it flagged as an omitted condition
+or a contradiction were then checked against the corpus by hand (see Adjudication):
+
+| Small answer compared with the large one | Questions |
+|---|---|
+| Says the same, or more | 119 (82.1%) |
+| Leaves out a detail that does not change what the customer does | 14 (9.7%) |
+| Leaves out a condition that could change what the customer does | 9 (6.2%) |
+| Contradicts it, and the small model is right | 2 (1.4%) |
+| Contradicts it, and the corpus is ambiguous | 1 (0.7%) |
+
+The first two rows include the judge's 109 "equivalent" and 11 "omits a detail" verdicts, which
+were not checked by hand.
+
+**Answers worse for the user: 19 of 158 (12.0%).** 11 are in the wrong language, 9 omit a
+condition, and one question has both problems.
+
+## What it shows
+
+**The wrong language is the main defect, and it is the small model's.** The corpus is in
+Spanish, and `gpt-oss-20b` follows the context's language instead of the question's in 17% of
+English questions ("Do you deliver…?" → "Sí, …"). The system prompt asks for the question's
+language, and the large model complied every time. This is a defect a user sees on every one of
+those answers. The language of an answer can be checked deterministically, so it can be fixed
+without a quality model: a small answer in the wrong language can be handed to the large model,
+as an unavailable one already is.
+
+**Omissions are real but few.** The 9 material omissions are exclusions and thresholds that the
+large model mentioned and the small one left out. For example, interest-free instalments "not
+for clearance items" (r-038), "from Q1,000" (r-068), and the higher point rates of the Silver
+and Gold levels (r-111, r-120). The small model is terser: its answers carry the main fact more
+often than the conditions around it.
+
+**The large model is not ground truth.** Of the three answers where the two models contradicted
+each other, the corpus sides with the small model twice. A TV that fails within 30 days is
+swapped at the store; the large model described the 15-day repair process instead (r-089). An
+installation done by the store's own technician is not a "third-party installation"; the large
+model said it was (c-050).
+
+**Faithfulness is not the deciding figure.** The small model scores higher on the NLI judge
+mostly because its answers are shorter: fewer claims give the judge fewer chances to flag one.
+By hand, faithfulness was not where the two models differed.
+
+**Cost and latency.** Both models read the same context, and the small model writes slightly
+more tokens, so the saving per question is the price gap between the two models on the
+provider. Median latency drops by about a third.
+
+## Adjudication
+
+The judge flagged 25 of the 145 pairs: 22 as an omitted condition and 3 as a contradiction.
+Each was checked against the corpus by hand. Of the 22 omitted conditions, only 9 held up. In 4
+the small answer was as complete as the large one or more complete, in 6 there was no real
+difference (the question already stated the condition, or the wording was equivalent), and in 3
+what was left out did not change what the customer would do.
+
+| Outcome | IDs |
+|---|---|
+| Material omission by the small model | r-038, r-045, r-063, r-068, r-080, r-111, r-120, s-010, c-023 |
+| Minor omission | r-034, r-123, r-126 |
+| No real difference | r-017, r-084, r-135, s-005, c-026, c-039 |
+| Small answer as or more complete (judge error) | r-008, r-058, r-088, r-141 |
+| Contradiction, small model right | r-089, c-050 |
+| Contradiction, ambiguous source | r-073 |
+
+The NLI-based comparison that the script also reports, the coverage of the large answer by the
+small one, is cheap and deterministic, but it is not reliable on terse answers: it reads "Q55."
+as not covering "El envío cuesta Q55.". It is kept in the raw data and is not quoted here.
+
+## Limits
+
+- **One run, one pair of models, one corpus.** Generation runs at temperature 0.1, so a rerun
+  differs slightly. Another small model, or a corpus in the users' own language, can behave
+  quite differently, and the language defect depends on both.
+- **The adjudication was done by one person,** the author of the router, against the corpus.
+  The IDs are listed so it can be checked.
+- **Only questions the router sends to the small model were measured.** That is the population
+  that matters for routing, but it is mostly single lookups; it says nothing about how the small
+  model would do on hard questions.
+- The question and the retrieved excerpts of the example corpus were sent to the provider. The
+  corpus is fictitious and public in this repository.

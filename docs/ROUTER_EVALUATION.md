@@ -84,7 +84,8 @@ were bugs in the rules, and they were fixed:
   answer is an abstention.
 - **This measures the routing decision, not the answers.** Whether the small model
   answers the questions it receives as well as the large one is a separate, live
-  measurement against the configured models.
+  measurement against the configured models: see
+  [`ROUTER_LIVE_EVALUATION.md`](ROUTER_LIVE_EVALUATION.md).
 - **Questions that combine two policies without saying so are the weak spot.** "I'm a
   Gold member in Quetzaltenango. Do I pay for installation?" has no comparison, no
   calculation and one question mark; only knowing the documents shows it needs two

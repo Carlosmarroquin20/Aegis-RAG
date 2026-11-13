@@ -441,9 +441,9 @@ one:
 
 ```bash
 LLM_ROUTING=heuristic
-LLM_SMALL_MODEL=llama-3.1-8b-instant      # same provider and key as LLM_MODEL by default
-LLM_SMALL_INPUT_PRICE_PER_MTOK=0.05       # its own price, for the cost metrics
-LLM_SMALL_OUTPUT_PRICE_PER_MTOK=0.08
+LLM_SMALL_MODEL=openai/gpt-oss-20b        # same provider and key as LLM_MODEL by default
+LLM_SMALL_INPUT_PRICE_PER_MTOK=<price>    # its own price per million tokens, as the
+LLM_SMALL_OUTPUT_PRICE_PER_MTOK=<price>   # provider publishes it, for the cost metrics
 ```
 
 The classifier is asymmetric on purpose: any one sign of complexity keeps the question on the
@@ -452,8 +452,14 @@ small model is down or rate limited, the large one answers instead. On the label
 it keeps 82.7% of complex questions on the large model and moves 97.4% of simple ones to the
 small model; questions that combine two policies without saying so are its weak spot. Figures
 and misses are in [`docs/ROUTER_EVALUATION.md`](docs/ROUTER_EVALUATION.md), the design in
-[ADR 0026](docs/adr/0026-route-simple-questions-to-a-small-model.md). It measures the routing
-decision; how well a given small model answers what it is sent is still to be measured live.
+[ADR 0026](docs/adr/0026-route-simple-questions-to-a-small-model.md).
+
+Measured live on Groq, with `gpt-oss-20b` as the small model and `gpt-oss-120b` as the large
+one, over the 159 questions the router sends small: 12% of the small model's answers were worse
+for the user. Most of those were answers in Spanish to English questions (11 of 65; the large
+model, none). The rest left out a condition the large model mentioned (9 of 158). Median latency
+fell by about a third. Details, and every case checked by hand, are in
+[`docs/ROUTER_LIVE_EVALUATION.md`](docs/ROUTER_LIVE_EVALUATION.md).
 
 ---
 
