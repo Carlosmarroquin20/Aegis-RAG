@@ -337,6 +337,14 @@ jobs:
           uv run python scripts/evaluate_retrieval.py --compare --show-misses
           --min-hit5 0.96 --min-mrr 0.86
 
+      - name: Check the multi-hop retrieval report is current
+        # Replays the recorded plans over the same retrieval stack (ADR 0028);
+        # no LLM is called. Fails when retrieval, the dataset or the plans have
+        # moved and docs/MULTIHOP_EVALUATION.md was not regenerated with --write.
+        env:
+          HF_HUB_DISABLE_XET: "1"
+        run: uv run python scripts/evaluate_multihop.py --check
+
   faithfulness-eval:
     name: Faithfulness Judge Gate
     runs-on: ubuntu-latest
