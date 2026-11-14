@@ -209,3 +209,16 @@ conserva: nunca adivina. En streaming retiene los primeros 160 caracteres hasta 
 Los tokens descartados se cuentan aparte para que el costo no quede oculto. Sobre las respuestas
 grabadas marca exactamente las 11 y ninguna del grande; las respuestas peores bajarían del 12 %
 al 5,1 %, todas omisiones.
+
+**[0028](0028-multi-hop-retrieval-by-question-decomposition.md) — Descomponer la pregunta para
+recuperar varios documentos: medido y no adoptado.** Algunas preguntas necesitan dos documentos
+(«Soy Oro en Quetzaltenango, ¿pago la instalación?»). Antes de construir un paso agéntico que la
+divida en subconsultas, se midió contra la alternativa simple con un criterio fijado de antemano:
+sobre 29 preguntas multi-documento, la recuperación actual (5 fragmentos) trae todo lo necesario
+en el 86,2 %, descomponer con 5 fragmentos en el 89,7 % y pedir 10 fragmentos en el 100 %. La
+descomposición no supera a pedir más contexto y cuesta una llamada al modelo, así que no se
+adopta: al reescribir la pregunta puede perder las palabras que la búsqueda necesitaba, y al
+repartir los fragmentos entre subconsultas deja fuera documentos que la pregunta entera sí
+traía. Pedir 10
+fragmentos para todas las preguntas duplica el contexto y queda pendiente de medir en vivo si
+mejora las respuestas. El clasificador del router solo marca como complejas 7 de las 29.
