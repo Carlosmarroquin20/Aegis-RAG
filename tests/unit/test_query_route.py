@@ -95,6 +95,20 @@ class TestQueryRouteSuccess:
         body = client.post("/api/v1/query", json={"query": "What is Aegis?"}).json()
         assert body["threat_level"] == "CLEAN"
 
+    def test_an_omitted_top_k_retrieves_ten_passages(self) -> None:
+        seen: list[QueryRequest] = []
+
+        class _Recording(_SuccessUseCase):
+            async def execute(
+                self, request: QueryRequest, *, client: str = "", tenant: Any = None
+            ) -> QueryResponse:
+                seen.append(request)
+                return await super().execute(request, client=client, tenant=tenant)
+
+        _build_client(_Recording()).post("/api/v1/query", json={"query": "anything"})
+
+        assert [r.top_k for r in seen] == [10]
+
     def test_custom_top_k_is_accepted(self) -> None:
         client = _build_client(_SuccessUseCase())
         response = client.post("/api/v1/query", json={"query": "anything", "top_k": 3})

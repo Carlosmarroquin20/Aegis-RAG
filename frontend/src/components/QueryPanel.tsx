@@ -7,7 +7,7 @@ import { ThreatBadge } from "./ThreatBadge";
 
 export function QueryPanel({ apiKey, examples = [] }: { apiKey: string; examples?: string[] }) {
   const [query, setQuery] = useState("");
-  const [topK, setTopK] = useState(5);
+  const [topK, setTopK] = useState(10);
   const [loading, setLoading] = useState(false);
   const [start, setStart] = useState<StreamStart | null>(null);
   const [answer, setAnswer] = useState("");

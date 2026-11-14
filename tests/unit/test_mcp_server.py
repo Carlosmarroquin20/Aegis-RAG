@@ -197,9 +197,10 @@ class TestToolDefinition:
             bounds["query"]["minLength"],
             bounds["query"]["maxLength"],
         )
-        assert (top_k["minimum"], top_k["maximum"]) == (
+        assert (top_k["minimum"], top_k["maximum"], top_k["default"]) == (
             bounds["top_k"]["minimum"],
             bounds["top_k"]["maximum"],
+            bounds["top_k"]["default"],
         )
 
 

@@ -247,7 +247,7 @@ curl -X POST http://localhost:8000/api/v1/documents \
 curl -X POST http://localhost:8000/api/v1/query \
   -H "Content-Type: application/json" \
   -H "X-API-Key: dev-key-change-in-production" \
-  -d '{"query": "What is the security model?", "top_k": 5}'
+  -d '{"query": "What is the security model?", "top_k": 10}'
 ```
 
 Or stream the answer as it is generated (server-sent events: `start`, `delta`, then `end` with

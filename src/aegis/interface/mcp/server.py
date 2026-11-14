@@ -45,7 +45,12 @@ from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from aegis.application.dtos.rag_dtos import FaithfulnessReport, QueryRequest, QueryResponse
+from aegis.application.dtos.rag_dtos import (
+    DEFAULT_TOP_K,
+    FaithfulnessReport,
+    QueryRequest,
+    QueryResponse,
+)
 from aegis.application.use_cases.query_rag import QueryRAGUseCase, SecurityViolationError
 from aegis.domain.models.tenant import Tenant
 from aegis.domain.ports.llm_client import LLMTimeoutError, LLMUnavailableError
@@ -204,7 +209,9 @@ def build_mcp_server(use_case_for: UseCaseFactory, *, version: str) -> MCPServer
             str, Field(min_length=1, max_length=8192, description="The question to answer.")
         ],
         ctx: Context[Any, Any],
-        top_k: Annotated[int, Field(ge=1, le=20, description="How many passages to retrieve.")] = 5,
+        top_k: Annotated[
+            int, Field(ge=1, le=20, description="How many passages to retrieve.")
+        ] = DEFAULT_TOP_K,
     ) -> Annotated[CallToolResult, AskResult]:
         tenant, client = caller(ctx)
         with tracer.start_as_current_span(f"mcp.tool {TOOL_NAME}") as span:

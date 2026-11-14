@@ -10,12 +10,19 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+# Passages retrieved when the caller does not say. Ten, not five: on the example
+# corpus five miss a needed document for one multi-document question in seven,
+# and answers judged correct went from 7 to 16 of 29 (ADR 0029).
+DEFAULT_TOP_K = 10
+
 
 class QueryRequest(BaseModel):
     """Inbound DTO from the API consumer."""
 
     query: str = Field(..., min_length=1, max_length=8192, description="Natural language question.")
-    top_k: int = Field(default=5, ge=1, le=20, description="Number of documents to retrieve.")
+    top_k: int = Field(
+        default=DEFAULT_TOP_K, ge=1, le=20, description="Number of documents to retrieve."
+    )
 
 
 class SourceDocument(BaseModel):
