@@ -222,3 +222,13 @@ repartir los fragmentos entre subconsultas deja fuera documentos que la pregunta
 traía. Pedir 10
 fragmentos para todas las preguntas duplica el contexto y queda pendiente de medir en vivo si
 mejora las respuestas. El clasificador del router solo marca como complejas 7 de las 29.
+
+**[0029](0029-retrieve-ten-passages-by-default.md) — Recuperar 10 fragmentos por defecto.**
+La alternativa que dejó pendiente el 0028 se midió en vivo: `gpt-oss-120b` respondió 71 preguntas
+con 5 y con 10 fragmentos, y un juez de otra familia (`qwen3.8-27b`) calificó ambas respuestas
+contra los documentos completos, con revisión a mano de cada caso en que difirieron. En las
+preguntas que necesitan varios documentos, las respuestas correctas pasan de 7 a 16 de 29; en las
+de un solo documento no hay dilución (de 31 a 34 de 42). Ninguna respuesta es realmente mejor con
+5. El costo son unos 600 tokens de entrada más por pregunta (+63 %), y el doble de trabajo para la
+verificación de fidelidad NLI cuando está activada. El valor vive en `DEFAULT_TOP_K` y lo comparten
+la API REST, la herramienta MCP y la consola.
