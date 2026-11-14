@@ -93,7 +93,10 @@ chroma_data/
 
 # ── Local AI-assistant scaffolding (not part of the published project) ────────
 CLAUDE.md
-.claude/
+.claude/*
+# Except the shared project settings: cloud sessions read only the committed
+# copy, and it is what keeps session links and attribution out of commits.
+!.claude/settings.json
 
 # Archify render artifacts — the JSON specs are the source of truth; HTML is a build output
 docs/diagrams/*.html
